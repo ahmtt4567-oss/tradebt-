@@ -1,0 +1,4 @@
+.analysisLive{color:#178a4b;background:#e9f7df;border:1px solid #c6e5b6;border-radius:8px;padding:8px 12px;font-size:11px;font-weight:900}
+.indicatorLegend{position:absolute;top:18px;left:22px;display:flex;gap:10px;background:#ffffffdd;padding:6px 9px;border-radius:7px;font-size:10px;font-weight:800}.indicatorLegend .e20{color:#20a75a}.indicatorLegend .e50{color:#e79512}.indicatorLegend .e200{color:#8057cf}
+.waiting{color:#d89f00!important}.levels{margin:0 14px;border:1px solid #e8ecdc;border-radius:9px;overflow:hidden}.levels div{display:flex;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #eef0e7;font-size:11px}.levels div:last-child{border:0}.levels span{color:#89917c}.levels b{color:#198b4c}
+.controls.disabled button:disabled{background:#d8dccf;color:#89917e;cursor:not-allowed}.controls.disabled small{display:block;text-align:center;color:#a0a694;margin-top:5px}
