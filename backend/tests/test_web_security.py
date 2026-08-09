@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.web_security import bearer_token, cors_origins, env_flag, evaluate_access
+from app.web_security import bootstrap_access_allowed, bearer_token, cors_origins, env_flag, evaluate_access
 
 
 class WebSecurityTests(unittest.TestCase):
@@ -55,6 +55,11 @@ class WebSecurityTests(unittest.TestCase):
             owner_access=token, path="/api/v22/me", method="GET",
         )
         self.assertTrue(decision.allowed)
+
+    def test_first_owner_bootstrap_requires_local_or_verified_web_owner(self):
+        self.assertTrue(bootstrap_access_allowed("127.0.0.1", web_owner_authenticated=False))
+        self.assertTrue(bootstrap_access_allowed("10.0.0.12", web_owner_authenticated=True))
+        self.assertFalse(bootstrap_access_allowed("10.0.0.12", web_owner_authenticated=False))
 
     def test_helpers_normalize_inputs(self):
         self.assertEqual(bearer_token("Bearer abc"), "abc")

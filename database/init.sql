@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS paper_account_snapshots (
   payload JSONB NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS application_state_snapshots (
+  state_key TEXT PRIMARY KEY,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payload JSONB NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS market_ticks (
   time TIMESTAMPTZ NOT NULL,
   symbol TEXT NOT NULL,

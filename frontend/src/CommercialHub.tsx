@@ -276,7 +276,7 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
         <label className="commercialRemember"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}/><span><b>Bu bilgisayarda beni hatırla</b><small>İşaretlerseniz oturum 30 gün boyunca hatırlanır.</small></span></label>
         <button disabled={busy} onClick={() => authenticate('login')}><KeyRound/>{busy ? 'DOĞRULANIYOR…' : 'GİRİŞ YAP'}</button>
       </>}
-      <p className={`commercialNotice ${noticeKind}`}>{notice}</p><small className="commercialLocalNote">Bu ekran yalnızca 127.0.0.1 üzerinde çalışır. Parolanı veya borsa anahtarını kimseyle paylaşma.</small>
+      <p className={`commercialNotice ${noticeKind}`}>{notice}</p><small className="commercialLocalNote">İlk kayıt yalnızca doğrulanmış güvenli yönetici oturumunda ve tek sefer yapılabilir. Parolanı veya borsa anahtarını kimseyle paylaşma.</small>
     </div>
   </section>
 

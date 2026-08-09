@@ -8,6 +8,7 @@ remain disabled so this package cannot move real money or place real orders.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import secrets
@@ -37,6 +38,7 @@ from .commercial_core import (
 )
 from .commerce_core import sanitize_business_settings
 from .local_storage import DATA_DIR, migrate_legacy_files
+from .web_security import MIN_ACCESS_TOKEN_LENGTH, bootstrap_access_allowed
 
 
 router = APIRouter(prefix="/api/v22", tags=["V24 Commercial Complete"])
@@ -51,6 +53,7 @@ SECRET_PATH = DATA_DIR / "v22_server_secret.dat"
 LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 STANDARD_SESSION_SECONDS = 8 * 60 * 60
 REMEMBER_SESSION_SECONDS = 30 * 24 * 60 * 60
+COMMERCIAL_STATE_KEY = "v22-commercial"
 
 
 def now_iso() -> str:
@@ -65,6 +68,12 @@ def parse_date(value: str | None) -> datetime:
 
 
 def load_secret() -> bytes:
+    configured = str(os.getenv("PROTREBOT_SESSION_SECRET") or "").strip()
+    if len(configured) >= 32:
+        return hashlib.sha256(configured.encode("utf-8")).digest()
+    web_owner_token = str(os.getenv("PROTREBOT_WEB_ACCESS_TOKEN") or "").strip()
+    if len(web_owner_token) >= MIN_ACCESS_TOKEN_LENGTH:
+        return hashlib.sha256(f"protrebot-v22-session-v1:{web_owner_token}".encode("utf-8")).digest()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if SECRET_PATH.exists():
         raw = SECRET_PATH.read_bytes()
@@ -117,6 +126,102 @@ def save_state(state: dict[str, Any]) -> None:
         except OSError:
             pass
     temp.replace(STATE_PATH)
+    state["_database_revision"] = int(state.get("_database_revision", 0)) + 1
+    state["_database_dirty"] = True
+
+
+async def ensure_commercial_schema(application: Any) -> None:
+    pool = getattr(application.state, "db_pool", None)
+    if pool is None:
+        return
+    await pool.execute(
+        """
+        CREATE TABLE IF NOT EXISTS application_state_snapshots (
+          state_key TEXT PRIMARY KEY,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          payload JSONB NOT NULL
+        )
+        """
+    )
+
+
+async def persist_v22_commercial(application: Any) -> bool:
+    pool = getattr(application.state, "db_pool", None)
+    if pool is None or not hasattr(application.state, "v22_commercial"):
+        return False
+    rt = application.state.v22_commercial
+    state = rt["state"]
+    revision = int(state.get("_database_revision", 0))
+    payload = json.dumps(sanitize_state(state), ensure_ascii=False)
+    try:
+        async with rt["storage_lock"]:
+            await pool.execute(
+                """
+                INSERT INTO application_state_snapshots (state_key, updated_at, payload)
+                VALUES ($1, NOW(), $2::jsonb)
+                ON CONFLICT (state_key) DO UPDATE
+                SET updated_at = NOW(), payload = EXCLUDED.payload
+                """,
+                COMMERCIAL_STATE_KEY,
+                payload,
+            )
+        if int(state.get("_database_revision", 0)) == revision:
+            state["_database_dirty"] = False
+        rt["storage_status"] = "POSTGRESQL_KALICI"
+        return True
+    except Exception:
+        rt["storage_status"] = "YEREL_YEDEK"
+        return False
+
+
+async def restore_v22_commercial(application: Any) -> bool:
+    pool = getattr(application.state, "db_pool", None)
+    if pool is None or not hasattr(application.state, "v22_commercial"):
+        return False
+    rt = application.state.v22_commercial
+    try:
+        row = await pool.fetchrow(
+            "SELECT payload FROM application_state_snapshots WHERE state_key = $1",
+            COMMERCIAL_STATE_KEY,
+        )
+    except Exception:
+        rt["storage_status"] = "YEREL_YEDEK"
+        return False
+    if row is None:
+        return False
+    payload = row["payload"]
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return False
+    if not isinstance(payload, dict):
+        return False
+    restored = sanitize_state(payload)
+    restored["_database_revision"] = 0
+    restored["_database_dirty"] = False
+    rt["state"] = restored
+    rt["storage_status"] = "POSTGRESQL_KALICI"
+    return True
+
+
+async def sync_v22_storage(application: Any) -> None:
+    if not hasattr(application.state, "v22_commercial"):
+        return
+    rt = application.state.v22_commercial
+    try:
+        if not rt.get("storage_ready"):
+            await ensure_commercial_schema(application)
+            rt["storage_ready"] = True
+        if not rt.get("restore_attempted"):
+            restored = await restore_v22_commercial(application)
+            rt["restore_attempted"] = True
+            if not restored:
+                await persist_v22_commercial(application)
+        elif rt["state"].get("_database_dirty"):
+            await persist_v22_commercial(application)
+    except Exception:
+        rt["storage_status"] = "YEREL_YEDEK"
 
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
@@ -335,7 +440,8 @@ class ReleaseEvidenceRequest(BaseModel):
 
 @router.get("/public")
 async def v22_public(request: Request):
-    state = runtime(request)["state"]
+    rt = runtime(request)
+    state = rt["state"]
     return {
         "version": V22_VERSION,
         "edition": "COMMERCIAL COMPLETE · LAUNCH LAB",
@@ -343,7 +449,7 @@ async def v22_public(request: Request):
         "plans": state["plans"],
         "billing": state["billing"],
         "security": state["security"],
-        "account_storage": "WINDOWS_LOCAL_APP_DATA" if os.name == "nt" else "PROJECT_LOCAL_DEV",
+        "account_storage": "WINDOWS_LOCAL_APP_DATA" if os.name == "nt" else rt.get("storage_status", "YEREL_YEDEK"),
         "message": "Üyelik, lisans, yerel ajan, satış ve müşteri kurulum altyapısı tek Demo/Paper paketinde; gerçek para ve gerçek emir yok.",
     }
 
@@ -352,8 +458,11 @@ async def v22_public(request: Request):
 async def v22_bootstrap(payload: BootstrapRequest, request: Request):
     rt = runtime(request)
     host = request.client.host if request.client else ""
-    if host not in {"127.0.0.1", "::1", "localhost", "testclient"}:
-        raise HTTPException(403, "İlk yönetici yalnızca bu bilgisayardan oluşturulabilir")
+    if not bootstrap_access_allowed(
+        host,
+        web_owner_authenticated=bool(getattr(request.state, "web_owner_authenticated", False)),
+    ):
+        raise HTTPException(403, "İlk yönetici yalnızca yerel uygulamadan veya doğrulanmış güvenli web oturumundan oluşturulabilir")
     async with rt["lock"]:
         state = rt["state"]
         if state.get("owner_user_id"):
@@ -378,6 +487,7 @@ async def v22_bootstrap(payload: BootstrapRequest, request: Request):
         state["licenses"].append({"id": uuid.uuid4().hex, "user_id": user_id, "plan": "ELITE", "status": "ACTIVE", "starts_at": now_iso(), "expires_at": expires_at, "source": "OWNER_BOOTSTRAP", "demo_only": True})
         add_audit(state, "OWNER_CREATED", "Yerel V24 sahibi ve geliştirme lisansı oluşturuldu.", actor=user_id, subject=user_id)
         save_state(state)
+    await persist_v22_commercial(request.app)
     token = issue_token(
         user_id,
         "OWNER",
@@ -718,7 +828,15 @@ async def v22_readiness(request: Request):
 
 def init_v22_commercial(application: Any) -> None:
     state = load_state()
-    application.state.v22_commercial = {"state": state, "secret": load_secret(), "lock": asyncio.Lock()}
+    application.state.v22_commercial = {
+        "state": state,
+        "secret": load_secret(),
+        "lock": asyncio.Lock(),
+        "storage_lock": asyncio.Lock(),
+        "storage_ready": False,
+        "restore_attempted": False,
+        "storage_status": "YEREL_YEDEK",
+    }
     add_audit(state, "V24_START", "V24 Commercial Complete başladı; ödeme ve gerçek emir kanalları kapalı.")
     save_state(state)
 
@@ -726,3 +844,4 @@ def init_v22_commercial(application: Any) -> None:
 async def shutdown_v22_commercial(application: Any) -> None:
     if hasattr(application.state, "v22_commercial"):
         save_state(application.state.v22_commercial["state"])
+        await persist_v22_commercial(application)

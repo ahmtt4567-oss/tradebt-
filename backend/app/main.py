@@ -18,7 +18,12 @@ from pydantic import BaseModel, Field
 from .analysis import analyze
 from .binance_demo import init_binance_demo, router as binance_demo_router, shutdown_binance_demo
 from .v21_demo import init_v21_demo, router as v21_demo_router, shutdown_v21_demo
-from .v22_commercial import init_v22_commercial, router as v22_commercial_router, shutdown_v22_commercial
+from .v22_commercial import (
+    init_v22_commercial,
+    router as v22_commercial_router,
+    shutdown_v22_commercial,
+    sync_v22_storage,
+)
 from .v24_commerce import router as v24_commerce_router
 from .v25_execution import init_v25_execution, router as v25_execution_router, shutdown_v25_execution
 from .paper_autonomy import (
@@ -28,7 +33,7 @@ from .paper_autonomy import (
     dynamic_paper_allocation,
     rank_paper_candidates,
 )
-from .web_security import cors_origins, env_flag, evaluate_access
+from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 
 BINANCE_API = "https://api.binance.com"
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
@@ -358,6 +363,8 @@ async def ensure_infrastructure(application: FastAPI) -> None:
                 await persist_paper_snapshot(application)
         elif application.state.paper_dirty:
             await persist_paper_snapshot(application)
+    if database_ok:
+        await sync_v22_storage(application)
     infrastructure.update({
         "api": "BAĞLI",
         "database": "BAĞLI" if database_ok else "BAĞLANIYOR",
@@ -509,6 +516,11 @@ async def owner_preview_gate(request, call_next):
     )
     if not decision.allowed:
         return JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
+    request.state.web_owner_authenticated = bool(
+        WEB_REQUIRE_AUTH
+        and request.method.upper() != "OPTIONS"
+        and request.url.path not in PUBLIC_PATHS
+    )
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
