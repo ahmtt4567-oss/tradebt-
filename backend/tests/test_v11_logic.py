@@ -32,6 +32,7 @@ def load_functions(*names):
 
 
 CORE = load_functions(
+    "json_safe_payload",
     "empty_v11_risk_state",
     "empty_v10_evolution_state",
     "empty_strategy_orchestrator_state",
@@ -120,6 +121,19 @@ class RestorePool:
 
 
 class V11LogicTests(unittest.TestCase):
+    def test_json_safe_payload_removes_non_finite_values_recursively(self):
+        payload = {
+            "ok": 1.25,
+            "nan": float("nan"),
+            "nested": [float("inf"), {"negative": float("-inf")}],
+        }
+        safe = CORE["json_safe_payload"](payload)
+        self.assertEqual(safe["ok"], 1.25)
+        self.assertIsNone(safe["nan"])
+        self.assertIsNone(safe["nested"][0])
+        self.assertIsNone(safe["nested"][1]["negative"])
+        json.dumps(safe, allow_nan=False)
+
     def test_monte_carlo_is_deterministic_and_tail_metrics_are_ordered(self):
         returns = {symbol: CORE["v11_returns"](rows) for symbol, rows in calm_portfolio().items()}
         weights = {symbol: 0.25 for symbol in returns}

@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import AppErrorBoundary from './AppErrorBoundary'
 import WebAccessGate from './WebAccessGate'
 import { installAuthorizedFetch } from './api'
 import './style.css'
@@ -40,4 +41,4 @@ import './execution-v25.css'
 import './web-access.css'
 
 installAuthorizedFetch()
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><WebAccessGate><App/></WebAccessGate></React.StrictMode>)
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AppErrorBoundary><WebAccessGate><App/></WebAccessGate></AppErrorBoundary></React.StrictMode>)

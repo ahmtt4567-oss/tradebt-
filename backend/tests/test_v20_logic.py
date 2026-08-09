@@ -188,7 +188,7 @@ class V20UnifiedTests(unittest.TestCase):
         self.assertIn('/api/v20/certificate', SOURCE_TEXT)
         self.assertIn('/api/paper/limit', SOURCE_TEXT)
         self.assertIn('refresh_paper_limit_orders', SOURCE_TEXT)
-        self.assertIn('V25 · LIVE GUARD', FRONTEND_TEXT)
+        self.assertIn('V25.1.2 · LIVE GUARD', FRONTEND_TEXT)
         self.assertIn('Limit & Pozisyon Haritası', FRONTEND_TEXT)
         self.assertIn('PAPER LİMİT EMRİNİ KAYDET', FRONTEND_TEXT)
         self.assertIn('gridLevelStrip', FRONTEND_TEXT)

@@ -1,7 +1,7 @@
 {
   "name": "protrebot-elite-x-frontend",
   "private": true,
-  "version": "25.1.0",
+  "version": "25.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
