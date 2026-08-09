@@ -38,6 +38,7 @@ from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 BINANCE_API = "https://api.binance.com"
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
 LEGACY_V25_API_CONTRACT = 'version="25.0.0"'
+DEPLOYMENT_PATCH = "25.1.2-json-safe"
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://protrebot:protrebot_local_change_me@127.0.0.1:5432/protrebot",
@@ -88,6 +89,25 @@ V7_STRATEGIES = ("GRID", "TREND", "KIRILIM")
 V8_FORECAST_HORIZONS = (12, 24)
 V10_EVOLUTION_TICK_SECONDS = 45
 V10_EVENT_LIMIT = 100
+
+
+def json_safe_payload(value):
+    """API yanıtındaki NaN/Infinity değerlerini JSON için güvenli hale getirir.
+
+    Canlı veri eksikliği veya çok kısa istatistik örneği bazı risk hesaplarında
+    sonlu olmayan kayan nokta değerleri üretebilir. Starlette bu değerleri
+    serileştirirken 500 üretir. Bu yardımcı yalnızca yanıt kopyasını temizler;
+    Paper durumunu veya borsa bağlantısını değiştirmez.
+    """
+    if isinstance(value, bool) or value is None or isinstance(value, (str, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): json_safe_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [json_safe_payload(item) for item in value]
+    return value
 V11_RISK_TICK_SECONDS = 60
 V11_EVENT_LIMIT = 100
 
@@ -494,7 +514,7 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
-app = FastAPI(title="ProTreBot Elite X API", version="25.1.0", lifespan=lifespan)
+app = FastAPI(title="ProTreBot Elite X API", version="25.1.2", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
@@ -538,7 +558,8 @@ app.include_router(v25_execution_router)
 @app.get("/api/health")
 async def health():
     return {
-        "status": "ok", "version": "25.1.0", "mode": "v25_1_autonomous_paper_live_guard", "time": datetime.now(timezone.utc),
+        "status": "ok", "version": "25.1.2", "patch": DEPLOYMENT_PATCH,
+        "mode": "v25_1_autonomous_paper_live_guard", "time": datetime.now(timezone.utc),
         **app.state.infrastructure,
         "paper_bot": "ÇALIŞIYOR" if app.state.paper_bot["enabled"] else "BEKLEMEDE",
         "grid_engine": "ÇALIŞIYOR" if app.state.paper.get("grid_engine", {}).get("enabled") else "BEKLEMEDE",
@@ -7536,10 +7557,14 @@ async def v11_risk_preview(
     )
     cached = V11_RISK_CACHE.get(cache_key)
     if cached and time.monotonic() - cached[0] < 60:
-        return {**cached[1], "cached": True}
+        safe_cached = json_safe_payload(cached[1])
+        return {**safe_cached, "cached": True, "response_patch": DEPLOYMENT_PATCH}
     try:
         candles = await v11_fetch_universe(universe, interval)
-        payload = v11_portfolio_risk_lab(candles, capital, interval, simulations, horizon_candles)
+        raw_payload = v11_portfolio_risk_lab(candles, capital, interval, simulations, horizon_candles)
+        payload = json_safe_payload(raw_payload)
+        if not isinstance(payload, dict):
+            raise ValueError("Risk laboratuvarı geçerli bir rapor üretemedi")
     except Exception as exc:
         # Üçüncü taraf mum verisi eksikken ValueError'ın ASGI sürecine kadar
         # taşınıp 500 üretmesini engeller. Arayüz bu 503'ü güvenli bekleme
@@ -7549,7 +7574,7 @@ async def v11_risk_preview(
             detail="V11 risk laboratuvarı için yeterli canlı mum verisi henüz alınamadı; otomatik Paper riski kapalı tutuluyor.",
         ) from exc
     V11_RISK_CACHE[cache_key] = (time.monotonic(), payload)
-    return {**payload, "cached": False}
+    return {**payload, "cached": False, "response_patch": DEPLOYMENT_PATCH}
 
 
 @app.post("/api/v11/risk/start")

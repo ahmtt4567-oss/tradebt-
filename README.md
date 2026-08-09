@@ -1,7 +1,7 @@
 # ProTreBot Web V1 — Güvenli Yönetici Önizlemesi
 
-> Güncel bakım paketi: **V1.2 / V25.1.1**. Demo işlem sonrası boş ekran,
-> geçici Render 500/502 yanıtları ve arayüz kurtarma koruması eklendi.
+> Güncel bakım paketi: **V1.3 / V25.1.2**. Risk Lab JSON 500 koruması,
+> Demo düğmesi sayfa koruması ve önceki boş ekran kurtarma katmanı eklendi.
 
 Bu paket ilk internet yayını içindir. Tek yönetici erişim koduyla korunur,
 Paper işlemleri kullanır ve müşteri parası tutmaz. Gerçek/Testnet emirleri
