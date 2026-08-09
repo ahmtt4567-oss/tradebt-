@@ -3287,8 +3287,23 @@ def regime_stability_gate(symbol: str, interval: str, regime: dict, observed_at:
 
 @app.get("/api/regime/stability/{symbol}")
 async def regime_stability_endpoint(symbol: str, interval: str = "15m"):
-    regime = await market_regime(symbol, interval)
-    return regime_stability_gate(symbol, interval, regime)
+    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+    try:
+        regime = await market_regime(safe_symbol, interval)
+        return regime_stability_gate(safe_symbol, interval, regime)
+    except Exception:
+        # Piyasa sağlayıcısı kısa süreli 5xx verdiğinde bu yardımcı gösterge
+        # bütün kokpiti düşürmemeli. Otomatik giriş kapalı, geçerli bir şema
+        # döndürülür ve bir sonraki ölçümde kendiliğinden yeniden denenir.
+        return {
+            "symbol": safe_symbol, "interval": interval,
+            "regime_label": "VERİ BEKLENİYOR", "direction": "BEKLE",
+            "mode": "GÜVENLİ BEKLEME", "auto_allowed": False,
+            "stable_samples": 0, "required_samples": 3,
+            "stability_score": 0,
+            "reason": "Canlı rejim verisi geçici olarak alınamadı; Paper girişleri güvenlik için kapalı tutuluyor.",
+            "degraded": True,
+        }
 
 
 async def liquidity_shield(symbol: str) -> dict:
@@ -4994,9 +5009,39 @@ async def v20_replay_endpoint(
 
 @app.get("/api/paper/account")
 async def paper_account():
-    await refresh_paper_limit_orders()
-    await refresh_paper_positions()
-    return paper_payload()
+    refresh_warning = None
+    try:
+        await refresh_paper_limit_orders()
+        await refresh_paper_positions()
+    except Exception as exc:
+        # Canlı fiyat yenilemesi başarısız olsa bile son sağlam Paper kayıtları
+        # okunabilsin. Bu uç nokta hiçbir zaman gerçek borsa emri üretmez.
+        refresh_warning = f"Canlı Paper fiyatı geçici olarak yenilenemedi: {str(exc)[:120]}"
+    try:
+        payload = paper_payload()
+        if refresh_warning:
+            payload["warning"] = refresh_warning
+        return payload
+    except Exception:
+        paper = app.state.paper
+        balance = float(paper.get("balance") or 0.0)
+        return {
+            "mode": "PAPER", "balance": round(balance, 2), "equity": round(balance, 2),
+            "available": round(balance, 2), "used_margin": 0.0, "reserved_margin": 0.0,
+            "unrealized_pnl": 0.0, "positions": [], "pending_orders": [],
+            "recent_limit_orders": [], "recent_trades": [],
+            "risk": {"status": "GÜVENLİ BEKLEME", "auto_paused": True, "daily_realized_pnl": 0.0,
+                     "daily_loss_limit": 0.0, "remaining_loss_budget": 0.0, "consecutive_losses": 0,
+                     "consecutive_loss_limit": 0, "cooldown_until": None,
+                     "reason": "Paper kayıtları güvenli biçimde yeniden hazırlanıyor."},
+            "performance": {"closed_count": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
+                            "realized_pnl": 0.0, "average_pnl": 0.0, "profit_factor": None,
+                            "best_trade": 0.0, "worst_trade": 0.0, "auto_trades": 0,
+                            "demo_trades": 0, "manual_trades": 0},
+            "shadow": {"enabled": False, "events": []},
+            "emergency_brake": {"active": False, "reason": "", "source": None, "triggered_at": None},
+            "notifications": [], "warning": "Paper hesap özeti kurtarma modunda; gerçek emir kanalları kapalı.",
+        }
 
 
 @app.get("/api/report/daily")
@@ -7492,8 +7537,17 @@ async def v11_risk_preview(
     cached = V11_RISK_CACHE.get(cache_key)
     if cached and time.monotonic() - cached[0] < 60:
         return {**cached[1], "cached": True}
-    candles = await v11_fetch_universe(universe, interval)
-    payload = v11_portfolio_risk_lab(candles, capital, interval, simulations, horizon_candles)
+    try:
+        candles = await v11_fetch_universe(universe, interval)
+        payload = v11_portfolio_risk_lab(candles, capital, interval, simulations, horizon_candles)
+    except Exception as exc:
+        # Üçüncü taraf mum verisi eksikken ValueError'ın ASGI sürecine kadar
+        # taşınıp 500 üretmesini engeller. Arayüz bu 503'ü güvenli bekleme
+        # durumu olarak ele alır ve son sağlam raporu korur.
+        raise HTTPException(
+            status_code=503,
+            detail="V11 risk laboratuvarı için yeterli canlı mum verisi henüz alınamadı; otomatik Paper riski kapalı tutuluyor.",
+        ) from exc
     V11_RISK_CACHE[cache_key] = (time.monotonic(), payload)
     return {**payload, "cached": False}
 

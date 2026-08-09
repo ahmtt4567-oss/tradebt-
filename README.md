@@ -1,5 +1,8 @@
 # ProTreBot Web V1 — Güvenli Yönetici Önizlemesi
 
+> Güncel bakım paketi: **V1.2 / V25.1.1**. Demo işlem sonrası boş ekran,
+> geçici Render 500/502 yanıtları ve arayüz kurtarma koruması eklendi.
+
 Bu paket ilk internet yayını içindir. Tek yönetici erişim koduyla korunur,
 Paper işlemleri kullanır ve müşteri parası tutmaz. Gerçek/Testnet emirleri
 sunucu ortamına taşınmaz.
@@ -48,4 +51,3 @@ Vercel adresini açınca görünen yönetici ekranına, Render'da belirlediğini
 - Bu önizleme müşteri üyeliği veya ödeme sistemi değildir.
 - Çok kullanıcılı müşteri sürümünden önce kullanıcı izolasyonu, şifreli anahtar
   kasası, abonelik ve denetim kayıtları ayrıca tamamlanmalıdır.
-

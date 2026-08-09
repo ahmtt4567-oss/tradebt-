@@ -130,6 +130,86 @@ type V11Intervention = { active:boolean;status:string;reason:string;triggered_at
 type V11Risk = { version:string;enabled:boolean;busy:boolean;status:string;interval:string;capital:number;universe:string[];simulations:number;horizon_candles:number;cycles:number;latest_report:V11Report|null;approved_allocations:V11Allocation[];intervention:V11Intervention;events:V11Event[];started_at:string|null;stopped_at:string|null;last_tick_at:string|null;last_action:string;orders_enabled:boolean;testnet_orders_enabled:boolean;mode:string;safety_note:string }
 type WorkspaceTab = 'dashboard'|'risk'|'strategy'|'live'|'automation'|'records'
 type WorkspaceView = 'dashboard'|'v22-commercial'|'v20-demo'|'v20-limit'|'v20-autopilot'|'v20-ghost'|'v20-certification'|'risk-command'|'strategy-evolution'|'strategy-future'|'strategy-lab'|'live-health'|'live-twin'|'automation-orchestra'|'automation-grid'|'automation-plan'|'records-command'|'records-journal'|'records-archive'
+
+const objectValue = (value:unknown):Record<string,unknown>|null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string,unknown> : null
+const numberValue = (value:unknown, fallback=0):number => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+/**
+ * Render veya ağ geçici bir hata nesnesi döndürdüğünde bunu Paper hesabı gibi
+ * ekrana basmayız. Eski kayıtların eksik alanlarını da güvenli varsayılanlarla
+ * tamamlarız; böylece tek bozuk yanıt bütün kokpiti beyaz ekrana düşüremez.
+ */
+const normalizePaperAccount = (value:unknown):PaperAccount|null => {
+  const row = objectValue(value)
+  if (!row || !Array.isArray(row.positions)) return null
+
+  const normalizePosition = (item:unknown):PaperPosition|null => {
+    const position = objectValue(item)
+    if (!position) return null
+    const symbol = String(position.symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const direction = String(position.direction ?? '').toUpperCase()
+    const entry = numberValue(position.entry_price)
+    if (!symbol.endsWith('USDT') || !['LONG','SHORT'].includes(direction) || entry <= 0) return null
+    const amount = Math.max(0, numberValue(position.amount, numberValue(position.original_amount)))
+    const quantity = Math.max(0, numberValue(position.quantity, amount / entry))
+    const stop = numberValue(position.stop_loss, entry)
+    const target = numberValue(position.take_profit, entry)
+    return {
+      ...(position as unknown as PaperPosition),
+      id:numberValue(position.id), symbol, direction:direction as 'LONG'|'SHORT', amount, quantity,
+      entry_price:entry, current_price:numberValue(position.current_price, entry), stop_loss:stop,
+      take_profit:target, tp1:numberValue(position.tp1, target), tp2:numberValue(position.tp2, target),
+      tp3:numberValue(position.tp3, target), unrealized_pnl:numberValue(position.unrealized_pnl),
+      status:String(position.status ?? 'AÇIK'), source:['MANUAL','AUTO','DEMO'].includes(String(position.source)) ? position.source as PaperPosition['source'] : 'DEMO',
+      partial_targets_hit:Array.isArray(position.partial_targets_hit) ? position.partial_targets_hit.map(String) : [],
+      lifecycle_events:Array.isArray(position.lifecycle_events) ? position.lifecycle_events as V20LifecycleEvent[] : [],
+      grid_levels:Array.isArray(position.grid_levels) ? position.grid_levels.map(level => numberValue(level)).filter(level => level > 0) : [],
+    }
+  }
+
+  const positions = row.positions.map(normalizePosition).filter((item):item is PaperPosition => item !== null)
+  const pendingOrders = Array.isArray(row.pending_orders) ? row.pending_orders.filter(item => objectValue(item)) as PaperLimitOrder[] : []
+  const recentLimitOrders = Array.isArray(row.recent_limit_orders) ? row.recent_limit_orders.filter(item => objectValue(item)) as PaperLimitOrder[] : []
+  const recentTrades = Array.isArray(row.recent_trades)
+    ? row.recent_trades.map(item => {
+        const base = normalizePosition(item)
+        const trade = objectValue(item)
+        return base && trade ? {...base,realized_pnl:numberValue(trade.realized_pnl),fee:numberValue(trade.fee),closed_at:String(trade.closed_at ?? '')} as PaperTrade : null
+      }).filter((item):item is PaperTrade => item !== null)
+    : []
+  const performance = objectValue(row.performance) ?? {}
+  const risk = objectValue(row.risk) ?? {}
+  const shadow = objectValue(row.shadow) ?? {}
+  const brake = objectValue(row.emergency_brake) ?? {}
+
+  return {
+    ...(row as unknown as PaperAccount),
+    balance:numberValue(row.balance), equity:numberValue(row.equity), available:numberValue(row.available),
+    used_margin:numberValue(row.used_margin), reserved_margin:numberValue(row.reserved_margin),
+    unrealized_pnl:numberValue(row.unrealized_pnl), positions, pending_orders:pendingOrders,
+    recent_limit_orders:recentLimitOrders, recent_trades:recentTrades,
+    performance:{
+      closed_count:numberValue(performance.closed_count), wins:numberValue(performance.wins), losses:numberValue(performance.losses),
+      win_rate:numberValue(performance.win_rate), realized_pnl:numberValue(performance.realized_pnl), average_pnl:numberValue(performance.average_pnl),
+      profit_factor:performance.profit_factor === null || performance.profit_factor === undefined ? null : numberValue(performance.profit_factor),
+      best_trade:numberValue(performance.best_trade), worst_trade:numberValue(performance.worst_trade), auto_trades:numberValue(performance.auto_trades),
+      demo_trades:numberValue(performance.demo_trades), manual_trades:numberValue(performance.manual_trades),
+    },
+    risk:{
+      status:String(risk.status ?? 'VERİ BEKLENİYOR'), auto_paused:Boolean(risk.auto_paused), daily_realized_pnl:numberValue(risk.daily_realized_pnl),
+      daily_loss_limit:numberValue(risk.daily_loss_limit), remaining_loss_budget:numberValue(risk.remaining_loss_budget),
+      consecutive_losses:numberValue(risk.consecutive_losses), consecutive_loss_limit:numberValue(risk.consecutive_loss_limit),
+      cooldown_until:risk.cooldown_until ? String(risk.cooldown_until) : null, reason:String(risk.reason ?? 'Risk verisi bekleniyor.'),
+    },
+    shadow:{enabled:Boolean(shadow.enabled),events:Array.isArray(shadow.events) ? shadow.events as ShadowEvent[] : []},
+    emergency_brake:{active:Boolean(brake.active),reason:String(brake.reason ?? ''),source:brake.source ? String(brake.source) : null,triggered_at:brake.triggered_at ? String(brake.triggered_at) : null},
+    notifications:Array.isArray(row.notifications) ? row.notifications.filter(item => objectValue(item)) as AppNotification[] : [],
+  }
+}
+
 const API = API_BASE
 const fmt = (value?:number) => value === undefined ? '—' : value.toLocaleString('tr-TR', { maximumFractionDigits:value < 10 ? 5 : 2 })
 const stamp = (value?:string) => value ? new Date(value).toLocaleString('tr-TR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
@@ -304,6 +384,16 @@ export default function App() {
   const [limitMessage, setLimitMessage] = useState('Analiz planını doldur veya seviyeleri kendin yaz.')
   const [selectedPositionId, setSelectedPositionId] = useState<number|null>(null)
   const [selectedLimitId, setSelectedLimitId] = useState<number|null>(null)
+
+  const acceptPaperAccount = (value:unknown, failureMessage='Paper hesabı geçici olarak okunamadı; son sağlam görünüm korunuyor.'):boolean => {
+    const normalized = normalizePaperAccount(value)
+    if (!normalized) {
+      setPaperMessage(failureMessage)
+      return false
+    }
+    setPaper(normalized)
+    return true
+  }
 
   const scan = async () => {
     setScanning(true); setScanMessage('Piyasa analiz ediliyor…')
@@ -505,7 +595,9 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [symbol, interval])
   useEffect(() => {
-    const refreshStability = () => fetch(`${API}/regime/stability/${symbol}?interval=${interval}`).then(response => response.json()).then(setRegimeStability).catch(() => setRegimeStability(null))
+    const refreshStability = () => fetch(`${API}/regime/stability/${symbol}?interval=${interval}`)
+      .then(response => { if (!response.ok) throw new Error('Rejim kararlılığı geçici olarak bekliyor'); return response.json() })
+      .then(setRegimeStability).catch(() => setRegimeStability(null))
     refreshStability()
     const timer = window.setInterval(refreshStability, 10000)
     return () => window.clearInterval(timer)
@@ -663,8 +755,14 @@ export default function App() {
   }, [orchestrator?.events, notificationsEnabled])
   useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
   const refreshPaper = async () => {
-    try { const response = await fetch(`${API}/paper/account`); setPaper(await response.json()) }
-    catch { setPaperMessage('Sanal hesap bağlantısı kurulamadı') }
+    try {
+      const response = await fetch(`${API}/paper/account`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(objectValue(payload)?.detail ? String(objectValue(payload)?.detail) : 'Paper hesabı geçici olarak yanıt vermedi')
+      acceptPaperAccount(payload)
+    } catch (error) {
+      setPaperMessage(error instanceof Error ? `${error.message}; son sağlam görünüm korunuyor.` : 'Sanal hesap bağlantısı kurulamadı; son sağlam görünüm korunuyor.')
+    }
   }
   useEffect(() => { refreshPaper(); const timer = window.setInterval(refreshPaper, 5000); return () => window.clearInterval(timer) }, [])
   const refreshGridPlans = async () => {
@@ -753,7 +851,7 @@ export default function App() {
       const response = await fetch(`${API}/paper/demo/${symbol}?interval=${interval}`, {method:'POST'})
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Demo Paper işlemi açılamadı')
-      setPaper(payload.account)
+      if (!acceptPaperAccount(payload.account, 'Demo açıldı ancak hesap özeti doğrulanamadı; sayfa güvenli biçimde açık tutuldu.')) throw new Error('Paper hesabı doğrulanamadı; işlem sonucu yenileniyor')
       if (payload.bot) setPaperBot(payload.bot)
       setPaperMessage(payload.message)
     } catch (error) { setPaperMessage(error instanceof Error ? error.message : 'Demo Paper işlemi açılamadı') }
@@ -777,14 +875,14 @@ export default function App() {
   }
   const toggleShadow = async () => {
     setPaperBusy(true)
-    try { const response = await fetch(`${API}/shadow/toggle`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Gölge Modu değiştirilemedi'); setPaper(payload.account); setPaperMessage(payload.message) }
+    try { const response = await fetch(`${API}/shadow/toggle`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Gölge Modu değiştirilemedi'); acceptPaperAccount(payload.account); setPaperMessage(payload.message) }
     catch (error) { setPaperMessage(error instanceof Error ? error.message : 'Gölge Modu değiştirilemedi') }
     finally { setPaperBusy(false) }
   }
   const toggleEmergency = async () => {
     setPaperBusy(true)
     const active = paper?.emergency_brake?.active
-    try { const response = await fetch(`${API}/emergency/${active ? 'reset' : 'trigger'}`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Acil fren güncellenemedi'); setPaper(payload.account); if (payload.bot) setPaperBot(payload.bot); setPaperMessage(payload.message) }
+    try { const response = await fetch(`${API}/emergency/${active ? 'reset' : 'trigger'}`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Acil fren güncellenemedi'); acceptPaperAccount(payload.account); if (payload.bot) setPaperBot(payload.bot); setPaperMessage(payload.message) }
     catch (error) { setPaperMessage(error instanceof Error ? error.message : 'Acil fren güncellenemedi') }
     finally { setPaperBusy(false) }
   }
@@ -795,13 +893,13 @@ export default function App() {
       const response = await fetch(`${API}/paper/open`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({symbol,direction,amount:100,stop_loss:analysis.stop_loss,take_profit:analysis.tp1,tp2:analysis.tp2,tp3:analysis.tp3}) })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Sanal işlem açılamadı')
-      setPaper(payload.account); setPaperMessage('Sanal pozisyon açıldı')
+      acceptPaperAccount(payload.account); setPaperMessage('Sanal pozisyon açıldı')
     } catch (error) { setPaperMessage(error instanceof Error ? error.message : 'Sanal işlem açılamadı') }
     finally { setPaperBusy(false) }
   }
   const closePaper = async (positionId:number) => {
     setPaperBusy(true)
-    try { const response = await fetch(`${API}/paper/close/${positionId}`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Kapatılamadı'); setPaper(payload.account); setPaperMessage('Sanal pozisyon kapatıldı') }
+    try { const response = await fetch(`${API}/paper/close/${positionId}`, {method:'POST'}); const payload = await response.json(); if (!response.ok) throw new Error(payload.detail || 'Kapatılamadı'); acceptPaperAccount(payload.account); setPaperMessage('Sanal pozisyon kapatıldı') }
     catch (error) { setPaperMessage(error instanceof Error ? error.message : 'Kapatılamadı') }
     finally { setPaperBusy(false) }
   }
@@ -838,7 +936,7 @@ export default function App() {
       })})
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Paper limit emri kaydedilemedi')
-      setPaper(payload.account); setLimitMessage(payload.order.status === 'TETİKLENDİ' ? 'Limit fiyatı geçilmişti; Paper pozisyon hemen açıldı.' : payload.message)
+      acceptPaperAccount(payload.account); setLimitMessage(payload.order.status === 'TETİKLENDİ' ? 'Limit fiyatı geçilmişti; Paper pozisyon hemen açıldı.' : payload.message)
       if (payload.order.position_id) { setSelectedPositionId(payload.order.position_id); setSelectedLimitId(null) }
       else { setSelectedLimitId(payload.order.id); setSelectedPositionId(null) }
     } catch (error) { setLimitMessage(error instanceof Error ? error.message : 'Paper limit emri kaydedilemedi') }
@@ -850,7 +948,7 @@ export default function App() {
       const response = await fetch(`${API}/paper/limit/cancel/${orderId}`, {method:'POST'})
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Limit emri iptal edilemedi')
-      setPaper(payload.account); setLimitMessage(payload.message)
+      acceptPaperAccount(payload.account); setLimitMessage(payload.message)
       if (selectedLimitId === orderId) setSelectedLimitId(null)
     } catch (error) { setLimitMessage(error instanceof Error ? error.message : 'Limit emri iptal edilemedi') }
     finally { setLimitBusy(false) }
