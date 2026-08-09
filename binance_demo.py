@@ -1,0 +1,1142 @@
+"""Binance USD-M Futures Demo connector for ProTreBot Elite X.
+
+This module deliberately knows only the Binance Demo hosts. Credentials prefer
+the current Windows user's encrypted DPAPI vault (with a local ``backend/.env``
+fallback) and are never returned by an API response. Entry orders require a
+short-lived manual arm; risk-reducing cancellation and close actions remain
+available while disarmed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import hmac
+import json
+import os
+import re
+import time
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from pathlib import Path
+from typing import Any, Literal
+from urllib.parse import urlencode
+
+import httpx
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from .local_storage import DATA_DIR, migrate_legacy_files
+
+
+DEMO_REST_BASE = "https://demo-fapi.binance.com"
+DEMO_WS_BASE = "wss://demo-fstream.binance.com"
+MAX_MARGIN_USDT = Decimal("100")
+MAX_LEVERAGE = 2
+MAX_NOTIONAL_USDT = MAX_MARGIN_USDT * MAX_LEVERAGE
+MAX_OPEN_POSITIONS = 3
+ARM_SECONDS = 10 * 60
+CLIENT_PREFIX = "PTB_"
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = BACKEND_ROOT / ".env"
+migrate_legacy_files(("binance_demo_runtime.json",))
+STATE_PATH = DATA_DIR / "binance_demo_runtime.json"
+
+PUBLIC_PATHS = {
+    "/fapi/v1/time",
+    "/fapi/v1/exchangeInfo",
+    "/fapi/v1/ticker/price",
+    "/fapi/v1/klines",
+}
+PRIVATE_PATHS = {
+    ("GET", "/fapi/v3/account"),
+    ("GET", "/fapi/v3/positionRisk"),
+    ("GET", "/fapi/v1/symbolConfig"),
+    ("GET", "/fapi/v1/openOrders"),
+    ("GET", "/fapi/v1/order"),
+    ("GET", "/fapi/v1/openAlgoOrders"),
+    ("GET", "/fapi/v1/allOrders"),
+    ("GET", "/fapi/v1/allAlgoOrders"),
+    ("GET", "/fapi/v1/userTrades"),
+    ("GET", "/fapi/v1/positionSide/dual"),
+    ("POST", "/fapi/v1/leverage"),
+    ("POST", "/fapi/v1/marginType"),
+    ("POST", "/fapi/v1/order/test"),
+    ("POST", "/fapi/v1/order"),
+    ("POST", "/fapi/v1/algoOrder"),
+    ("DELETE", "/fapi/v1/order"),
+    ("DELETE", "/fapi/v1/algoOrder"),
+}
+API_KEY_PATHS = {
+    ("POST", "/fapi/v1/listenKey"),
+    ("PUT", "/fapi/v1/listenKey"),
+    ("DELETE", "/fapi/v1/listenKey"),
+}
+
+router = APIRouter(prefix="/api/binance-demo", tags=["Binance Futures Demo"])
+
+
+class BinanceDemoError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        http_status: int = 502,
+        exchange_code: int | None = None,
+        unknown_execution: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.http_status = http_status
+        self.exchange_code = exchange_code
+        self.unknown_execution = unknown_execution
+
+
+class ArmRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=32)
+
+
+class DemoOrderRequest(BaseModel):
+    symbol: str = Field(min_length=5, max_length=20)
+    direction: Literal["LONG", "SHORT"]
+    order_type: Literal["MARKET", "LIMIT"] = "MARKET"
+    margin_usdt: float = Field(ge=5, le=100)
+    leverage: int = Field(ge=1, le=2)
+    limit_price: float | None = Field(default=None, gt=0)
+    stop_loss: float = Field(gt=0)
+    tp1: float = Field(gt=0)
+    tp2: float = Field(gt=0)
+    tp3: float = Field(gt=0)
+
+
+class CancelOrderRequest(BaseModel):
+    symbol: str = Field(min_length=5, max_length=20)
+    order_id: int = Field(gt=0)
+
+
+class CancelAlgoRequest(BaseModel):
+    symbol: str = Field(min_length=5, max_length=20)
+    algo_id: int = Field(gt=0)
+
+
+class ClosePositionRequest(BaseModel):
+    symbol: str = Field(min_length=5, max_length=20)
+    confirmation: str = Field(min_length=1, max_length=32)
+
+
+class EmergencyRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=48)
+    close_positions: bool = True
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def normalize_symbol(value: str) -> str:
+    symbol = re.sub(r"[^A-Z0-9]", "", value.upper())
+    if not symbol.endswith("USDT") or not 5 <= len(symbol) <= 20:
+        raise BinanceDemoError("Yalnızca USDT vadeli işlem pariteleri destekleniyor.", http_status=422)
+    return symbol
+
+
+def response_rows(payload: Any) -> list[dict[str, Any]]:
+    """Normalize Binance list/object responses without trusting their shape."""
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        nested = payload.get("positions")
+        if isinstance(nested, list):
+            return [item for item in nested if isinstance(item, dict)]
+        return [payload] if payload else []
+    return []
+
+
+def load_demo_credentials() -> tuple[str, str]:
+    try:
+        from .credential_store import load_credentials
+
+        vault_api_key, vault_secret_key = load_credentials()
+        if len(vault_api_key) >= 10 and len(vault_secret_key) >= 10:
+            return vault_api_key, vault_secret_key
+    except (ImportError, OSError, RuntimeError):
+        pass
+    values: dict[str, str] = {}
+    if ENV_PATH.exists():
+        try:
+            for raw_line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+        except OSError:
+            values = {}
+    api_key = str(os.environ.get("BINANCE_DEMO_API_KEY") or values.get("BINANCE_DEMO_API_KEY") or "").strip()
+    secret_key = str(os.environ.get("BINANCE_DEMO_SECRET_KEY") or values.get("BINANCE_DEMO_SECRET_KEY") or "").strip()
+    return api_key, secret_key
+
+
+def credentials_configured() -> bool:
+    api_key, secret_key = load_demo_credentials()
+    return len(api_key) >= 10 and len(secret_key) >= 10
+
+
+def signed_query(secret_key: str, params: dict[str, Any]) -> tuple[str, str]:
+    """Return Binance-compatible query text and HMAC signature."""
+    query = urlencode([(key, value) for key, value in params.items() if value is not None], doseq=True)
+    signature = hmac.new(secret_key.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
+    return query, signature
+
+
+def decimal_text(value: Decimal) -> str:
+    text = format(value.normalize(), "f")
+    return "0" if text in {"-0", ""} else text
+
+
+def floor_step(value: Decimal, step: Decimal) -> Decimal:
+    if step <= 0:
+        return value
+    return (value / step).to_integral_value(rounding=ROUND_DOWN) * step
+
+
+def round_tick(value: Decimal, tick: Decimal) -> Decimal:
+    if tick <= 0:
+        return value
+    return (value / tick).to_integral_value(rounding=ROUND_HALF_UP) * tick
+
+
+class BinanceDemoClient:
+    def __init__(self, http: httpx.AsyncClient, api_key: str, secret_key: str) -> None:
+        if not api_key or not secret_key:
+            raise BinanceDemoError(
+                "Demo API anahtarları ayarlı değil. BINANCE-DEMO-AYARLA.bat dosyasını çalıştırın.",
+                http_status=412,
+            )
+        self.http = http
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.time_offset_ms = 0
+        self.last_time_sync = 0.0
+        self._clock_lock = asyncio.Lock()
+
+    async def public_get(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        if path not in PUBLIC_PATHS:
+            raise BinanceDemoError("İzin verilmeyen Demo API yolu.", http_status=500)
+        return await self._request("GET", path, params or {}, signed=False)
+
+    async def sync_clock(self) -> None:
+        if time.monotonic() - self.last_time_sync < 30:
+            return
+        async with self._clock_lock:
+            if time.monotonic() - self.last_time_sync < 30:
+                return
+            before = int(time.time() * 1000)
+            payload = await self.public_get("/fapi/v1/time")
+            after = int(time.time() * 1000)
+            server_time = int(payload["serverTime"])
+            self.time_offset_ms = server_time - ((before + after) // 2)
+            self.last_time_sync = time.monotonic()
+
+    async def signed(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
+        method = method.upper()
+        if (method, path) not in PRIVATE_PATHS:
+            raise BinanceDemoError("İzin verilmeyen özel Demo API işlemi.", http_status=500)
+        await self.sync_clock()
+        payload = dict(params or {})
+        payload["timestamp"] = int(time.time() * 1000) + self.time_offset_ms
+        payload["recvWindow"] = 5000
+        query, signature = signed_query(self.secret_key, payload)
+        return await self._request(
+            method,
+            path,
+            payload,
+            signed=True,
+            encoded_query=query,
+            signature=signature,
+        )
+
+    async def api_key_request(self, method: str, path: str) -> Any:
+        """Call a USER_STREAM endpoint with the API key but without a signature."""
+        method = method.upper()
+        if (method, path) not in API_KEY_PATHS:
+            raise BinanceDemoError("İzin verilmeyen Demo kullanıcı akışı işlemi.", http_status=500)
+        return await self._request(method, path, {}, signed=False, api_key_header=True)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any],
+        *,
+        signed: bool,
+        encoded_query: str = "",
+        signature: str = "",
+        api_key_header: bool = False,
+    ) -> Any:
+        url = f"{DEMO_REST_BASE}{path}"
+        if not url.startswith(f"{DEMO_REST_BASE}/"):
+            raise BinanceDemoError("Demo sunucu kilidi doğrulanamadı.", http_status=500)
+        headers = {"X-MBX-APIKEY": self.api_key} if signed or api_key_header else {}
+        request_url = f"{url}?{encoded_query}&signature={signature}" if signed else url
+        try:
+            response = await self.http.request(method, request_url, params=None if signed else params, headers=headers)
+        except httpx.RequestError as exc:
+            raise BinanceDemoError("Binance Demo sunucusuna ulaşılamadı.") from exc
+
+        if response.status_code >= 400:
+            try:
+                body = response.json()
+            except (ValueError, json.JSONDecodeError):
+                body = {}
+            code = body.get("code") if isinstance(body, dict) else None
+            raw_message = body.get("msg") if isinstance(body, dict) else None
+            safe_message = str(raw_message or "Binance Demo işlemi reddetti.").replace(self.api_key, "[gizli]")
+            if response.status_code in {429, 418}:
+                safe_message = "Demo API hız sınırına ulaşıldı; kısa süre bekleyip tekrar deneyin."
+            unknown = response.status_code == 503
+            if unknown:
+                safe_message = "Emir durumu belirsiz döndü; sistem açık emirlerden doğrulama yapacak."
+            raise BinanceDemoError(
+                safe_message,
+                http_status=429 if response.status_code in {429, 418} else 502,
+                exchange_code=int(code) if isinstance(code, int) else None,
+                unknown_execution=unknown,
+            )
+        try:
+            return response.json()
+        except (ValueError, json.JSONDecodeError):
+            return {}
+
+
+def client_for(request: Request) -> BinanceDemoClient:
+    api_key, secret_key = load_demo_credentials()
+    return BinanceDemoClient(request.app.state.http, api_key, secret_key)
+
+
+def state_for(request: Request) -> dict[str, Any]:
+    return request.app.state.binance_demo
+
+
+def armed(state: dict[str, Any]) -> bool:
+    return float(state.get("armed_until", 0)) > time.time()
+
+
+def add_event(state: dict[str, Any], kind: str, message: str) -> None:
+    state.setdefault("events", []).insert(0, {"kind": kind, "message": message, "created_at": utc_now()})
+    del state["events"][40:]
+
+
+def public_status(state: dict[str, Any]) -> dict[str, Any]:
+    active = armed(state)
+    if not active:
+        state["armed_until"] = 0
+    return {
+        "version": "21.0.0",
+        "mode": "BINANCE_FUTURES_DEMO_ONLY",
+        "configured": credentials_configured(),
+        "connected": bool(state.get("connected")),
+        "armed": active,
+        "armed_until": datetime.fromtimestamp(state["armed_until"], timezone.utc).isoformat() if active else None,
+        "rest_host": DEMO_REST_BASE,
+        "websocket_host": DEMO_WS_BASE,
+        "real_trading_locked": True,
+        "limits": {
+            "max_margin_usdt": float(MAX_MARGIN_USDT),
+            "max_leverage": MAX_LEVERAGE,
+            "max_notional_usdt": float(MAX_NOTIONAL_USDT),
+            "max_open_positions": MAX_OPEN_POSITIONS,
+            "arm_minutes": ARM_SECONDS // 60,
+        },
+        "last_checked": state.get("last_checked"),
+        "last_error": state.get("last_error"),
+        "events": state.get("events", [])[:12],
+    }
+
+
+def safe_exchange_error(exc: BinanceDemoError) -> HTTPException:
+    suffix = f" (Demo kodu: {exc.exchange_code})" if exc.exchange_code is not None else ""
+    return HTTPException(status_code=exc.http_status, detail=f"{exc}{suffix}")
+
+
+def verify_leverage_response(payload: Any, symbol: str, requested: int) -> dict[str, Any]:
+    """Fail closed unless Binance confirms the exact requested leverage."""
+    if not isinstance(payload, dict):
+        raise BinanceDemoError("Binance Demo kaldıraç doğrulama yanıtı okunamadı; emir gönderilmedi.", http_status=409)
+    response_symbol = str(payload.get("symbol") or "").upper()
+    try:
+        applied = int(payload.get("leverage"))
+    except (TypeError, ValueError):
+        applied = 0
+    if response_symbol != symbol or applied != requested:
+        raise BinanceDemoError(
+            f"Binance Demo {requested}x yerine {applied or 'belirsiz'}x bildirdi; güvenlik için emir gönderilmedi.",
+            http_status=409,
+        )
+    return {
+        "symbol": symbol,
+        "requested_leverage": requested,
+        "applied_leverage": applied,
+        "max_notional_value": str(payload.get("maxNotionalValue") or ""),
+        "leverage_verified": True,
+    }
+
+
+def verify_symbol_configuration(payload: Any, symbol: str, requested: int) -> dict[str, Any]:
+    """Verify leverage and isolated margin from the account symbol configuration."""
+    row = next((item for item in response_rows(payload) if str(item.get("symbol") or "").upper() == symbol), None)
+    if row is None:
+        raise BinanceDemoError(f"{symbol} hesap yapılandırması Binance Demo'dan doğrulanamadı; emir gönderilmedi.", http_status=409)
+    try:
+        applied = int(row.get("leverage"))
+    except (TypeError, ValueError):
+        applied = 0
+    margin_type = str(row.get("marginType") or "").upper()
+    if applied != requested or margin_type != "ISOLATED":
+        raise BinanceDemoError(
+            f"{symbol} güvenlik ayarı uyuşmadı: istenen {requested}x ISOLATED, uygulanan {applied or 'belirsiz'}x {margin_type or 'belirsiz'}; emir gönderilmedi.",
+            http_status=409,
+        )
+    return {
+        "symbol": symbol,
+        "requested_leverage": requested,
+        "applied_leverage": applied,
+        "margin_type": "isolated",
+        "max_notional_value": str(row.get("maxNotionalValue") or ""),
+        "leverage_verified": True,
+        "configuration_source": "BINANCE_SYMBOL_CONFIG",
+    }
+
+
+async def set_isolated_margin(client: BinanceDemoClient, symbol: str) -> None:
+    """Force isolated margin; Binance code -4046 means it is already isolated."""
+    try:
+        await client.signed("POST", "/fapi/v1/marginType", {"symbol": symbol, "marginType": "ISOLATED"})
+    except BinanceDemoError as exc:
+        if exc.exchange_code != -4046:
+            raise
+
+
+async def apply_verified_leverage(client: BinanceDemoClient, symbol: str, requested: int) -> dict[str, Any]:
+    response = await client.signed("POST", "/fapi/v1/leverage", {"symbol": symbol, "leverage": requested})
+    verify_leverage_response(response, symbol, requested)
+    configuration = await client.signed("GET", "/fapi/v1/symbolConfig", {"symbol": symbol})
+    return verify_symbol_configuration(configuration, symbol, requested)
+
+
+async def position_mode(client: BinanceDemoClient) -> bool:
+    payload = await client.signed("GET", "/fapi/v1/positionSide/dual")
+    value = payload.get("dualSidePosition", payload.get("dualPosition", False))
+    return value is True or str(value).lower() == "true"
+
+
+async def optional_symbol_configurations(client: BinanceDemoClient) -> Any:
+    """Keep read-only account visibility if an older Demo deployment lacks this endpoint."""
+    try:
+        return await client.signed("GET", "/fapi/v1/symbolConfig")
+    except BinanceDemoError:
+        return []
+
+
+async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
+    account, positions, orders, algo_orders, hedge_mode, configurations = await asyncio.gather(
+        client.signed("GET", "/fapi/v3/account"),
+        client.signed("GET", "/fapi/v3/positionRisk"),
+        client.signed("GET", "/fapi/v1/openOrders"),
+        client.signed("GET", "/fapi/v1/openAlgoOrders"),
+        position_mode(client),
+        optional_symbol_configurations(client),
+    )
+    config_by_symbol = {
+        str(item.get("symbol") or "").upper(): item
+        for item in response_rows(configurations)
+        if item.get("symbol")
+    }
+    open_positions = []
+    for item in response_rows(positions):
+        amount = Decimal(str(item.get("positionAmt", "0")))
+        if amount == 0:
+            continue
+        symbol = str(item.get("symbol") or "").upper()
+        configuration = config_by_symbol.get(symbol, {})
+        raw_leverage = item.get("leverage", configuration.get("leverage"))
+        raw_margin_type = item.get("marginType", configuration.get("marginType"))
+        try:
+            leverage = int(raw_leverage) if raw_leverage is not None else None
+        except (TypeError, ValueError):
+            leverage = None
+        margin_type = str(raw_margin_type).lower() if raw_margin_type else None
+        open_positions.append({
+            "symbol": symbol,
+            "direction": "LONG" if amount > 0 else "SHORT",
+            "quantity": abs(float(amount)),
+            "entry_price": float(item.get("entryPrice", 0)),
+            "mark_price": float(item.get("markPrice", 0)),
+            "liquidation_price": float(item.get("liquidationPrice", 0)),
+            "unrealized_pnl": float(item.get("unRealizedProfit", item.get("unrealizedProfit", 0))),
+            "leverage": leverage,
+            "margin_type": margin_type,
+            "requested_leverage": None,
+            "applied_leverage": leverage,
+            "leverage_verified": bool(configuration and leverage and margin_type),
+            "configuration_source": "BINANCE_SYMBOL_CONFIG" if configuration else "UNAVAILABLE",
+        })
+    open_orders = [{
+        "symbol": item.get("symbol"),
+        "order_id": int(item.get("orderId", 0)),
+        "client_order_id": item.get("clientOrderId"),
+        "side": item.get("side"),
+        "type": item.get("type"),
+        "status": item.get("status"),
+        "price": float(item.get("price", 0)),
+        "quantity": float(item.get("origQty", 0)),
+        "executed_quantity": float(item.get("executedQty", 0)),
+        "reduce_only": bool(item.get("reduceOnly", False)),
+    } for item in response_rows(orders)]
+    open_algos = [{
+        "symbol": item.get("symbol"),
+        "algo_id": int(item.get("algoId", 0)),
+        "client_algo_id": item.get("clientAlgoId"),
+        "side": item.get("side"),
+        "type": item.get("orderType", item.get("type")),
+        "status": item.get("algoStatus", item.get("status")),
+        "trigger_price": float(item.get("triggerPrice", item.get("stopPrice", 0))),
+        "quantity": float(item.get("quantity", item.get("origQty", 0)) or 0),
+        "close_position": str(item.get("closePosition", "false")).lower() == "true",
+    } for item in response_rows(algo_orders)]
+    return {
+        "wallet_balance": float(account.get("totalWalletBalance", 0)),
+        "available_balance": float(account.get("availableBalance", 0)),
+        "margin_balance": float(account.get("totalMarginBalance", 0)),
+        "unrealized_pnl": float(account.get("totalUnrealizedProfit", 0)),
+        "positions": open_positions,
+        "open_orders": open_orders,
+        "open_algo_orders": open_algos,
+        "hedge_mode": hedge_mode,
+    }
+
+
+def enrich_snapshot_with_plans(snapshot: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    """Add the local request audit without inventing missing exchange values."""
+    plans = list(state.get("plans", {}).values())
+    active_by_symbol: dict[str, dict[str, Any]] = {}
+    for plan in plans:
+        if plan.get("status") not in {"KAPANDI", "İPTAL", "GÜVENLİK İÇİN KAPATILDI", "ACİL DURDURULDU"}:
+            active_by_symbol[str(plan.get("symbol") or "")] = plan
+    for position in snapshot.get("positions", []):
+        plan = active_by_symbol.get(str(position.get("symbol") or ""))
+        if not plan:
+            continue
+        requested = int(plan.get("requested_leverage") or plan.get("leverage") or 0) or None
+        applied = int(plan.get("applied_leverage") or 0) or position.get("leverage")
+        position["requested_leverage"] = requested
+        position["applied_leverage"] = position.get("leverage") or applied
+        if position.get("leverage") is None and applied:
+            position["leverage"] = applied
+            position["configuration_source"] = "VERIFIED_LEVERAGE_RESPONSE"
+        if not position.get("margin_type") and plan.get("margin_type"):
+            position["margin_type"] = plan["margin_type"]
+        position["leverage_verified"] = bool(
+            position.get("leverage_verified")
+            or (
+                plan.get("leverage_verified")
+                and requested == position.get("leverage")
+                and str(position.get("margin_type") or "").lower() == "isolated"
+            )
+        )
+    return snapshot
+
+
+async def symbol_rules(client: BinanceDemoClient, symbol: str) -> dict[str, Decimal]:
+    payload = await client.public_get("/fapi/v1/exchangeInfo")
+    row = next((item for item in payload.get("symbols", []) if item.get("symbol") == symbol), None)
+    if not row or row.get("status") != "TRADING":
+        raise BinanceDemoError(f"{symbol} Demo vadeli işlemlerde açık değil.", http_status=422)
+    filters = {item.get("filterType"): item for item in row.get("filters", [])}
+    lot = filters.get("LOT_SIZE", {})
+    price_filter = filters.get("PRICE_FILTER", {})
+    notional_filter = filters.get("MIN_NOTIONAL", {})
+    return {
+        "step": Decimal(str(lot.get("stepSize", "0.001"))),
+        "min_qty": Decimal(str(lot.get("minQty", "0"))),
+        "max_qty": Decimal(str(lot.get("maxQty", "999999999"))),
+        "tick": Decimal(str(price_filter.get("tickSize", "0.01"))),
+        "min_notional": Decimal(str(notional_filter.get("notional", "0"))),
+    }
+
+
+async def ticker_price(client: BinanceDemoClient, symbol: str) -> Decimal:
+    payload = await client.public_get("/fapi/v1/ticker/price", {"symbol": symbol})
+    price = Decimal(str(payload.get("price", "0")))
+    if price <= 0:
+        raise BinanceDemoError("Demo piyasa fiyatı alınamadı.")
+    return price
+
+
+def validate_levels(direction: str, entry: Decimal, stop: Decimal, targets: list[Decimal]) -> None:
+    if direction == "LONG":
+        valid = stop < entry < targets[0] < targets[1] < targets[2]
+        message = "LONG için sıralama Stop < Giriş < TP1 < TP2 < TP3 olmalı."
+    else:
+        valid = targets[2] < targets[1] < targets[0] < entry < stop
+        message = "SHORT için sıralama TP3 < TP2 < TP1 < Giriş < Stop olmalı."
+    if not valid:
+        raise BinanceDemoError(message, http_status=422)
+
+
+async def build_order_spec(client: BinanceDemoClient, order: DemoOrderRequest) -> dict[str, Any]:
+    symbol = normalize_symbol(order.symbol)
+    current_price, rules = await asyncio.gather(ticker_price(client, symbol), symbol_rules(client, symbol))
+    if order.order_type == "LIMIT" and order.limit_price is None:
+        raise BinanceDemoError("Limit emir için limit fiyatı zorunludur.", http_status=422)
+    entry = Decimal(str(order.limit_price)) if order.order_type == "LIMIT" else current_price
+    margin = Decimal(str(order.margin_usdt))
+    notional = margin * Decimal(order.leverage)
+    if margin > MAX_MARGIN_USDT or order.leverage > MAX_LEVERAGE or notional > MAX_NOTIONAL_USDT:
+        raise BinanceDemoError("Demo güvenlik tavanı: en fazla 100 USDT marjin ve 2x kaldıraç.", http_status=422)
+    quantity = floor_step(notional / entry, rules["step"])
+    minimum_notional = max(rules["min_notional"], rules["min_qty"] * entry)
+    if quantity < rules["min_qty"] or quantity * entry < rules["min_notional"]:
+        min_margin = minimum_notional / Decimal(order.leverage)
+        raise BinanceDemoError(
+            f"{symbol} için borsa minimumu bu güvenlik tavanını aşıyor. Yaklaşık en az {decimal_text(min_margin.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))} USDT marjin gerekir; daha düşük fiyatlı bir parite seçin.",
+            http_status=422,
+        )
+    if quantity > rules["max_qty"]:
+        raise BinanceDemoError("Hesaplanan miktar borsa üst sınırını aşıyor.", http_status=422)
+    stop = round_tick(Decimal(str(order.stop_loss)), rules["tick"])
+    targets = [round_tick(Decimal(str(value)), rules["tick"]) for value in (order.tp1, order.tp2, order.tp3)]
+    limit_price = round_tick(entry, rules["tick"])
+    validate_levels(order.direction, limit_price if order.order_type == "LIMIT" else current_price, stop, targets)
+    return {
+        "symbol": symbol,
+        "direction": order.direction,
+        "side": "BUY" if order.direction == "LONG" else "SELL",
+        "close_side": "SELL" if order.direction == "LONG" else "BUY",
+        "order_type": order.order_type,
+        "margin_usdt": float(margin),
+        "leverage": order.leverage,
+        "notional_usdt": float(quantity * entry),
+        "quantity": decimal_text(quantity),
+        "quantity_decimal": quantity,
+        "current_price": float(current_price),
+        "entry_price": decimal_text(limit_price),
+        "stop_loss": decimal_text(stop),
+        "targets": [decimal_text(value) for value in targets],
+        "step": rules["step"],
+        "min_qty": rules["min_qty"],
+        "min_notional": float(minimum_notional),
+    }
+
+
+def runtime_payload(state: dict[str, Any]) -> dict[str, Any]:
+    return {"plans": state.get("plans", {}), "saved_at": utc_now()}
+
+
+def persist_runtime(state: dict[str, Any]) -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = STATE_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps(runtime_payload(state), ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(STATE_PATH)
+
+
+def load_runtime() -> dict[str, Any]:
+    try:
+        payload = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+        return payload.get("plans", {}) if isinstance(payload.get("plans"), dict) else {}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {}
+
+
+def new_client_id(kind: str) -> str:
+    return f"{CLIENT_PREFIX}{kind}_{uuid.uuid4().hex[:18]}"
+
+
+async def find_order_by_client_id(client: BinanceDemoClient, symbol: str, client_id: str) -> dict[str, Any] | None:
+    try:
+        result = await client.signed("GET", "/fapi/v1/order", {"symbol": symbol, "origClientOrderId": client_id})
+        return result if isinstance(result, dict) and result.get("orderId") else None
+    except BinanceDemoError:
+        return None
+
+
+async def submit_entry(client: BinanceDemoClient, spec: dict[str, Any], *, test_only: bool) -> dict[str, Any]:
+    client_id = new_client_id("TEST" if test_only else "ENTRY")
+    params: dict[str, Any] = {
+        "symbol": spec["symbol"],
+        "side": spec["side"],
+        "type": spec["order_type"],
+        "quantity": spec["quantity"],
+        "newClientOrderId": client_id,
+        "newOrderRespType": "RESULT",
+    }
+    if spec["order_type"] == "LIMIT":
+        params.update({"price": spec["entry_price"], "timeInForce": "GTC"})
+    path = "/fapi/v1/order/test" if test_only else "/fapi/v1/order"
+    try:
+        response = await client.signed("POST", path, params)
+    except BinanceDemoError as exc:
+        if not test_only and exc.unknown_execution:
+            recovered = await find_order_by_client_id(client, spec["symbol"], client_id)
+            if recovered is not None:
+                return recovered
+        raise
+    return response if isinstance(response, dict) else {}
+
+
+async def cancel_entry_if_open(client: BinanceDemoClient, plan: dict[str, Any]) -> None:
+    order_id = plan.get("entry_order_id")
+    if not order_id:
+        return
+    try:
+        await client.signed("DELETE", "/fapi/v1/order", {"symbol": plan["symbol"], "orderId": order_id})
+    except BinanceDemoError as exc:
+        if exc.exchange_code not in {-2011, -2013}:
+            raise
+
+
+async def close_symbol_position(client: BinanceDemoClient, symbol: str) -> dict[str, Any] | None:
+    rows = await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol})
+    row = next((item for item in response_rows(rows) if Decimal(str(item.get("positionAmt", "0"))) != 0), None)
+    if row is None:
+        return None
+    amount = Decimal(str(row["positionAmt"]))
+    params = {
+        "symbol": symbol,
+        "side": "SELL" if amount > 0 else "BUY",
+        "type": "MARKET",
+        "quantity": decimal_text(abs(amount)),
+        "reduceOnly": "true",
+        "newClientOrderId": new_client_id("CLOSE"),
+        "newOrderRespType": "RESULT",
+    }
+    return await client.signed("POST", "/fapi/v1/order", params)
+
+
+async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[str, Any]:
+    """Create one conditional order without blind retry on ambiguous responses."""
+    try:
+        result = await client.signed("POST", "/fapi/v1/algoOrder", params)
+        return result if isinstance(result, dict) else {}
+    except BinanceDemoError as exc:
+        if not exc.unknown_execution:
+            raise
+        open_algos = response_rows(
+            await client.signed("GET", "/fapi/v1/openAlgoOrders", {"symbol": params["symbol"]})
+        )
+        recovered = next(
+            (item for item in open_algos if item.get("clientAlgoId") == params.get("clientAlgoId")),
+            None,
+        )
+        if recovered is None:
+            raise
+        return recovered
+
+
+async def install_protection(client: BinanceDemoClient, state: dict[str, Any], plan: dict[str, Any]) -> None:
+    symbol = plan["symbol"]
+    rows = await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol})
+    position = next((item for item in response_rows(rows) if Decimal(str(item.get("positionAmt", "0"))) != 0), None)
+    if position is None:
+        plan["status"] = "DOLUM BEKLİYOR"
+        return
+    amount = Decimal(str(position["positionAmt"]))
+    actual_direction = "LONG" if amount > 0 else "SHORT"
+    if actual_direction != plan["direction"]:
+        plan["status"] = "YÖN UYUŞMAZLIĞI"
+        add_event(state, "KORUMA KİLİDİ", f"{symbol} pozisyon yönü planla uyuşmadı; otomatik koruma kurulmadı.")
+        return
+
+    close_side = "SELL" if amount > 0 else "BUY"
+    common = {
+        "algoType": "CONDITIONAL",
+        "symbol": symbol,
+        "side": close_side,
+        "workingType": "MARK_PRICE",
+        "priceProtect": "TRUE",
+    }
+    stop_client_id = plan.setdefault("stop_client_id", new_client_id("SL"))
+    stop_params = {
+        **common,
+        "type": "STOP_MARKET",
+        "triggerPrice": plan["stop_loss"],
+        "closePosition": "true",
+        "clientAlgoId": stop_client_id,
+    }
+    protection_ids: list[int] = []
+    try:
+        stop_result = await post_algo(client, stop_params)
+        if stop_result.get("algoId"):
+            stop_algo_id = int(stop_result["algoId"])
+            protection_ids.append(stop_algo_id)
+            plan["stop_algo_id"] = stop_algo_id
+    except BinanceDemoError as exc:
+        plan["status"] = "KORUMA BAŞARISIZ - KAPATILIYOR"
+        add_event(state, "ACİL KORUMA", f"{symbol} Stop kurulamadı; Demo pozisyon güvenlik için kapatılıyor.")
+        await cancel_entry_if_open(client, plan)
+        await close_symbol_position(client, symbol)
+        plan["last_error"] = str(exc)
+        plan["status"] = "GÜVENLİK İÇİN KAPATILDI"
+        return
+
+    step = Decimal(str(plan["step"]))
+    min_qty = Decimal(str(plan["min_qty"]))
+    total_qty = abs(amount)
+    partial_qty = floor_step(total_qty * Decimal("0.30"), step)
+    targets = plan["targets"]
+    monitoring_targets: list[str] = []
+    if partial_qty >= min_qty:
+        for index, trigger in enumerate(targets[:2], start=1):
+            client_key = f"tp{index}_client_id"
+            algo_client_id = plan.setdefault(client_key, new_client_id(f"TP{index}"))
+            params = {
+                **common,
+                "type": "TAKE_PROFIT_MARKET",
+                "triggerPrice": trigger,
+                "quantity": decimal_text(partial_qty),
+                "reduceOnly": "true",
+                "clientAlgoId": algo_client_id,
+            }
+            try:
+                result = await post_algo(client, params)
+                if result.get("algoId"):
+                    protection_ids.append(int(result["algoId"]))
+            except BinanceDemoError:
+                monitoring_targets.append(f"TP{index}")
+    else:
+        monitoring_targets.extend(["TP1", "TP2"])
+
+    tp3_client_id = plan.setdefault("tp3_client_id", new_client_id("TP3"))
+    try:
+        tp3_result = await post_algo(client, {
+            **common,
+            "type": "TAKE_PROFIT_MARKET",
+            "triggerPrice": targets[2],
+            "closePosition": "true",
+            "clientAlgoId": tp3_client_id,
+        })
+        if tp3_result.get("algoId"):
+            protection_ids.append(int(tp3_result["algoId"]))
+    except BinanceDemoError:
+        monitoring_targets.append("TP3")
+
+    plan["protection_ids"] = protection_ids
+    plan["monitoring_targets"] = monitoring_targets
+    plan["status"] = "KORUMA AKTİF" if not monitoring_targets else "STOP AKTİF · HEDEF İZLEME"
+    plan["protected_at"] = utc_now()
+    add_event(state, "KORUMA KURULDU", f"{symbol} Stop aktif; hedef planı Demo hesabına işlendi.")
+
+
+async def cleanup_closed_plan(client: BinanceDemoClient, plan: dict[str, Any]) -> None:
+    for algo_id in plan.get("protection_ids", []):
+        try:
+            await client.signed("DELETE", "/fapi/v1/algoOrder", {"symbol": plan["symbol"], "algoId": algo_id})
+        except BinanceDemoError as exc:
+            if exc.exchange_code not in {-2011, -2013}:
+                continue
+
+
+async def protection_loop(application: Any) -> None:
+    while True:
+        await asyncio.sleep(2)
+        state = application.state.binance_demo
+        if not credentials_configured() or not state.get("plans"):
+            continue
+        try:
+            api_key, secret_key = load_demo_credentials()
+            client = BinanceDemoClient(application.state.http, api_key, secret_key)
+            changed = False
+            for plan in list(state["plans"].values()):
+                if plan.get("status") in {"KAPANDI", "İPTAL", "GÜVENLİK İÇİN KAPATILDI"}:
+                    continue
+                rows = response_rows(
+                    await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": plan["symbol"]})
+                )
+                active_position = next((row for row in rows if Decimal(str(row.get("positionAmt", "0"))) != 0), None)
+                if active_position is not None and plan.get("status") not in {"KORUMA AKTİF", "STOP AKTİF · HEDEF İZLEME"}:
+                    await install_protection(client, state, plan)
+                    changed = True
+                elif active_position is None and plan.get("status") in {"KORUMA AKTİF", "STOP AKTİF · HEDEF İZLEME"}:
+                    await cleanup_closed_plan(client, plan)
+                    plan["status"] = "KAPANDI"
+                    plan["closed_at"] = utc_now()
+                    add_event(state, "POZİSYON KAPANDI", f"{plan['symbol']} Demo pozisyonu kapandı; kalan bot emirleri temizlendi.")
+                    changed = True
+            if changed:
+                persist_runtime(state)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            state["last_error"] = str(exc)[:240]
+
+
+def init_binance_demo(application: Any) -> None:
+    application.state.binance_demo = {
+        "connected": False,
+        "armed_until": 0,
+        "last_checked": None,
+        "last_error": None,
+        "events": [],
+        "plans": load_runtime(),
+        "lock": asyncio.Lock(),
+    }
+    add_event(application.state.binance_demo, "GÜVENLİ BAŞLANGIÇ", "Demo emir kilidi kapalı başladı; yeniden elle açılması gerekir.")
+    application.state.binance_demo_task = asyncio.create_task(protection_loop(application))
+
+
+async def shutdown_binance_demo(application: Any) -> None:
+    task = getattr(application.state, "binance_demo_task", None)
+    if task is not None:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@router.get("/status")
+async def demo_status(request: Request) -> dict[str, Any]:
+    return public_status(state_for(request))
+
+
+@router.post("/connect")
+async def demo_connect(request: Request) -> dict[str, Any]:
+    state = state_for(request)
+    try:
+        client = client_for(request)
+        snapshot = enrich_snapshot_with_plans(await account_snapshot(client), state)
+        state.update({"connected": True, "last_checked": utc_now(), "last_error": None})
+        add_event(state, "BAĞLANTI BAŞARILI", "Binance Futures Demo hesabı doğrulandı; gerçek hesap kanalı kilitli.")
+        return {**public_status(state), "account": snapshot}
+    except BinanceDemoError as exc:
+        state.update({"connected": False, "last_checked": utc_now(), "last_error": str(exc)[:240]})
+        raise safe_exchange_error(exc) from exc
+
+
+@router.get("/account")
+async def demo_account(request: Request) -> dict[str, Any]:
+    state = state_for(request)
+    try:
+        snapshot = enrich_snapshot_with_plans(await account_snapshot(client_for(request)), state)
+        state.update({"connected": True, "last_checked": utc_now(), "last_error": None})
+        return {**public_status(state), **snapshot, "plans": list(state.get("plans", {}).values())[-12:]}
+    except BinanceDemoError as exc:
+        state.update({"connected": False, "last_checked": utc_now(), "last_error": str(exc)[:240]})
+        raise safe_exchange_error(exc) from exc
+
+
+@router.post("/arm")
+async def demo_arm(request: Request, body: ArmRequest) -> dict[str, Any]:
+    state = state_for(request)
+    if body.confirmation.strip().upper() != "DEMO":
+        raise HTTPException(422, "Onay alanına DEMO yazın.")
+    try:
+        snapshot = await account_snapshot(client_for(request))
+    except BinanceDemoError as exc:
+        raise safe_exchange_error(exc) from exc
+    if snapshot["hedge_mode"]:
+        raise HTTPException(409, "Binance Demo hesabında Pozisyon Modu 'Tek Yön / One-way' olmalı.")
+    state["armed_until"] = time.time() + ARM_SECONDS
+    state["connected"] = True
+    state["last_checked"] = utc_now()
+    add_event(state, "DEMO EMİR KİLİDİ AÇILDI", "Yalnızca Binance Futures Demo emirleri 10 dakika için açıldı.")
+    return public_status(state)
+
+
+@router.post("/disarm")
+async def demo_disarm(request: Request) -> dict[str, Any]:
+    state = state_for(request)
+    state["armed_until"] = 0
+    add_event(state, "DEMO EMİR KİLİDİ KAPANDI", "Yeni Demo giriş emirleri durduruldu; koruma emirleri çalışmaya devam eder.")
+    return public_status(state)
+
+
+@router.post("/order/test")
+async def demo_order_test(request: Request, body: DemoOrderRequest) -> dict[str, Any]:
+    state = state_for(request)
+    try:
+        client = client_for(request)
+        if await position_mode(client):
+            raise BinanceDemoError("Pozisyon Modu 'Tek Yön / One-way' olmalı.", http_status=409)
+        spec = await build_order_spec(client, body)
+        await submit_entry(client, spec, test_only=True)
+        add_event(state, "EMİR TESTİ BAŞARILI", f"{spec['symbol']} {spec['direction']} planı Demo doğrulamasından geçti; emir oluşmadı.")
+        return {
+            "ok": True,
+            "message": "Demo emir testi başarılı; hiçbir pozisyon veya emir oluşturulmadı.",
+            "preview": {key: value for key, value in spec.items() if not key.endswith("_decimal") and key not in {"step"}},
+            "real_trading_locked": True,
+        }
+    except BinanceDemoError as exc:
+        state["last_error"] = str(exc)[:240]
+        raise safe_exchange_error(exc) from exc
+
+
+@router.post("/order")
+async def demo_order(request: Request, body: DemoOrderRequest) -> dict[str, Any]:
+    return await execute_demo_order(request.app, body, source="MANUAL")
+
+
+async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source: str = "MANUAL") -> dict[str, Any]:
+    """Submit one hard-capped Demo order for the manual or V21 automation path."""
+    state = application.state.binance_demo
+    if not armed(state):
+        raise HTTPException(423, "Demo emir kilidi kapalı veya süresi doldu; önce 10 dakikalık kilidi açın.")
+    async with state["lock"]:
+        try:
+            api_key, secret_key = load_demo_credentials()
+            client = BinanceDemoClient(application.state.http, api_key, secret_key)
+            snapshot = await account_snapshot(client)
+            if snapshot["hedge_mode"]:
+                raise BinanceDemoError("Pozisyon Modu 'Tek Yön / One-way' olmalı.", http_status=409)
+            symbol = normalize_symbol(body.symbol)
+            if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:
+                raise BinanceDemoError("En fazla 3 açık Demo pozisyonuna izin verilir.", http_status=409)
+            if any(item["symbol"] == symbol for item in snapshot["positions"] + snapshot["open_orders"]):
+                raise BinanceDemoError(f"{symbol} için zaten açık pozisyon veya emir var.", http_status=409)
+            if snapshot["available_balance"] < body.margin_usdt:
+                raise BinanceDemoError("Demo hesabında seçilen marjin için yeterli kullanılabilir bakiye yok.", http_status=409)
+            spec = await build_order_spec(client, body)
+            await set_isolated_margin(client, spec["symbol"])
+            leverage_audit = await apply_verified_leverage(client, spec["symbol"], spec["leverage"])
+            result = await submit_entry(client, spec, test_only=False)
+            plan_id = uuid.uuid4().hex[:12]
+            plan = {
+                "id": plan_id,
+                "symbol": spec["symbol"],
+                "direction": spec["direction"],
+                "order_type": spec["order_type"],
+                "entry_price": spec["entry_price"],
+                "quantity": spec["quantity"],
+                "margin_usdt": spec["margin_usdt"],
+                "leverage": spec["leverage"],
+                "requested_leverage": leverage_audit["requested_leverage"],
+                "applied_leverage": leverage_audit["applied_leverage"],
+                "margin_type": leverage_audit["margin_type"],
+                "leverage_verified": leverage_audit["leverage_verified"],
+                "configuration_source": leverage_audit["configuration_source"],
+                "max_notional_value": leverage_audit["max_notional_value"],
+                "leverage_verified_at": utc_now(),
+                "stop_loss": spec["stop_loss"],
+                "targets": spec["targets"],
+                "step": decimal_text(spec["step"]),
+                "min_qty": decimal_text(spec["min_qty"]),
+                "entry_order_id": int(result.get("orderId", 0)) or None,
+                "entry_client_order_id": result.get("clientOrderId"),
+                "status": "DOLUM BEKLİYOR",
+                "created_at": utc_now(),
+                "demo_only": True,
+                "source": source,
+                "initial_stop_loss": spec["stop_loss"],
+            }
+            state.setdefault("plans", {})[plan_id] = plan
+            persist_runtime(state)
+            add_event(
+                state,
+                "KALDIRAÇ DOĞRULANDI",
+                f"{spec['symbol']} istenen {spec['leverage']}x, uygulanan {leverage_audit['applied_leverage']}x ISOLATED; emir güvenlik kontrolünden geçti.",
+            )
+            add_event(state, "DEMO EMİR GÖNDERİLDİ", f"{spec['symbol']} {spec['direction']} {spec['order_type']} emri Demo hesabına gönderildi ({source}).")
+            if spec["order_type"] == "MARKET":
+                await install_protection(client, state, plan)
+                persist_runtime(state)
+            return {
+                "ok": True,
+                "message": f"Emir yalnızca Binance Futures Demo hesabına gönderildi; {leverage_audit['applied_leverage']}x ISOLATED doğrulandı.",
+                "order": {
+                    "symbol": result.get("symbol", spec["symbol"]),
+                    "order_id": result.get("orderId"),
+                    "client_order_id": result.get("clientOrderId"),
+                    "status": result.get("status", plan["status"]),
+                    "type": result.get("type", spec["order_type"]),
+                    "side": result.get("side", spec["side"]),
+                },
+                "plan": plan,
+                "real_trading_locked": True,
+            }
+        except BinanceDemoError as exc:
+            state["last_error"] = str(exc)[:240]
+            raise safe_exchange_error(exc) from exc
+
+
+@router.post("/order/cancel")
+async def demo_cancel_order(request: Request, body: CancelOrderRequest) -> dict[str, Any]:
+    try:
+        symbol = normalize_symbol(body.symbol)
+        result = await client_for(request).signed("DELETE", "/fapi/v1/order", {"symbol": symbol, "orderId": body.order_id})
+        add_event(state_for(request), "EMİR İPTAL", f"{symbol} Demo emri iptal edildi.")
+        return {"ok": True, "symbol": symbol, "order_id": result.get("orderId", body.order_id)}
+    except BinanceDemoError as exc:
+        raise safe_exchange_error(exc) from exc
+
+
+@router.post("/algo/cancel")
+async def demo_cancel_algo(request: Request, body: CancelAlgoRequest) -> dict[str, Any]:
+    try:
+        symbol = normalize_symbol(body.symbol)
+        result = await client_for(request).signed("DELETE", "/fapi/v1/algoOrder", {"symbol": symbol, "algoId": body.algo_id})
+        add_event(state_for(request), "KORUMA İPTAL", f"{symbol} koşullu Demo emri iptal edildi.")
+        return {"ok": True, "symbol": symbol, "algo_id": result.get("algoId", body.algo_id)}
+    except BinanceDemoError as exc:
+        raise safe_exchange_error(exc) from exc
+
+
+@router.post("/position/close")
+async def demo_close_position(request: Request, body: ClosePositionRequest) -> dict[str, Any]:
+    if body.confirmation.strip().upper() != "DEMO KAPAT":
+        raise HTTPException(422, "Pozisyonu kapatmak için DEMO KAPAT yazın.")
+    try:
+        symbol = normalize_symbol(body.symbol)
+        result = await close_symbol_position(client_for(request), symbol)
+        if result is None:
+            raise BinanceDemoError("Bu paritede açık Demo pozisyonu yok.", http_status=404)
+        add_event(state_for(request), "POZİSYON KAPATILDI", f"{symbol} Demo pozisyonu reduce-only piyasa emriyle kapatıldı.")
+        return {"ok": True, "symbol": symbol, "order_id": result.get("orderId")}
+    except BinanceDemoError as exc:
+        raise safe_exchange_error(exc) from exc
+
+
+@router.post("/emergency")
+async def demo_emergency(request: Request, body: EmergencyRequest) -> dict[str, Any]:
+    if body.confirmation.strip().upper() != "DEMO ACİL DURDUR":
+        raise HTTPException(422, "Acil işlem için DEMO ACİL DURDUR yazın.")
+    state = state_for(request)
+    async with state["lock"]:
+        try:
+            client = client_for(request)
+            snapshot = await account_snapshot(client)
+            cancelled_orders = 0
+            cancelled_algos = 0
+            closed_positions = 0
+            for item in snapshot["open_orders"]:
+                if str(item.get("client_order_id") or "").startswith(CLIENT_PREFIX):
+                    try:
+                        await client.signed("DELETE", "/fapi/v1/order", {"symbol": item["symbol"], "orderId": item["order_id"]})
+                        cancelled_orders += 1
+                    except BinanceDemoError:
+                        pass
+            for item in snapshot["open_algo_orders"]:
+                if str(item.get("client_algo_id") or "").startswith(CLIENT_PREFIX):
+                    try:
+                        await client.signed("DELETE", "/fapi/v1/algoOrder", {"symbol": item["symbol"], "algoId": item["algo_id"]})
+                        cancelled_algos += 1
+                    except BinanceDemoError:
+                        pass
+            if body.close_positions:
+                for item in snapshot["positions"]:
+                    if await close_symbol_position(client, item["symbol"]) is not None:
+                        closed_positions += 1
+            state["armed_until"] = 0
+            for plan in state.get("plans", {}).values():
+                if plan.get("status") not in {"KAPANDI", "İPTAL"}:
+                    plan["status"] = "ACİL DURDURULDU"
+            persist_runtime(state)
+            add_event(state, "ACİL DEMO DURDURMA", f"{cancelled_orders} giriş, {cancelled_algos} koruma iptal; {closed_positions} Demo pozisyon kapatma emri.")
+            return {
+                "ok": True,
+                "cancelled_bot_orders": cancelled_orders,
+                "cancelled_bot_algos": cancelled_algos,
+                "closed_demo_positions": closed_positions,
+                "armed": False,
+                "real_trading_locked": True,
+            }
+        except BinanceDemoError as exc:
+            raise safe_exchange_error(exc) from exc
