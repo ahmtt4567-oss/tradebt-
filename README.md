@@ -9,10 +9,10 @@ sunucu ortamına taşınmaz.
 
 ## 1. GitHub
 
-1. ZIP'i bilgisayarda çıkartın.
-2. `ProTreBot-Web-V1` klasörünün **içindekileri** özel `ProTreBot-Web`
-   deposuna yükleyin. ZIP dosyasını tek başına yüklemeyin.
-3. `.env`, API anahtarı, `backend/data`, `node_modules` ve `dist` yüklemeyin.
+Web sayfasından yüzlerce dosyayı tek tek sürüklemeyin; klasör yolları bozulabilir.
+Bu paketteki `TEK-SEFERDE-YAYIN.md` dosyasını izleyip GitHub Desktop ile tek
+commit gönderin. `.env`, API anahtarı, `backend/data`, `node_modules`, `dist`
+ve `.venv` yüklemeyin.
 
 ## 2. Render backend
 
