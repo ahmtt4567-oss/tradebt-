@@ -1,53 +1,67 @@
-# ProTreBot Web V1 — Güvenli Yönetici Önizlemesi
+# ProTreBot Elite X V26 — Testnet-First / Live-Ready
 
-> Güncel bakım paketi: **V1.3 / V25.1.2**. Risk Lab JSON 500 koruması,
-> Demo düğmesi sayfa koruması ve önceki boş ekran kurtarma katmanı eklendi.
+Bu sürümde **Paper kapalıdır**. Ana çalışma motoru Binance USD-M Futures Demo/Testnet'tir.
+Gerçek Futures ekranı ve altyapısı hazırdır; ancak canlı API anahtarları, salt-okunur bağlantı,
+Demo sertifikası, risk politikası, 24 saatlik izin ve 5 dakikalık son kilit tamamlanmadan
+gerçek emir gönderemez.
 
-Bu paket ilk internet yayını içindir. Tek yönetici erişim koduyla korunur,
-Paper işlemleri kullanır ve müşteri parası tutmaz. Gerçek/Testnet emirleri
-sunucu ortamına taşınmaz.
+> Testnet sonucu gerçek piyasa sonucunu ve kârı garanti etmez. İlk kurulumda canlı anahtarları
+> boş bırakın; yalnızca Demo anahtarlarını bağlayın.
 
-## 1. GitHub
+## Güvenlik modeli
 
-Web sayfasından yüzlerce dosyayı tek tek sürüklemeyin; klasör yolları bozulabilir.
-Bu paketteki `TEK-SEFERDE-YAYIN.md` dosyasını izleyip GitHub Desktop ile tek
-commit gönderin. `.env`, API anahtarı, `backend/data`, `node_modules`, `dist`
-ve `.venv` yüklemeyin.
+- API ve Secret anahtarları tarayıcıya, GitHub'a veya Vercel'e yazılmaz.
+- Anahtarlar yalnızca Render **Environment** bölümünde tutulur.
+- Uygulama yeniden başlatılınca canlı işlem izni ve kısa süreli emir kilidi iptal olur.
+- Para çekme ve transfer izni bu proje için kullanılmaz.
+- Canlı emir kanalı, eksik olan tek bir güvenlik kapısında bile kapalı kalır.
 
-## 2. Render backend
+## 1. GitHub'a yükleme
 
-1. Render hesabında **New > Blueprint** seçin.
-2. Özel GitHub `ProTreBot-Web` deposunu bağlayın.
-3. Render kökteki `render.yaml` dosyasını okuyacaktır.
-4. `PROTREBOT_WEB_ACCESS_TOKEN` için en az 24 karakterlik, yalnızca sizin
-   bildiğiniz bir kod girin.
-5. İlk aşamada `PROTREBOT_CORS_ORIGINS` değerine `http://localhost:5173`
-   yazılabilir. Vercel adresi oluştuktan sonra bunu Vercel adresiyle değiştirin.
-6. Dağıtım bitince `https://...onrender.com/api/health` adresini kontrol edin.
+Paketin içindeki dosyaları özel `ProTreBot-Web` deponuzun köküne yükleyin. Şunları yüklemeyin:
 
-Ücretsiz Render servisi yalnızca önizleme içindir ve boşta kalınca uyuyabilir.
-7/24 bot çalışması için testlerden sonra ücretli, sürekli çalışan plana geçin.
+- `.env` ve API anahtarları
+- `node_modules`, `dist`, `.venv`
+- `backend/data`, günlükler veya çalışma zamanı kayıtları
 
-## 3. Vercel frontend
+## 2. Render — arka uç
 
-1. Vercel'de **Add New > Project** seçin ve aynı GitHub deposunu bağlayın.
-2. Root Directory olarak `frontend` seçin.
-3. Environment Variables bölümüne şunları ekleyin:
-   - `VITE_API_URL` = Render servis adresi, örn. `https://protrebot-api.onrender.com`
-   - `VITE_WEB_ACCESS_REQUIRED` = `true`
-4. Deploy düğmesine basın.
-5. Oluşan `https://...vercel.app` adresini kopyalayın.
-6. Render'da `PROTREBOT_CORS_ORIGINS` değerini bu tam adres yapıp backend'i
-   yeniden dağıtın.
+Render mevcut depodaki `render.yaml` dosyasını kullanır. Serviste şu değerler bulunmalıdır:
 
-## 4. İlk giriş
+| Değişken | İlk kurulum değeri |
+|---|---|
+| `PROTREBOT_WEB_ACCESS_TOKEN` | En az 24 karakterlik yönetici kodunuz |
+| `PROTREBOT_CORS_ORIGINS` | Tam Vercel adresiniz |
+| `BINANCE_DEMO_API_KEY` | Binance Futures Demo API Key |
+| `BINANCE_DEMO_SECRET_KEY` | Binance Futures Demo Secret Key |
+| `BINANCE_LIVE_API_KEY` | Şimdilik boş |
+| `BINANCE_LIVE_SECRET_KEY` | Şimdilik boş |
 
-Vercel adresini açınca görünen yönetici ekranına, Render'da belirlediğiniz
-`PROTREBOT_WEB_ACCESS_TOKEN` değerini yazın. Bu kod Binance API anahtarı değildir.
+Değişiklikten sonra **Manual Deploy > Deploy latest commit** çalıştırın. Sağlık kontrolü:
 
-## Güvenlik sınırı
+`https://protrebot-api.onrender.com/api/health`
 
-- Binance anahtarları GitHub veya Vercel'e yazılmaz.
-- Bu önizleme müşteri üyeliği veya ödeme sistemi değildir.
-- Çok kullanıcılı müşteri sürümünden önce kullanıcı izolasyonu, şifreli anahtar
-  kasası, abonelik ve denetim kayıtları ayrıca tamamlanmalıdır.
+Ücretsiz Render servisi boşta uyur ve ilk istekte gecikebilir. 7/24 Testnet takibi ve ileride
+canlı işlem için sürekli çalışan ücretli servis gerekir.
+
+## 3. Vercel — ön yüz
+
+Vercel projesinde Root Directory `frontend` olmalıdır. Ortam değişkenleri:
+
+| Değişken | Değer |
+|---|---|
+| `VITE_API_URL` | `https://protrebot-api.onrender.com` |
+| `VITE_WEB_ACCESS_REQUIRED` | `true` |
+
+Ana sayfada yönetici erişim kodunu girin. Bu kod Binance anahtarı değildir.
+
+## 4. Testnet doğrulama sırası
+
+1. `Yayın Kapıları` sekmesinde Demo kanalının bağlı olduğunu doğrulayın.
+2. `Testnet Komuta` bölümünde bakiye ve pozisyon modunu kontrol edin.
+3. Önce emir testi, sonra küçük Demo MARKET/LIMIT emri deneyin.
+4. Stop ve TP emirlerinin Binance Demo hesabında göründüğünü doğrulayın.
+5. Acil durdurma tatbikatı yapın ve tüm Demo emirlerinin kapandığını denetleyin.
+6. En az 30 aktif gün ve 100 kapanmış Demo işlem ile sonuç toplayın.
+
+Canlı kanalın ayrıntılı kapıları için [V26-TESTNET-FIRST.md](V26-TESTNET-FIRST.md) dosyasına bakın.

@@ -23,6 +23,20 @@ services:
         sync: false
       - key: PROTREBOT_DATA_DIR
         value: /tmp/protrebot-data
+      - key: PROTREBOT_EXECUTION_MODE
+        value: TESTNET_FIRST
+      - key: PROTREBOT_PAPER_ENABLED
+        value: "false"
+      - key: PROTREBOT_LIVE_CHANNEL_ENABLED
+        value: "true"
+      - key: BINANCE_DEMO_API_KEY
+        sync: false
+      - key: BINANCE_DEMO_SECRET_KEY
+        sync: false
+      - key: BINANCE_LIVE_API_KEY
+        sync: false
+      - key: BINANCE_LIVE_SECRET_KEY
+        sync: false
 
 databases:
   - name: protrebot-db
@@ -30,4 +44,3 @@ databases:
     region: frankfurt
     databaseName: protrebot
     user: protrebot
-
