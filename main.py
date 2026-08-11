@@ -16,7 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from .analysis import analyze
-from .binance_demo import init_binance_demo, router as binance_demo_router, shutdown_binance_demo
+from .binance_demo import (
+    armed as demo_armed,
+    credentials_configured as demo_credentials_configured,
+    init_binance_demo,
+    router as binance_demo_router,
+    shutdown_binance_demo,
+)
 from .v21_demo import init_v21_demo, router as v21_demo_router, shutdown_v21_demo
 from .v22_commercial import (
     init_v22_commercial,
@@ -38,7 +44,7 @@ from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 BINANCE_API = "https://api.binance.com"
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
 LEGACY_V25_API_CONTRACT = 'version="25.0.0"'
-DEPLOYMENT_PATCH = "25.1.2-json-safe"
+DEPLOYMENT_PATCH = "26.0.0-testnet-first-live-ready"
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://protrebot:protrebot_local_change_me@127.0.0.1:5432/protrebot",
@@ -47,6 +53,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0").strip()
 WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
+PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=False)
+LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
+EXECUTION_MODE = "TESTNET_FIRST"
 ALLOWED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
 INTERVAL_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 SCAN_CACHE: dict[tuple[int, str], tuple[float, list]] = {}
@@ -331,7 +340,7 @@ async def ensure_infrastructure(application: FastAPI) -> None:
             application.state.db_pool = None
             application.state.paper_schema_ready = False
             application.state.market_twin_schema_ready = False
-            infrastructure["paper_storage"] = "BEKLENİYOR"
+            infrastructure["paper_storage"] = "BEKLENİYOR" if PAPER_ENABLED else "DEVRE DIŞI"
     if application.state.db_pool is None:
         try:
             application.state.db_pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=2, timeout=3)
@@ -339,7 +348,7 @@ async def ensure_infrastructure(application: FastAPI) -> None:
             application.state.market_twin_schema_ready = False
         except Exception:
             application.state.db_pool = None
-            infrastructure["paper_storage"] = "BEKLENİYOR"
+            infrastructure["paper_storage"] = "BEKLENİYOR" if PAPER_ENABLED else "DEVRE DIŞI"
 
     redis_client = application.state.redis_client
     if redis_client is not None:
@@ -358,7 +367,7 @@ async def ensure_infrastructure(application: FastAPI) -> None:
 
     database_ok = application.state.db_pool is not None
     redis_ok = application.state.redis_client is not None
-    if database_ok and not application.state.paper_schema_ready:
+    if PAPER_ENABLED and database_ok and not application.state.paper_schema_ready:
         try:
             await ensure_paper_schema(application)
             application.state.paper_schema_ready = True
@@ -374,7 +383,7 @@ async def ensure_infrastructure(application: FastAPI) -> None:
     if application.state.market_twin_schema_ready and not application.state.market_twin_restore_attempted:
         await restore_v9_history(application)
         application.state.market_twin_restore_attempted = True
-    if application.state.paper_schema_ready:
+    if PAPER_ENABLED and application.state.paper_schema_ready:
         if not application.state.paper_restore_attempted:
             restored = await restore_paper_snapshot(application)
             application.state.paper_restore_attempted = True
@@ -389,10 +398,10 @@ async def ensure_infrastructure(application: FastAPI) -> None:
         "api": "BAĞLI",
         "database": "BAĞLI" if database_ok else "BAĞLANIYOR",
         "redis": "BAĞLI" if redis_ok else "BAĞLANIYOR",
-        "paper_storage": infrastructure.get("paper_storage", "BEKLENİYOR"),
+        "paper_storage": infrastructure.get("paper_storage", "BEKLENİYOR") if PAPER_ENABLED else "DEVRE DIŞI",
         "self_healing": "AKTİF",
         "last_checked": datetime.now(timezone.utc).isoformat(),
-        "message": "Tüm servisler ve Kalıcı Paper Cüzdan hazır." if database_ok and redis_ok and application.state.paper_schema_ready else "Altyapı servisi bekleniyor; Sistem Sağlık Merkezi yeniden bağlanmayı deniyor.",
+        "message": "Testnet-First altyapısı ve kalıcı kayıt servisi hazır." if database_ok else "Altyapı servisi bekleniyor; Sistem Sağlık Merkezi yeniden bağlanmayı deniyor.",
     })
 
 
@@ -419,7 +428,7 @@ async def lifespan(app: FastAPI):
     app.state.market_twin_restore_attempted = False
     app.state.paper_dirty = False
     app.state.snapshot_lock = asyncio.Lock()
-    app.state.infrastructure = {"api": "BAĞLI", "database": "BAĞLANIYOR", "redis": "BAĞLANIYOR", "paper_storage": "BEKLENİYOR", "self_healing": "AKTİF", "last_checked": None, "message": "Altyapı kontrol ediliyor."}
+    app.state.infrastructure = {"api": "BAĞLI", "database": "BAĞLANIYOR", "redis": "BAĞLANIYOR", "paper_storage": "BEKLENİYOR" if PAPER_ENABLED else "DEVRE DIŞI", "self_healing": "AKTİF", "last_checked": None, "message": "Testnet-First altyapısı kontrol ediliyor."}
     app.state.paper = {
         "balance": 10_000.0,
         "initial_balance": 10_000.0,
@@ -481,32 +490,32 @@ async def lifespan(app: FastAPI):
     init_v25_execution(app)
     await ensure_infrastructure(app)
     app.state.infrastructure_task = asyncio.create_task(infrastructure_loop(app))
-    app.state.paper_bot_task = asyncio.create_task(paper_bot_loop(app))
-    app.state.paper_limit_task = asyncio.create_task(paper_limit_loop(app))
-    app.state.grid_engine_task = asyncio.create_task(grid_engine_loop(app))
-    app.state.strategy_orchestrator_task = asyncio.create_task(strategy_orchestrator_loop(app))
-    app.state.market_twin_task = asyncio.create_task(v9_market_twin_loop(app))
-    app.state.strategy_evolution_task = asyncio.create_task(v10_evolution_loop(app))
-    app.state.portfolio_risk_task = asyncio.create_task(v11_risk_loop(app))
+    app.state.runtime_tasks = [app.state.infrastructure_task]
+    if PAPER_ENABLED:
+        app.state.runtime_tasks.extend([
+            asyncio.create_task(paper_bot_loop(app)),
+            asyncio.create_task(paper_limit_loop(app)),
+            asyncio.create_task(grid_engine_loop(app)),
+            asyncio.create_task(strategy_orchestrator_loop(app)),
+            asyncio.create_task(v10_evolution_loop(app)),
+            asyncio.create_task(v11_risk_loop(app)),
+        ])
+    app.state.runtime_tasks.append(asyncio.create_task(v9_market_twin_loop(app)))
     yield
-    app.state.infrastructure_task.cancel()
-    app.state.paper_bot_task.cancel()
-    app.state.paper_limit_task.cancel()
-    app.state.grid_engine_task.cancel()
-    app.state.strategy_orchestrator_task.cancel()
-    app.state.market_twin_task.cancel()
-    app.state.strategy_evolution_task.cancel()
-    app.state.portfolio_risk_task.cancel()
+    for task in app.state.runtime_tasks:
+        task.cancel()
+    await asyncio.gather(*app.state.runtime_tasks, return_exceptions=True)
     await shutdown_v21_demo(app)
     await shutdown_binance_demo(app)
     await shutdown_v25_execution(app)
     await shutdown_v22_commercial(app)
     # Kapanışta, son işlemden hemen sonra uygulama durdurulsa bile Paper
     # bakiyesinin ve açık pozisyonların veritabanına ulaşmasını dener.
-    try:
-        await persist_paper_snapshot(app)
-    except Exception:
-        pass
+    if PAPER_ENABLED:
+        try:
+            await persist_paper_snapshot(app)
+        except Exception:
+            pass
     if app.state.db_pool is not None:
         await app.state.db_pool.close()
     if app.state.redis_client is not None:
@@ -514,7 +523,7 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
-app = FastAPI(title="ProTreBot Elite X API", version="25.1.2", lifespan=lifespan)
+app = FastAPI(title="ProTreBot Elite X API", version="26.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
@@ -541,6 +550,12 @@ async def owner_preview_gate(request, call_next):
         and request.method.upper() != "OPTIONS"
         and request.url.path not in PUBLIC_PATHS
     )
+    paper_prefixes = ("/api/paper", "/api/v6", "/api/v7", "/api/v10", "/api/v11", "/api/v9/paper")
+    if not PAPER_ENABLED and request.method.upper() in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path.startswith(paper_prefixes):
+        return JSONResponse(
+            {"detail": "Paper motoru V26 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
+            status_code=410,
+        )
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -558,18 +573,19 @@ app.include_router(v25_execution_router)
 @app.get("/api/health")
 async def health():
     return {
-        "status": "ok", "version": "25.1.2", "patch": DEPLOYMENT_PATCH,
-        "mode": "v25_1_autonomous_paper_live_guard", "time": datetime.now(timezone.utc),
+        "status": "ok", "version": "26.0.0", "patch": DEPLOYMENT_PATCH,
+        "mode": "TESTNET_FIRST_WITH_LIVE_READY", "execution_mode": EXECUTION_MODE, "time": datetime.now(timezone.utc),
         **app.state.infrastructure,
-        "paper_bot": "ÇALIŞIYOR" if app.state.paper_bot["enabled"] else "BEKLEMEDE",
-        "grid_engine": "ÇALIŞIYOR" if app.state.paper.get("grid_engine", {}).get("enabled") else "BEKLEMEDE",
-        "strategy_orchestrator": "ÇALIŞIYOR" if app.state.paper.get("strategy_orchestrator", {}).get("enabled") else "BEKLEMEDE",
-        "strategy_evolution": "ÇALIŞIYOR" if app.state.paper.get("strategy_evolution", {}).get("enabled") else "BEKLEMEDE",
-        "portfolio_risk": "ÇALIŞIYOR" if app.state.paper.get("portfolio_risk", {}).get("enabled") else "BEKLEMEDE",
+        "paper": "DEVRE DIŞI",
+        "paper_bot": "DEVRE DIŞI",
+        "grid_engine": "DEVRE DIŞI",
+        "strategy_orchestrator": "DEVRE DIŞI",
+        "strategy_evolution": "DEVRE DIŞI",
+        "portfolio_risk": "DEVRE DIŞI",
         "future_lab": "AKTİF",
         "market_twin": app.state.market_twin.get("stream_health", "BEKLEMEDE"),
         "testnet": testnet_readiness()["status"],
-        "live_guard": "HAZIRLIK" if not app.state.v25_execution.get("connected") else "SALT OKUNUR BAĞLI",
+        "live_guard": "DEVRE DIŞI" if not LIVE_CHANNEL_ENABLED else "API BEKLİYOR" if not app.state.v25_execution.get("connected") else "SALT OKUNUR BAĞLI",
         "web_access": "YÖNETİCİ KİLİTLİ" if WEB_REQUIRE_AUTH else "YEREL MOD",
     }
 
@@ -3876,19 +3892,25 @@ async def record_shadow_candidate(
 
 
 def testnet_readiness() -> dict:
-    """Testnet entegrasyonunu güvenli biçimde görünür yapar; emir kodu içermez."""
-    key_present = bool(os.getenv("PROTREBOT_TESTNET_API_KEY"))
-    secret_present = bool(os.getenv("PROTREBOT_TESTNET_API_SECRET"))
-    credentials_configured = key_present and secret_present
-    status = "EMİR KİLİTLİ" if credentials_configured else "ANAHTAR BEKLİYOR"
+    """Report the real Binance Futures Demo transport used by V26."""
+    credential_check = globals().get("demo_credentials_configured")
+    credentials_configured = bool(credential_check()) if callable(credential_check) else bool(
+        os.getenv("BINANCE_DEMO_API_KEY", "").strip() and os.getenv("BINANCE_DEMO_SECRET_KEY", "").strip()
+    )
+    application = globals().get("app")
+    demo_state = getattr(getattr(application, "state", None), "binance_demo", {}) if application is not None else {}
+    connected = bool(demo_state.get("connected"))
+    arm_check = globals().get("demo_armed")
+    armed_now = bool(demo_state) and bool(arm_check(demo_state)) if callable(arm_check) else False
+    status = "10 DK EMİR KİLİDİ AÇIK" if armed_now else "BAĞLI · KİLİTLİ" if connected else "BAĞLANTI BEKLİYOR" if credentials_configured else "ANAHTAR BEKLİYOR"
     return {
-        "mode": "V20 TESTNET ADAYI", "status": status, "credentials_configured": credentials_configured,
-        "orders_enabled": False,
-        "reason": "V20 Testnet hazırlık paneli hazır. Anahtarlar algılansa bile bu tek pakette emir gönderimi fiziksel olarak kapalıdır.",
+        "mode": "V26 BINANCE FUTURES DEMO", "status": status, "credentials_configured": credentials_configured,
+        "orders_enabled": armed_now,
+        "reason": "Emirler yalnızca Binance Futures Demo hesabına gider; gerçek para kanalı ayrı ve varsayılan olarak kilitlidir.",
         "checks": [
-            {"label": "V8 veto + V7 orkestra güvenlikleri", "status": "HAZIR", "passed": True},
-            {"label": "Testnet anahtarları", "status": "ALGILANDI" if credentials_configured else "BEKLENİYOR", "passed": credentials_configured},
-            {"label": "Emir gönderimi", "status": "BİLİNÇLİ KİLİTLİ", "passed": True},
+            {"label": "Binance Futures Demo anahtarları", "status": "ALGILANDI" if credentials_configured else "BEKLENİYOR", "passed": credentials_configured},
+            {"label": "Salt-okunur hesap bağlantısı", "status": "BAĞLI" if connected else "BEKLENİYOR", "passed": connected},
+            {"label": "10 dakikalık emir izni", "status": "AÇIK" if armed_now else "KİLİTLİ", "passed": armed_now},
         ],
     }
 

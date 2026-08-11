@@ -140,10 +140,34 @@ def save_live_credentials(api_key: str, secret_key: str) -> None:
 
 
 def load_live_credentials() -> tuple[str, str]:
+    """Load live credentials without ever exposing them to the browser.
+
+    Hosted deployments use Render environment secrets.  The Windows DPAPI
+    vault remains available for the desktop build.  A partially configured
+    environment fails closed instead of silently falling back to a different
+    credential set.
+    """
+    env_api_key = os.getenv("BINANCE_LIVE_API_KEY", "").strip()
+    env_secret_key = os.getenv("BINANCE_LIVE_SECRET_KEY", "").strip()
+    if env_api_key or env_secret_key:
+        if len(env_api_key) >= 10 and len(env_secret_key) >= 10:
+            return env_api_key, env_secret_key
+        return "", ""
     payload = _load_protected_json(LIVE_VAULT_PATH)
     if payload.get("scope") != "BINANCE_USDM_FUTURES_LIVE":
         return "", ""
     return str(payload.get("api_key") or "").strip(), str(payload.get("secret_key") or "").strip()
+
+
+def live_credential_source() -> str:
+    """Return a public storage label, never credential material."""
+    env_api_key = os.getenv("BINANCE_LIVE_API_KEY", "").strip()
+    env_secret_key = os.getenv("BINANCE_LIVE_SECRET_KEY", "").strip()
+    if env_api_key or env_secret_key:
+        return "RENDER_ENV" if len(env_api_key) >= 10 and len(env_secret_key) >= 10 else "RENDER_ENV_EKSİK"
+    if os.name == "nt" and LIVE_VAULT_PATH.exists():
+        return "WINDOWS_DPAPI"
+    return "YAPILANDIRILMADI"
 
 
 def delete_live_credentials() -> None:

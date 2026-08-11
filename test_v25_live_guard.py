@@ -173,20 +173,23 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("cancel_owned_algos_for_symbol", EXECUTION_SOURCE)
         self.assertIn("PROTECTION_CLEANUP", EXECUTION_SOURCE)
 
-    def test_credentials_are_dpapi_only_and_never_browser_inputs(self):
+    def test_credentials_are_server_only_with_dpapi_desktop_fallback(self):
         self.assertIn("LIVE_VAULT_PATH", CREDENTIAL_SOURCE)
         self.assertIn("CryptProtectData", CREDENTIAL_SOURCE)
+        self.assertIn('os.getenv("BINANCE_LIVE_API_KEY"', CREDENTIAL_SOURCE)
+        self.assertIn('os.getenv("BINANCE_LIVE_SECRET_KEY"', CREDENTIAL_SOURCE)
+        self.assertIn('return "RENDER_ENV"', CREDENTIAL_SOURCE)
         lowered = FRONTEND_SOURCE.casefold()
         self.assertNotIn("secret_key", lowered)
         self.assertNotIn("api_key", lowered)
-        self.assertIn("BINANCE-CANLI-AYARLA.bat", FRONTEND_SOURCE)
+        self.assertIn("Render Environment", FRONTEND_SOURCE)
         self.assertIn("secret_inputs_in_browser", EXECUTION_SOURCE)
 
     def test_v25_router_and_frontend_center_are_integrated(self):
         self.assertIn('version="25.0.0"', MAIN_SOURCE)
         self.assertIn("httpx.AsyncClient(timeout=15, trust_env=False)", MAIN_SOURCE)
         self.assertIn("v25_execution_router", MAIN_SOURCE)
-        for route in ('"/connect/read-only"', '"/market/candles"', '"/policy"', '"/order/test"', '"/arm"', '"/order"', '"/auto/start"', '"/emergency"'):
+        for route in ('"/connect/read-only"', '"/market/candles"', '"/consent"', '"/policy"', '"/order/test"', '"/arm"', '"/order"', '"/auto/start"', '"/emergency"'):
             self.assertIn(route, EXECUTION_SOURCE)
         for label in ("Canlı Kasa & Otonom Emir Merkezi", "Canlı Risk Politikası", "Canlı Yayın Kapısı", "MARKET / LIMIT Emir Bileti", "Canlı Seviye Grafiği", "ACİL DURDUR"):
             self.assertIn(label, FRONTEND_SOURCE)
@@ -195,6 +198,11 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("class ManualLiveOrderRequest", EXECUTION_SOURCE)
         self.assertIn("CANLI EMİR GÖNDER", EXECUTION_SOURCE)
         self.assertIn("confirmation:phrase", FRONTEND_SOURCE)
+
+    def test_hosted_consent_is_transient_and_restart_revoked(self):
+        self.assertIn('"web_consent": {"accepted_at": None', EXECUTION_SOURCE)
+        self.assertIn("CANLI İŞLEM RİSKİNİ 24 SAAT KABUL EDİYORUM", EXECUTION_SOURCE)
+        self.assertIn('"storage": "SUNUCU_BELLEĞİ"', EXECUTION_SOURCE)
 
 
 if __name__ == "__main__":
