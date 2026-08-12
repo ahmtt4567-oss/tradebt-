@@ -1,31 +1,30 @@
-# ProTreBot V25.1.2 — Tek Seferde Doğru Yayın
+# ProTreBot V27 — Tek Seferde Doğru Yayın
 
-Bu dosya, GitHub ana sayfasına dosyaların yanlışlıkla dağılmasını önleyen son yayın yoludur.
+## GitHub
 
-## En güvenli yöntem: GitHub Desktop
+1. GitHub Desktop ile özel `Gezginci08/ProTreBot-Web` deposunu klonlayın.
+2. Bu paketteki `ProTreBot-Web-V27-Cloud-Ops` klasörünün **içindeki** dosyaları klonlanan
+   deponun köküne kopyalayın.
+3. Windows sorarsa hedefteki dosyaları değiştirin.
+4. `.env`, API anahtarı, parola, `node_modules`, `dist`, `.venv` ve çalışma verisi kopyalamayın.
+5. `V27 cloud operations` açıklamasıyla commit ve push yapın.
 
-1. GitHub Desktop uygulamasını açın ve GitHub hesabınızla giriş yapın.
-2. **File > Clone repository** seçin.
-3. `Gezginci08/ProTreBot-Web` deposunu seçip bilgisayarınıza klonlayın.
-4. Bu paketteki `ProTreBot-Web-V1` klasörünü açın.
-5. Klasörün içindeki `backend`, `frontend`, `database` klasörleri ile kök dosyaları klonlanan `ProTreBot-Web` klasörüne kopyalayın.
-6. Windows sorarsa **Hedefteki dosyaları değiştir** seçeneğini onaylayın.
-7. `.env`, API anahtarı, parola, `node_modules`, `dist`, `.venv` veya `backend/data` kopyalamayın.
-8. GitHub Desktop'a dönün. Summary alanına `V25.1.2 final stabilizasyon` yazın.
-9. **Commit to main**, ardından **Push origin** düğmesine basın.
+## Render
 
-GitHub sayfasında `backend/app/main.py` ve `frontend/src/App.tsx` yolları görünmelidir. `App.tsx` veya `main.py` yalnızca depo ana sayfasında görünüyorsa yanlış konumdadır.
+1. GitHub push sonrasında dağıtım başlamazsa **Manual Deploy > Deploy latest commit** seçin.
+2. `https://protrebot-api.onrender.com/api/health` adresinde şunları görün:
+   - `version: 27.0.0`
+   - `mode: TESTNET_FIRST_CLOUD_DURABLE`
+   - `cloud_evidence: KALICI`
 
-## Dağıtımın tamamlandığını doğrulama
+## Vercel
 
-1. Render dağıtımının **Live** olmasını bekleyin.
-2. `https://protrebot-api.onrender.com/api/health` adresini açın.
-3. Yanıtta `"version":"25.1.2"` ve `"patch":"25.1.2-json-safe"` görünmelidir.
-4. Vercel dağıtımının **Ready** olmasını bekleyin.
-5. `https://pro-tre-bot-web.vercel.app` adresini açıp `Ctrl+F5` yapın.
-6. Sol üstte `V25.1.2 · LIVE GUARD` görünmelidir.
-7. `50 USDT DEMO AÇ` düğmesi sayfayı boşaltmadan Paper pozisyonu açmalıdır.
+1. Vercel otomatik dağıtımı tamamladığında siteyi açıp `Ctrl+F5` yapın.
+2. Sol üstte `V27 · CLOUD OPERATIONS / TESTNET-FIRST` görünmelidir.
+3. **Operasyon & Kanıt** sekmesini açıp kalıcı kanıt durumunu kontrol edin.
 
 ## Güvenlik sınırı
 
-Bu yayın Paper/demo içindir. Gerçek para veya Testnet emri kendiliğinden açılmaz. Kâr garanti edilmez; stop ile kapanan zarar işlemleri normal risk yönetiminin parçasıdır.
+İlk yayında yalnızca Binance Futures Demo anahtarlarını kullanın. Anahtarları GitHub'a,
+Vercel'e, ekran görüntüsüne veya sohbete koymayın. Testnet kâr garantisi vermez ve ücretsiz
+sunucu katmanı 7/24 otomasyon sağlamaz.

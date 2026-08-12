@@ -1,4 +1,9 @@
-# ProTreBot Elite X V26 — Testnet-First / Live-Ready
+# ProTreBot Elite X V27 — Cloud Operations & Evidence
+
+V27, V26 Testnet-First motorunu korur ve üzerine **Bulut Operasyon ve Kanıt Merkezi** ekler.
+Botun son taraması, neden işlem açtığı/açmadığı, açık Testnet pozisyonları, Stop/TP koruma
+sayısı ve Demo sertifika ilerlemesi tek ekranda görünür. Karar ve işlem kanıtları PostgreSQL'e
+yazıldığı için Render yeniden başlatmasında kaybolmaz.
 
 Bu sürümde **Paper kapalıdır**. Ana çalışma motoru Binance USD-M Futures Demo/Testnet'tir.
 Gerçek Futures ekranı ve altyapısı hazırdır; ancak canlı API anahtarları, salt-okunur bağlantı,
@@ -15,6 +20,8 @@ gerçek emir gönderemez.
 - Uygulama yeniden başlatılınca canlı işlem izni ve kısa süreli emir kilidi iptal olur.
 - Para çekme ve transfer izni bu proje için kullanılmaz.
 - Canlı emir kanalı, eksik olan tek bir güvenlik kapısında bile kapalı kalır.
+- V27 PostgreSQL'e yalnızca anahtarsız Testnet kararları, planları ve olayları kaydeder.
+- Sunucu yeniden başlatıldığında Testnet otomasyonu ve kısa süreli emir kilidi kapalı başlar.
 
 ## 1. GitHub'a yükleme
 
@@ -36,6 +43,7 @@ Render mevcut depodaki `render.yaml` dosyasını kullanır. Serviste şu değerl
 | `BINANCE_DEMO_SECRET_KEY` | Binance Futures Demo Secret Key |
 | `BINANCE_LIVE_API_KEY` | Şimdilik boş |
 | `BINANCE_LIVE_SECRET_KEY` | Şimdilik boş |
+| `PROTREBOT_DEPLOYMENT_TIER` | Ücretsiz testte `FREE_PREVIEW`; sürekli sunucuda `ALWAYS_ON` |
 
 Değişiklikten sonra **Manual Deploy > Deploy latest commit** çalıştırın. Sağlık kontrolü:
 
@@ -60,8 +68,10 @@ Ana sayfada yönetici erişim kodunu girin. Bu kod Binance anahtarı değildir.
 1. `Yayın Kapıları` sekmesinde Demo kanalının bağlı olduğunu doğrulayın.
 2. `Testnet Komuta` bölümünde bakiye ve pozisyon modunu kontrol edin.
 3. Önce emir testi, sonra küçük Demo MARKET/LIMIT emri deneyin.
-4. Stop ve TP emirlerinin Binance Demo hesabında göründüğünü doğrulayın.
-5. Acil durdurma tatbikatı yapın ve tüm Demo emirlerinin kapandığını denetleyin.
-6. En az 30 aktif gün ve 100 kapanmış Demo işlem ile sonuç toplayın.
+4. `Operasyon & Kanıt` sekmesinde PostgreSQL durumunun **KALICI** olduğunu görün.
+5. Stop ve TP emirlerinin Binance Demo hesabında göründüğünü doğrulayın.
+6. Acil durdurma tatbikatı yapın ve tüm Demo emirlerinin kapandığını denetleyin.
+7. En az 30 aktif gün ve 100 kapanmış Demo işlem ile sonuç toplayın.
 
-Canlı kanalın ayrıntılı kapıları için [V26-TESTNET-FIRST.md](V26-TESTNET-FIRST.md) dosyasına bakın.
+V27 ayrıntıları için [V27-CLOUD-OPERASYON.md](V27-CLOUD-OPERASYON.md), canlı kanalın
+kapıları için [V26-TESTNET-FIRST.md](V26-TESTNET-FIRST.md) dosyasına bakın.
