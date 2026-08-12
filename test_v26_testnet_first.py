@@ -15,11 +15,11 @@ class V26TestnetFirstContracts(unittest.TestCase):
     def test_testnet_is_primary_and_paper_is_disabled_by_default(self):
         self.assertIn('EXECUTION_MODE = "TESTNET_FIRST"', MAIN)
         self.assertIn('env_flag("PROTREBOT_PAPER_ENABLED", default=False)', MAIN)
-        self.assertIn("Paper motoru V26 Testnet-First sürümünde devre dışıdır", MAIN)
+        self.assertIn("Paper motoru V27 Testnet-First sürümünde devre dışıdır", MAIN)
 
     def test_new_shell_exposes_separate_testnet_live_and_setup_tabs(self):
         self.assertIn("<TestnetFirstApp/>", ENTRY)
-        for label in ("TESTNET KOMUTA", "CANLI HAZIRLIK", "YAYIN KAPILARI"):
+        for label in ("TESTNET KOMUTA", "OPERASYON & KANIT", "CANLI HAZIRLIK", "YAYIN KAPILARI"):
             self.assertIn(label, FRONTEND)
         self.assertIn("Paper devre dışı", FRONTEND)
 

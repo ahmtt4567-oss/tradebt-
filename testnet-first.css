@@ -64,7 +64,7 @@ body{background:#f3f8e7}
   top:8px;
   z-index:18;
   display:grid;
-  grid-template-columns:repeat(3,1fr);
+  grid-template-columns:repeat(4,1fr);
   gap:9px;
   margin-top:12px;
   padding:8px;

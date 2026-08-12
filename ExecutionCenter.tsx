@@ -245,7 +245,7 @@ export default function ExecutionCenter({token=''}:{token?:string}) {
 
   return <div className="executionV25">
     <header className="executionHero">
-      <div><span><ShieldCheck/></span><div><small>V26 · FAIL-CLOSED LIVE READY</small><h2>Canlı Kasa & Otonom Emir Merkezi</h2><p>Binance Futures Demo kanıtı → salt-okunur canlı hesap → süreli gerçek emir zinciri.</p></div></div>
+      <div><span><ShieldCheck/></span><div><small>V27 · FAIL-CLOSED LIVE READY</small><h2>Canlı Kasa & Otonom Emir Merkezi</h2><p>Binance Futures Demo kanıtı → salt-okunur canlı hesap → süreli gerçek emir zinciri.</p></div></div>
       <aside className={status.readiness.ready ? 'ready' : 'locked'}><b>{status.readiness.ready ? 'CANLI ADAY HAZIR' : 'CANLI KİLİTLİ'}</b><strong>%{status.readiness.score}</strong><span>{pendingGate ? `${pendingGate.label} bekleniyor` : 'Bütün yayın kapıları geçti'}</span></aside>
     </header>
 

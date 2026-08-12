@@ -32,6 +32,11 @@ from .v22_commercial import (
 )
 from .v24_commerce import router as v24_commerce_router
 from .v25_execution import init_v25_execution, router as v25_execution_router, shutdown_v25_execution
+from .v27_cloud_ops import (
+    init_v27_cloud,
+    router as v27_cloud_router,
+    shutdown_v27_cloud,
+)
 from .paper_autonomy import (
     PAPER_AUTONOMY_VERSION,
     autonomy_policy,
@@ -44,7 +49,7 @@ from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 BINANCE_API = "https://api.binance.com"
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
 LEGACY_V25_API_CONTRACT = 'version="25.0.0"'
-DEPLOYMENT_PATCH = "26.0.0-testnet-first-live-ready"
+DEPLOYMENT_PATCH = "27.0.0-cloud-operations-evidence"
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://protrebot:protrebot_local_change_me@127.0.0.1:5432/protrebot",
@@ -489,6 +494,7 @@ async def lifespan(app: FastAPI):
     init_v22_commercial(app)
     init_v25_execution(app)
     await ensure_infrastructure(app)
+    await init_v27_cloud(app)
     app.state.infrastructure_task = asyncio.create_task(infrastructure_loop(app))
     app.state.runtime_tasks = [app.state.infrastructure_task]
     if PAPER_ENABLED:
@@ -508,6 +514,7 @@ async def lifespan(app: FastAPI):
     await shutdown_v21_demo(app)
     await shutdown_binance_demo(app)
     await shutdown_v25_execution(app)
+    await shutdown_v27_cloud(app)
     await shutdown_v22_commercial(app)
     # Kapanışta, son işlemden hemen sonra uygulama durdurulsa bile Paper
     # bakiyesinin ve açık pozisyonların veritabanına ulaşmasını dener.
@@ -523,7 +530,7 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
-app = FastAPI(title="ProTreBot Elite X API", version="26.0.0", lifespan=lifespan)
+app = FastAPI(title="ProTreBot Elite X API", version="27.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
@@ -553,7 +560,7 @@ async def owner_preview_gate(request, call_next):
     paper_prefixes = ("/api/paper", "/api/v6", "/api/v7", "/api/v10", "/api/v11", "/api/v9/paper")
     if not PAPER_ENABLED and request.method.upper() in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path.startswith(paper_prefixes):
         return JSONResponse(
-            {"detail": "Paper motoru V26 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
+            {"detail": "Paper motoru V27 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
             status_code=410,
         )
     response = await call_next(request)
@@ -568,13 +575,14 @@ app.include_router(v21_demo_router)
 app.include_router(v22_commercial_router)
 app.include_router(v24_commerce_router)
 app.include_router(v25_execution_router)
+app.include_router(v27_cloud_router)
 
 
 @app.get("/api/health")
 async def health():
     return {
-        "status": "ok", "version": "26.0.0", "patch": DEPLOYMENT_PATCH,
-        "mode": "TESTNET_FIRST_WITH_LIVE_READY", "execution_mode": EXECUTION_MODE, "time": datetime.now(timezone.utc),
+        "status": "ok", "version": "27.0.0", "patch": DEPLOYMENT_PATCH,
+        "mode": "TESTNET_FIRST_CLOUD_DURABLE", "execution_mode": EXECUTION_MODE, "time": datetime.now(timezone.utc),
         **app.state.infrastructure,
         "paper": "DEVRE DIŞI",
         "paper_bot": "DEVRE DIŞI",
@@ -586,6 +594,7 @@ async def health():
         "market_twin": app.state.market_twin.get("stream_health", "BEKLEMEDE"),
         "testnet": testnet_readiness()["status"],
         "live_guard": "DEVRE DIŞI" if not LIVE_CHANNEL_ENABLED else "API BEKLİYOR" if not app.state.v25_execution.get("connected") else "SALT OKUNUR BAĞLI",
+        "cloud_evidence": app.state.v27_cloud.get("status", "BAŞLIYOR"),
         "web_access": "YÖNETİCİ KİLİTLİ" if WEB_REQUIRE_AUTH else "YEREL MOD",
     }
 
@@ -593,7 +602,12 @@ async def health():
 @app.get("/api/web/access/check")
 async def web_access_check():
     """The owner gate middleware has already authenticated this request."""
-    return {"authorized": True, "mode": "OWNER_PREVIEW", "orders_enabled": False}
+    return {
+        "authorized": True,
+        "mode": "OWNER_PREVIEW",
+        "real_orders_enabled": False,
+        "testnet_orders_available": True,
+    }
 
 
 @app.get("/api/markets")

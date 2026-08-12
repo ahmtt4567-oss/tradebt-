@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
-import { Activity, CheckCircle2, CircleDollarSign, CloudCog, KeyRound, LayoutDashboard, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2, TrendingUp } from 'lucide-react'
+import { Activity, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
 const ExecutionCenter = lazy(() => import('./ExecutionCenter'))
+const CloudOpsCenter = lazy(() => import('./CloudOpsCenter'))
 
-type View = 'testnet'|'live'|'setup'
+type View = 'testnet'|'ops'|'live'|'setup'
 type Market = {symbol:string;display:string;price:number;change:number;volume:number}
 type Candle = {time:number;open:number;high:number;low:number;close:number;volume:number}
 type Point = {time:number;value:number}
@@ -15,7 +16,7 @@ type Analysis = {
   support:number;resistance:number;trend:string;momentum:string;rsi:number;adx:number;volume_ratio:number;explanation:string;
   series:{ema20:Point[];ema50:Point[];ema200:Point[]}
 }
-type Health = {status:string;version:string;mode:string;testnet:string;live_guard:string;paper:string;database:string;web_access:string}
+type Health = {status:string;version:string;mode:string;testnet:string;live_guard:string;paper:string;database:string;cloud_evidence:string;web_access:string}
 
 const format = (value:number) => value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
 
@@ -117,10 +118,11 @@ export default function TestnetFirstApp() {
 
   return <main className="v26App">
     <header className="v26Header">
-      <div className="v26Brand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V26 · TESTNET-FIRST / LIVE-READY</small></div></div>
+      <div className="v26Brand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V27 · CLOUD OPERATIONS / TESTNET-FIRST</small></div></div>
       <div className="v26HeaderSignals">
         <span className="ok"><i/>SUNUCU CANLI</span>
         <span className="ok"><i/>TESTNET ANA MOD</span>
+        <span className={health?.cloud_evidence === 'KALICI' ? 'ok' : 'locked'}><Cloud/>{health?.cloud_evidence || 'KANIT BAĞLANIYOR'}</span>
         <span className={health?.live_guard === 'SALT OKUNUR BAĞLI' ? 'ok' : 'locked'}><LockKeyhole/>{health?.live_guard || 'CANLI API BEKLİYOR'}</span>
       </div>
       <button className="v26Refresh" onClick={refresh} disabled={loading}><RefreshCw className={loading ? 'spin' : ''}/>{loading ? 'YENİLENİYOR' : 'YENİLE'}</button>
@@ -128,12 +130,13 @@ export default function TestnetFirstApp() {
 
     <nav className="v26Nav">
       <button className={view === 'testnet' ? 'active' : ''} onClick={() => setView('testnet')}><TestTube2/><span><b>TESTNET KOMUTA</b><small>Binance Futures Demo · Ana çalışma alanı</small></span></button>
+      <button className={view === 'ops' ? 'active' : ''} onClick={() => setView('ops')}><Cloud/><span><b>OPERASYON & KANIT</b><small>Karar, pozisyon ve kalıcı PostgreSQL kaydı</small></span></button>
       <button className={view === 'live' ? 'active liveTab' : ''} onClick={() => setView('live')}><ShieldCheck/><span><b>CANLI HAZIRLIK</b><small>API yoksa kesin kilitli · Gerçek kanal</small></span></button>
       <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}><CloudCog/><span><b>YAYIN KAPILARI</b><small>Render secret ve geçiş kontrolü</small></span></button>
     </nav>
 
     <section className="v26ModeBar">
-      <div><small>AKTİF ÇALIŞMA ALANI</small><h1>{view === 'testnet' ? 'Binance Futures Demo Merkezi' : view === 'live' ? 'Gerçek Futures Hazırlık Merkezi' : 'Sunucu ve Anahtar Kapıları'}</h1><p>{view === 'testnet' ? 'Gerçek Binance motoruna en yakın test ortamı; sanal bakiye, gerçek emir akışı ve borsa yanıtları.' : view === 'live' ? 'Altyapı hazır; Render canlı API anahtarları eklenene kadar emir gönderimi fiziksel olarak kapalı.' : 'Anahtar değerleri tarayıcıya veya GitHub’a yazılmaz; yalnızca Render Environment kasasında tutulur.'}</p></div>
+      <div><small>AKTİF ÇALIŞMA ALANI</small><h1>{view === 'testnet' ? 'Binance Futures Demo Merkezi' : view === 'ops' ? 'Bulut Operasyon ve Kanıt Merkezi' : view === 'live' ? 'Gerçek Futures Hazırlık Merkezi' : 'Sunucu ve Anahtar Kapıları'}</h1><p>{view === 'testnet' ? 'Gerçek Binance motoruna en yakın test ortamı; sanal bakiye, gerçek emir akışı ve borsa yanıtları.' : view === 'ops' ? 'Otonom taramanın son kararı, pozisyonlar ve yeniden başlatmaya dayanıklı PostgreSQL kanıt defteri.' : view === 'live' ? 'Altyapı hazır; Render canlı API anahtarları eklenene kadar emir gönderimi fiziksel olarak kapalı.' : 'Anahtar değerleri tarayıcıya veya GitHub’a yazılmaz; yalnızca Render Environment kasasında tutulur.'}</p></div>
       <aside><span><CircleDollarSign/>GERÇEK PARA</span><b>{view === 'live' ? 'KİLİTLİ' : '0 USDT'}</b><em>Paper devre dışı</em></aside>
     </section>
 
@@ -149,6 +152,8 @@ export default function TestnetFirstApp() {
     </>}
 
     {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><ExecutionCenter/></Suspense>}
+
+    {view === 'ops' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Bulut operasyon merkezi hazırlanıyor…</div>}><CloudOpsCenter/></Suspense>}
 
     {view === 'setup' && <section className="v26Setup">
       <header><div><KeyRound/><span><small>SECRETS-ONLY TASARIM</small><h2>İki Ayrı Binance Kanalı</h2></span></div><b><ShieldCheck/>TARAYICIYA ANAHTAR GİRİLMEZ</b></header>
@@ -166,6 +171,6 @@ export default function TestnetFirstApp() {
       <footer><CheckCircle2/>Altyapı tamamlandıktan sonra ilk aşamada yalnızca Demo secret’larını ekleyeceğiz. Canlı secret’lar boş kalacak.</footer>
     </section>}
 
-    <footer className="v26Footer"><span><RadioTower/>API: <b>{health?.status === 'ok' ? 'BAĞLI' : 'KONTROL EDİLİYOR'}</b></span><span>Veritabanı: <b>{health?.database || '—'}</b></span><span>Çalışma modu: <b>TESTNET FIRST</b></span><span>Paper: <b>DEVRE DIŞI</b></span><em>Kâr garantisi yoktur. Testnet sonucu gerçek piyasa sonucunu garanti etmez.</em></footer>
+    <footer className="v26Footer"><span><RadioTower/>API: <b>{health?.status === 'ok' ? 'BAĞLI' : 'KONTROL EDİLİYOR'}</b></span><span>Veritabanı: <b>{health?.database || '—'}</b></span><span>Kanıt defteri: <b>{health?.cloud_evidence || '—'}</b></span><span>Çalışma modu: <b>TESTNET FIRST</b></span><span>Paper: <b>DEVRE DIŞI</b></span><em>Kâr garantisi yoktur. Testnet sonucu gerçek piyasa sonucunu garanti etmez.</em></footer>
   </main>
 }
