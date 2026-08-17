@@ -6,3 +6,4 @@ asyncpg==0.31.0
 redis==6.4.0
 websockets==16.1.1
 python-dotenv==1.2.2
+cryptography==46.0.0

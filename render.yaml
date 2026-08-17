@@ -31,14 +31,6 @@ services:
         value: "true"
       - key: PROTREBOT_DEPLOYMENT_TIER
         value: "FREE_PREVIEW"
-      - key: BINANCE_DEMO_API_KEY
-        sync: false
-      - key: BINANCE_DEMO_SECRET_KEY
-        sync: false
-      - key: BINANCE_LIVE_API_KEY
-        sync: false
-      - key: BINANCE_LIVE_SECRET_KEY
-        sync: false
 
 databases:
   - name: protrebot-db

@@ -412,7 +412,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
       <div className="demoHeroStatus">
-        <span className={status?.configured ? 'demoOk' : 'demoWait'}><LockKeyhole/><small>ANAHTAR</small><b>{status?.configured ? 'YERELDE HAZIR' : 'AYAR BEKLİYOR'}</b></span>
+        <span className={status?.configured ? 'demoOk' : 'demoWait'}><LockKeyhole/><small>ANAHTAR</small><b>{status?.configured ? 'KASADA HAZIR' : 'KASA BEKLİYOR'}</b></span>
         <span className={status?.connected ? 'demoOk' : 'demoWait'}><Radio/><small>DEMO API</small><b>{status?.connected ? 'BAĞLI' : 'BAĞLI DEĞİL'}</b></span>
         <span className={status?.armed ? 'demoArmed' : 'demoSafe'}>{status?.armed ? <UnlockKeyhole/> : <LockKeyhole/>}<small>EMİR KİLİDİ</small><b>{status?.armed ? `${Math.floor(armSeconds/60)}:${String(armSeconds%60).padStart(2,'0')}` : 'KAPALI'}</b></span>
       </div>
@@ -437,8 +437,8 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     </section>
 
     {!status?.configured && <section className="demoSetupCard">
-      <div><LockKeyhole/><span><b>Anahtarlar tarayıcıya yazılmaz</b><p>Proje klasöründeki <strong>BINANCE-DEMO-AYARLA.bat</strong> dosyasına çift tıklayın. Açılan siyah yerel pencereye Demo API Key ve Secret Key’i yapıştırın; sonra ProTreBot’u yeniden başlatın.</p></span></div>
-      <button onClick={refreshStatus}><RefreshCw/> AYARI YENİDEN KONTROL ET</button>
+      <div><LockKeyhole/><span><b>Testnet anahtarı şifreli kasada bekleniyor</b><p>Üst menüdeki <strong>BORSA BAĞLANTILARI</strong> sekmesine girin. TESTNET kartında anahtarı test edin, şifreli kaydedin ve aktifleştirin; başka bir siteye veya siyah pencereye gitmeniz gerekmez.</p></span></div>
+      <button onClick={refreshStatus}><RefreshCw/> KASAYI YENİDEN KONTROL ET</button>
     </section>}
 
     <section className={`demoCommandBar ${tab !== 'trade' ? 'demoTabHidden' : ''}`}>

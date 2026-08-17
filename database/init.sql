@@ -91,3 +91,38 @@ CREATE TABLE IF NOT EXISTS paper_twin_fills (
   latency_ms INTEGER NOT NULL,
   paper_only BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+-- V27 keeps only non-secret Testnet decisions, plans and evidence. Exchange
+-- credentials are never written to these evidence tables.
+CREATE TABLE IF NOT EXISTS protrebot_cloud_state (
+  state_key TEXT PRIMARY KEY,
+  version TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payload JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS protrebot_cloud_evidence (
+  event_key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  symbol TEXT,
+  event_time TIMESTAMPTZ NOT NULL,
+  payload JSONB NOT NULL,
+  stored_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_protrebot_cloud_evidence_time
+  ON protrebot_cloud_evidence (event_time DESC);
+
+-- V28 exchange credentials are stored only as authenticated ciphertext.  API
+-- and Secret key columns deliberately do not exist.
+CREATE TABLE IF NOT EXISTS protrebot_exchange_vault (
+  mode TEXT PRIMARY KEY CHECK (mode IN ('TESTNET', 'LIVE')),
+  encrypted_payload BYTEA NOT NULL,
+  fingerprint TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  last_test_ok BOOLEAN NOT NULL DEFAULT FALSE,
+  last_test_at TIMESTAMPTZ,
+  last_error TEXT,
+  account_summary JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -154,6 +154,19 @@ def response_rows(payload: Any) -> list[dict[str, Any]]:
 
 
 def load_demo_credentials() -> tuple[str, str]:
+    # V28 web deployments use the encrypted in-application vault.  Once a
+    # TESTNET record exists, its active switch is authoritative and legacy
+    # environment values cannot bypass it.
+    try:
+        from .exchange_connections import cached_credentials, vault_managed
+
+        vault_values = cached_credentials("TESTNET", active_only=True)
+        if vault_values[0] and vault_values[1]:
+            return vault_values
+        if vault_managed("TESTNET"):
+            return "", ""
+    except (ImportError, RuntimeError, ValueError):
+        pass
     try:
         from .credential_store import load_credentials
 
@@ -211,7 +224,7 @@ class BinanceDemoClient:
     def __init__(self, http: httpx.AsyncClient, api_key: str, secret_key: str) -> None:
         if not api_key or not secret_key:
             raise BinanceDemoError(
-                "Demo API anahtarları ayarlı değil. BINANCE-DEMO-AYARLA.bat dosyasını çalıştırın.",
+                "Demo API bağlantısı aktif değil. Programdaki Borsa Bağlantıları bölümünden Testnet anahtarını kaydedip aktifleştirin.",
                 http_status=412,
             )
         self.http = http

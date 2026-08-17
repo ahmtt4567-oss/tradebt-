@@ -1,0 +1,28 @@
+PROTREBOT ELITE X V28 - HIZLI KURULUM
+=====================================
+
+1. Bu ZIP'i bilgisayarınızda çıkarın.
+2. Çıkan klasörün İÇİNDEKİ dosyaları GitHub'daki ProTreBot-Web deponuzun ana dizinine yükleyin.
+3. GitHub yüklemesi tamamlanınca Render ve Vercel otomatik yeniden yayın yapar.
+4. Yeni Vercel adresini açıp yönetici kodunuzla giriş yapın.
+5. Üst menüden BORSA BAĞLANTILARI sekmesine girin.
+6. Önce TESTNET'i seçin: API Key + Secret Key > BAĞLANTIYI TEST ET > kutuyu işaretle > ŞİFRELİ KAYDET > AKTİFLEŞTİR.
+7. Gerçek hesap için LIVE kartını ancak Testnet kontrolü tamamlandıktan sonra kullanın.
+
+ARTIK RENDER'A BINANCE ANAHTARI YAZILMAZ.
+
+Render'da yalnızca mevcut altyapı değerleri kalır:
+- DATABASE_URL
+- PROTREBOT_WEB_ACCESS_TOKEN (en az 24 karakter)
+- PROTREBOT_CORS_ORIGINS (tam Vercel adresi)
+- PROTREBOT_EXECUTION_MODE=TESTNET_FIRST
+- PROTREBOT_LIVE_CHANNEL_ENABLED=true
+
+Vercel'de:
+- VITE_API_URL=https://SIZIN-RENDER-API-ADRESINIZ.onrender.com
+- VITE_WEB_ACCESS_REQUIRED=true
+
+GÜVENLİK:
+- API/Secret değerlerini ChatGPT'ye, ekran görüntüsüne veya GitHub'a koymayın.
+- Para çekme yetkisini hiçbir anahtarda açmayın.
+- Önce Testnet kullanın; gerçek işlemlerde kâr garantisi yoktur ve tüm sermaye kaybedilebilir.

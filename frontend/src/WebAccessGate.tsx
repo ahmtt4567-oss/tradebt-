@@ -14,7 +14,7 @@ export default function WebAccessGate({children}:{children:ReactNode}) {
     if (!ACCESS_REQUIRED) return
     if (!token) {
       setStatus('LOCKED')
-      setMessage('Render üzerinde belirlediğin yönetici erişim kodunu yaz.')
+      setMessage('Sunucuda belirlediğin yönetici erişim kodunu yaz.')
       return
     }
     verifyOwnerAccess(token)
@@ -55,7 +55,7 @@ export default function WebAccessGate({children}:{children:ReactNode}) {
 
   return <main className="webAccessShell">
     <section className="webAccessCard">
-      <div className="webAccessBrand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>WEB V1 · OWNER PREVIEW</small></div></div>
+      <div className="webAccessBrand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V28 · IN-APP EXCHANGE VAULT</small></div></div>
       <div className="webAccessIcon"><LockKeyhole/></div>
       <h1>Yönetici erişimi</h1>
       <p>Bot paneli ve API uçları internete karşı kilitlidir. Bu ekran Binance anahtarı istemez.</p>
@@ -65,8 +65,7 @@ export default function WebAccessGate({children}:{children:ReactNode}) {
         <button disabled={status === 'CHECKING'}>{status === 'CHECKING' ? 'DOĞRULANIYOR…' : 'GÜVENLİ PANELE GİR'}</button>
       </form>
       <em>{message}</em>
-      <footer><ShieldCheck size={14}/> Gerçek ve Testnet emirleri bu önizlemede kapalıdır.</footer>
+      <footer><ShieldCheck size={14}/> Testnet ana çalışma modudur; gerçek emir kanalı ayrıca kilitlidir.</footer>
     </section>
   </main>
 }
-

@@ -15,7 +15,7 @@ type Event = {id:string;kind:string;message:string;created_at:string;symbol?:str
 type Candle = {time:number;open:number;high:number;low:number;close:number;volume:number}
 type CandleResponse = {symbol:string;interval:string;candles:Candle[];updated_at:string;orders_created:false}
 type Status = {
-  version:string;host:string;credentials:{configured:boolean;fingerprint:string|null;storage:string};consent:{active:boolean;accepted_at:string|null;expires_at:string|null;fingerprint:string|null};connected:boolean;connection:{last_checked:string|null;last_error:string|null;clock_offset_ms:number|null};stream:{status:string;transport:string;last_event:string|null;last_error:string|null;event_count:number;reconnect_count:number};armed:boolean;armed_until:string|null;auto_session_until:string|null;auto:{enabled:boolean;busy:boolean;cycles:number;last_scan:string|null;last_decision:string;last_error:string|null};policy:Policy;policy_digest:string;policy_acknowledged:boolean;readiness:{ready:boolean;score:number;gates:Gate[];demo_certificate:{status?:string;score?:number;gates?:{name:string;passed:boolean;value:string|number;target:string|number}[]}};account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:Position[];open_orders:unknown[];open_algo_orders:unknown[];hedge_mode:boolean|null};daily:{entries:number;realized_pnl:number;unverified_closures:number};plans:Plan[];events:Event[];emergency:{active:boolean;triggered_at:string|null;reason:string|null};profit_guaranteed:boolean
+  version:string;host:string;credentials:{configured:boolean;fingerprint:string|null;storage:string};consent:{active:boolean;accepted_at:string|null;expires_at:string|null;fingerprint:string|null;storage?:string};connected:boolean;connection:{last_checked:string|null;last_error:string|null;clock_offset_ms:number|null};stream:{status:string;transport:string;last_event:string|null;last_error:string|null;event_count:number;reconnect_count:number};armed:boolean;armed_until:string|null;auto_session_until:string|null;auto:{enabled:boolean;busy:boolean;cycles:number;last_scan:string|null;last_decision:string;last_error:string|null};policy:Policy;policy_digest:string;policy_acknowledged:boolean;readiness:{ready:boolean;score:number;gates:Gate[];demo_certificate:{status?:string;score?:number;gates?:{name:string;passed:boolean;value:string|number;target:string|number}[]}};account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:Position[];open_orders:unknown[];open_algo_orders:unknown[];hedge_mode:boolean|null};daily:{entries:number;realized_pnl:number;unverified_closures:number};plans:Plan[];events:Event[];emergency:{active:boolean;triggered_at:string|null;reason:string|null};profit_guaranteed:boolean
 }
 
 type OrderForm = {symbol:string;direction:'LONG'|'SHORT';order_type:'MARKET'|'LIMIT';limit_price:string;margin_usdt:string;leverage:string;stop_loss:string;tp1:string;tp2:string;tp3:string}
@@ -29,7 +29,7 @@ function errorText(value:unknown):string {
   return 'İşlem tamamlanamadı; güvenlik kapılarını ve bağlantıyı kontrol edin.'
 }
 
-function LivePositionChart({token,symbol,interval,plan}:{token:string;symbol:string;interval:string;plan:Plan|null}) {
+function LivePositionChart({token,symbol,interval,plan}:{token?:string;symbol:string;interval:string;plan:Plan|null}) {
   const ref = useRef<HTMLDivElement>(null)
   const [message,setMessage] = useState('Canlı mumlar hazırlanıyor…')
   const [updated,setUpdated] = useState<string|null>(null)
@@ -72,7 +72,9 @@ function LivePositionChart({token,symbol,interval,plan}:{token:string;symbol:str
 
     const load = async () => {
       try {
-        const response = await fetch(`${API}/market/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=360`,{headers:{Authorization:`Bearer ${token}`}})
+        const headers = new Headers()
+        if (token) headers.set('Authorization',`Bearer ${token}`)
+        const response = await fetch(`${API}/market/candles?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=360`,{headers})
         const payload = await response.json().catch(() => null) as CandleResponse|{detail?:unknown}|null
         if (!response.ok) throw new Error(errorText(payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : payload))
         if (!active || !payload || !('candles' in payload)) return
@@ -98,7 +100,7 @@ function LivePositionChart({token,symbol,interval,plan}:{token:string;symbol:str
   </section>
 }
 
-export default function ExecutionCenter({token}:{token:string}) {
+export default function ExecutionCenter({token=''}:{token?:string}) {
   const [status,setStatus] = useState<Status|null>(null)
   const [policy,setPolicy] = useState<Policy|null>(null)
   const [busy,setBusy] = useState('')
@@ -110,7 +112,7 @@ export default function ExecutionCenter({token}:{token:string}) {
 
   const call = async <T,>(path:string,options:RequestInit={}):Promise<T> => {
     const headers = new Headers(options.headers)
-    headers.set('Authorization',`Bearer ${token}`)
+    if (token) headers.set('Authorization',`Bearer ${token}`)
     if (options.body) headers.set('Content-Type','application/json')
     const response = await fetch(`${API}${path}`,{...options,headers})
     let payload:unknown = null
@@ -149,6 +151,11 @@ export default function ExecutionCenter({token}:{token:string}) {
   }
 
   const connect = () => run('connect','/connect/read-only',undefined,'Canlı hesap salt-okunur bağlandı; emir gönderilmedi.')
+  const grantConsent = () => {
+    const phrase = window.prompt('24 saatlik canlı risk izni için aynen yazın: CANLI İŞLEM RİSKİNİ 24 SAAT KABUL EDİYORUM')
+    if (!phrase) return
+    void run('consent','/consent',{confirmation:phrase},'24 saatlik canlı izin verildi. Sunucu yeniden başlarsa otomatik iptal olur.')
+  }
   const acknowledge = () => {
     const phrase = window.prompt('Mevcut limitleri onaylamak için aynen yazın: RİSK LİMİTLERİNİ ONAYLIYORUM')
     if (!phrase) return
@@ -238,7 +245,7 @@ export default function ExecutionCenter({token}:{token:string}) {
 
   return <div className="executionV25">
     <header className="executionHero">
-      <div><span><ShieldCheck/></span><div><small>V25 · FAIL-CLOSED EXECUTION</small><h2>Canlı Kasa & Otonom Emir Merkezi</h2><p>Paper → Binance Demo → salt-okunur canlı hesap → süreli gerçek emir zinciri.</p></div></div>
+      <div><span><ShieldCheck/></span><div><small>V28 · IN-APP VAULT / FAIL-CLOSED LIVE</small><h2>Canlı Kasa & Otonom Emir Merkezi</h2><p>Uygulama içi şifreli API kasası → salt-okunur canlı hesap → süreli gerçek emir zinciri.</p></div></div>
       <aside className={status.readiness.ready ? 'ready' : 'locked'}><b>{status.readiness.ready ? 'CANLI ADAY HAZIR' : 'CANLI KİLİTLİ'}</b><strong>%{status.readiness.score}</strong><span>{pendingGate ? `${pendingGate.label} bekleniyor` : 'Bütün yayın kapıları geçti'}</span></aside>
     </header>
 
@@ -246,16 +253,17 @@ export default function ExecutionCenter({token}:{token:string}) {
     <div className={`executionNotice ${noticeKind}`}>{notice}</div>
 
     <section className="executionPulse">
-      <article className={status.credentials.configured ? 'ok' : 'wait'}><KeyRound/><small>YEREL ANAHTAR</small><b>{status.credentials.configured ? 'DPAPI KASADA' : 'AYAR BEKLİYOR'}</b><span>{status.credentials.fingerprint ? `İz ${status.credentials.fingerprint}` : 'BINANCE-CANLI-AYARLA.bat'}</span></article>
+      <article className={status.credentials.configured ? 'ok' : 'wait'}><KeyRound/><small>ŞİFRELİ API KASASI</small><b>{status.credentials.configured ? 'UYGULAMADA AKTİF' : 'API BEKLİYOR'}</b><span>{status.credentials.fingerprint ? `İz ${status.credentials.fingerprint}` : 'Borsa Bağlantıları sekmesinden ekleyin'}</span></article>
       <article className={status.connected ? 'ok' : 'wait'}><Activity/><small>SALT OKUNUR API</small><b>{status.connected ? 'BAĞLI' : 'BAĞLI DEĞİL'}</b><span>{status.connection.last_error || `Saat farkı ${status.connection.clock_offset_ms ?? '—'} ms`}</span></article>
       <article className={status.stream.status === 'CANLI' ? 'ok' : 'wait'}><RefreshCw/><small>EMİR / POZİSYON AKIŞI</small><b>{status.stream.status}</b><span>{status.stream.last_error || `${status.stream.event_count} olay · ${status.stream.transport}`}</span></article>
-      <article className={status.consent.active ? 'ok' : 'wait'}><LockKeyhole/><small>YEREL CANLI İZİN</small><b>{status.consent.active ? '24 SAATLİK AKTİF' : 'KAPALI'}</b><span>{status.consent.active ? date(status.consent.expires_at) : 'CANLI-ISLEM-IZNI.bat'}</span></article>
+      <article className={status.consent.active ? 'ok' : 'wait'}><LockKeyhole/><small>CANLI RİSK İZNİ</small><b>{status.consent.active ? '24 SAATLİK AKTİF' : 'KAPALI'}</b><span>{status.consent.active ? `${date(status.consent.expires_at)} · ${status.consent.storage || ''}` : 'API’den sonra elle onaylanır'}</span></article>
       <article className={status.armed ? 'hot' : 'wait'}><Power/><small>EMİR KİLİDİ</small><b>{status.armed ? '5 DK AÇIK' : 'KİLİTLİ'}</b><span>{status.armed_until ? date(status.armed_until) : 'Her açılışta sıfırlanır'}</span></article>
       <article className={status.auto.enabled ? 'hot' : 'wait'}><Bot/><small>OTOMASYON</small><b>{status.auto.enabled ? '1 SAATLİK OTURUM' : 'DURDU'}</b><span>{status.auto.enabled ? `${date(status.auto_session_until)} · ` : ''}{status.auto.cycles} tur · {status.auto.last_decision}</span></article>
     </section>
 
     <section className="executionActionBar">
       <button onClick={connect} disabled={!!busy}><Activity/>{busy === 'connect' ? 'BAĞLANIYOR…' : 'SALT OKUNUR TEST'}</button>
+      <button onClick={grantConsent} disabled={!!busy || !status.credentials.configured || status.consent.active}><LockKeyhole/>{status.consent.active ? '24 SAAT İZİNLİ' : '24 SAAT İZİN VER'}</button>
       <button onClick={acknowledge} disabled={!!busy || status.policy_acknowledged}><ShieldCheck/>{status.policy_acknowledged ? 'LİMİTLER ONAYLI' : 'LİMİTLERİ ONAYLA'}</button>
       <button className="arm" onClick={arm} disabled={!!busy || !status.readiness.ready || status.armed}><LockKeyhole/>{status.armed ? '5 DK KİLİT AÇIK' : 'CANLI KİLİDİ AÇ'}</button>
       <button className="auto" onClick={startAuto} disabled={!!busy || !status.armed || status.auto.enabled}><Play/>OTOMASYONU BAŞLAT</button>
