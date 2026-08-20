@@ -65,6 +65,7 @@ WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=False)
+RISK_PER_TRADE = 0.01
 LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
 EXECUTION_MODE = "TESTNET_FIRST"
 ALLOWED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
@@ -5271,7 +5272,24 @@ async def paper_open(order: PaperOrder):
         v20_target_plan(entry_price, order.stop_loss, order.direction, order.take_profit, order.tp2, order.tp3)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    stop_distance = abs(entry_price - float(order.stop_loss))
+    if stop_distance <= 0:
+        raise HTTPException(422, "Giriş ve stop-loss fiyatları farklı olmalı")
+    # Size the Paper position from the fixed per-trade risk while preserving the legacy amount/quantity model.
+    risk_budget = float(paper["balance"]) * RISK_PER_TRADE
+    quantity = risk_budget / stop_distance
+    position_amount = quantity * entry_price
     async with paper["lock"]:
+        open_positions = [position for position in paper["positions"] if position["status"] == "AÇIK"]
+        used_margin = sum(position["amount"] for position in open_positions)
+        reserved_margin = sum(
+            float(item.get("amount") or 0.0)
+            for item in paper.get("limit_orders", [])
+            if item.get("status") == "BEKLİYOR"
+        )
+        if position_amount > paper["balance"] - used_margin - reserved_margin:
+            raise HTTPException(409, "Sanal bakiye bu işlem için yeterli değil")
+        order.amount = position_amount
         position = build_paper_position(order, entry_price, int(paper["next_id"]))
         paper["next_id"] += 1
         paper["positions"].append(position)
