@@ -64,7 +64,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0").strip()
 WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
-PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=False)
+PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
 LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
@@ -5638,10 +5638,13 @@ async def paper_open(order: PaperOrder):
     stop_distance = abs(entry_price - float(order.stop_loss))
     if stop_distance <= 0:
         raise HTTPException(422, "Giriş ve stop-loss fiyatları farklı olmalı")
-    # Size the Paper position from the fixed per-trade risk while preserving the legacy amount/quantity model.
-    risk_budget = float(paper["balance"]) * RISK_PER_TRADE
-    quantity = risk_budget / stop_distance
-    position_amount = quantity * entry_price
+    # AUTO allocations are already sized by the Paper autonomy risk model.
+    if order.source == "AUTO":
+        position_amount = float(order.amount)
+    else:
+        risk_budget = float(paper["balance"]) * RISK_PER_TRADE
+        quantity = risk_budget / stop_distance
+        position_amount = quantity * entry_price
     async with paper["lock"]:
         open_positions = [position for position in paper["positions"] if position["status"] == "AÇIK"]
         used_margin = sum(position["amount"] for position in open_positions)

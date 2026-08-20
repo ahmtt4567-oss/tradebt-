@@ -1,2 +1,9 @@
 __pycache__/
 *.pyc
+backend/.env
+backend/data/demo_credentials.dat
+backend/data/v21_demo_state.json
+backend/data/v22_commercial_state.json
+backend/data/v22_commercial_state.backup.json
+backend/data/v22_server_secret.dat
+backend/data/v22_agent_token.dat

@@ -253,7 +253,7 @@ export default function ExecutionCenter({token=''}:{token?:string}) {
     <div className={`executionNotice ${noticeKind}`}>{notice}</div>
 
     <section className="executionPulse">
-      <article className={status.credentials.configured ? 'ok' : 'wait'}><KeyRound/><small>ŞİFRELİ API KASASI</small><b>{status.credentials.configured ? 'UYGULAMADA AKTİF' : 'API BEKLİYOR'}</b><span>{status.credentials.fingerprint ? `İz ${status.credentials.fingerprint}` : 'Borsa Bağlantıları sekmesinden ekleyin'}</span></article>
+      <article className={status.credentials.configured ? 'ok' : 'wait'}><KeyRound/><small>ŞİFRELİ API KASASI</small><b>{status.credentials.configured ? 'UYGULAMADA AKTİF' : 'API BEKLİYOR'}</b><span>{status.credentials.fingerprint ? `İz ${status.credentials.fingerprint}` : 'Borsa Bağlantıları sekmesinden ekleyin · BINANCE-CANLI-AYARLA.bat'}</span></article>
       <article className={status.connected ? 'ok' : 'wait'}><Activity/><small>SALT OKUNUR API</small><b>{status.connected ? 'BAĞLI' : 'BAĞLI DEĞİL'}</b><span>{status.connection.last_error || `Saat farkı ${status.connection.clock_offset_ms ?? '—'} ms`}</span></article>
       <article className={status.stream.status === 'CANLI' ? 'ok' : 'wait'}><RefreshCw/><small>EMİR / POZİSYON AKIŞI</small><b>{status.stream.status}</b><span>{status.stream.last_error || `${status.stream.event_count} olay · ${status.stream.transport}`}</span></article>
       <article className={status.consent.active ? 'ok' : 'wait'}><LockKeyhole/><small>CANLI RİSK İZNİ</small><b>{status.consent.active ? '24 SAATLİK AKTİF' : 'KAPALI'}</b><span>{status.consent.active ? `${date(status.consent.expires_at)} · ${status.consent.storage || ''}` : 'API’den sonra elle onaylanır'}</span></article>
