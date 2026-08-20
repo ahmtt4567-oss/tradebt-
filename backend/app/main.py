@@ -3130,13 +3130,22 @@ async def multi_timeframe_consensus(symbol: str):
     scores = {"LONG": 0.0, "SHORT": 0.0, "BEKLE": 0.0}
     for item in timeframes:
         scores[item["direction"]] += item["weight"] * item["confidence"] / 100
-    direction = max(scores, key=scores.get)
-    alignment = round(scores[direction] * 100)
-    matching = sum(1 for item in timeframes if item["direction"] == direction)
-    if direction != "BEKLE" and matching == 3 and alignment >= 70:
+    dominant_direction = max(scores, key=scores.get)
+    alignment = round(scores[dominant_direction] * 100)
+    matching = sum(1 for item in timeframes if item["direction"] == dominant_direction)
+    by_timeframe = {item["timeframe"]: item["direction"] for item in timeframes}
+    entry_direction = by_timeframe["15m"]
+    higher_timeframe_confirmation = (
+        entry_direction in {"LONG", "SHORT"}
+        and by_timeframe["1h"] == entry_direction
+        and by_timeframe["4h"] == entry_direction
+    )
+    # Keep the 15m signal as the entry direction only after 1h and 4h confirm it.
+    direction = entry_direction if higher_timeframe_confirmation else "BEKLE"
+    if higher_timeframe_confirmation and matching == 3 and alignment >= 70:
         verdict, permission = "GÜÇLÜ ONAY", True
         reason = "Üç zaman dilimi aynı yönü doğruluyor."
-    elif direction != "BEKLE" and matching >= 2 and alignment >= 55:
+    elif higher_timeframe_confirmation and matching >= 2 and alignment >= 55:
         verdict, permission = "KISMİ ONAY", False
         reason = "Yön baskın ancak işlem öncesi mum kapanışı ve Tuzak Radarı kontrol edilmeli."
     else:
