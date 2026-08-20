@@ -114,6 +114,130 @@ V10_EVOLUTION_TICK_SECONDS = 45
 V10_EVENT_LIMIT = 100
 
 
+def shared_mtf_decision(
+    symbol: str,
+    entry_direction: str,
+    confidence_15m: float,
+    timeframe_results: dict[str, dict],
+    short_filter: bool = True,
+    short_alignment_max: float = SHORT_MTF_ALIGNMENT_MAX,
+) -> dict:
+    """Pure MTF gate that evaluates already-computed timeframe opinions without fetching data.
+
+    This helper intentionally does not touch network, analyze(), or any caller logic.
+    It only inspects the current 15m direction and the already-computed 1h/4h payloads.
+    """
+    default_timeframe = {"direction": "BEKLE", "confidence": 0.0}
+    timeframe_map = {
+        "15m": {
+            "direction": entry_direction if entry_direction in {"LONG", "SHORT"} else "BEKLE",
+            "confidence": float(confidence_15m or 0.0),
+            "weight": 0.25,
+        },
+        "1h": {
+            "direction": (timeframe_results.get("1h") or {}).get("direction", default_timeframe["direction"]),
+            "confidence": float((timeframe_results.get("1h") or {}).get("confidence", 0.0) or 0.0),
+            "weight": 0.35,
+        },
+        "4h": {
+            "direction": (timeframe_results.get("4h") or {}).get("direction", default_timeframe["direction"]),
+            "confidence": float((timeframe_results.get("4h") or {}).get("confidence", 0.0) or 0.0),
+            "weight": 0.40,
+        },
+    }
+
+    if entry_direction not in {"LONG", "SHORT"}:
+        return {
+            "symbol": symbol,
+            "direction": "BEKLE",
+            "alignment": 0,
+            "verdict": "UYUMSUZ",
+            "entry_permission": False,
+            "reason": f"15m giriş yönü geçersiz: {entry_direction}; LONG/SHORT bekleniyordu.",
+            "timeframes": timeframe_map,
+            "long_permission": False,
+            "short_permission": False,
+            "blocked_by_short_filter": False,
+            "higher_timeframe_confirmation": False,
+        }
+
+    higher_timeframe_confirmation = (
+        timeframe_map["1h"]["direction"] == entry_direction
+        and timeframe_map["4h"]["direction"] == entry_direction
+    )
+    alignment = round(
+        float(timeframe_map["15m"]["confidence"]) * 0.25
+        + float(timeframe_map["1h"]["confidence"]) * 0.35
+        + float(timeframe_map["4h"]["confidence"]) * 0.40
+    )
+
+    if not higher_timeframe_confirmation:
+        reason_bits = []
+        if timeframe_map["1h"]["direction"] != entry_direction:
+            reason_bits.append(f"1h={timeframe_map['1h']['direction']}")
+        if timeframe_map["4h"]["direction"] != entry_direction:
+            reason_bits.append(f"4h={timeframe_map['4h']['direction']}")
+        return {
+            "symbol": symbol,
+            "direction": "BEKLE",
+            "alignment": alignment,
+            "verdict": "UYUMSUZ",
+            "entry_permission": False,
+            "reason": (
+                f"15m {entry_direction} yönü, yüksek zaman dilimlerinde onaylanmadı: "
+                + ", ".join(reason_bits) if reason_bits else "yüksek zaman dilimleri aynı yönde değil."
+            ),
+            "timeframes": timeframe_map,
+            "long_permission": False,
+            "short_permission": False,
+            "blocked_by_short_filter": False,
+            "higher_timeframe_confirmation": False,
+        }
+
+    if entry_direction == "LONG":
+        verdict = "GÜÇLÜ ONAY"
+        reason = "15m, 1h ve 4h aynı LONG yönünü doğruluyor."
+        long_permission = True
+        short_permission = False
+        blocked_by_short_filter = False
+        entry_permission = True
+        direction = "LONG"
+    else:
+        if short_filter and alignment >= short_alignment_max:
+            verdict = "SHORT_ALIGNMENT_FILTRE"
+            reason = (
+                f"SHORT yönü 15m/1h/4h tarafından doğrulandı, ancak alignment {alignment} >= "
+                f"{short_alignment_max}; kısa pozisyon için kısa filtre devreye girdi."
+            )
+            long_permission = False
+            short_permission = False
+            blocked_by_short_filter = True
+            entry_permission = False
+            direction = "SHORT"
+        else:
+            verdict = "GÜÇLÜ ONAY"
+            reason = "15m, 1h ve 4h aynı SHORT yönünü doğruluyor."
+            long_permission = False
+            short_permission = True
+            blocked_by_short_filter = False
+            entry_permission = True
+            direction = "SHORT"
+
+    return {
+        "symbol": symbol,
+        "direction": direction,
+        "alignment": alignment,
+        "verdict": verdict,
+        "entry_permission": entry_permission,
+        "reason": reason,
+        "timeframes": timeframe_map,
+        "long_permission": long_permission,
+        "short_permission": short_permission,
+        "blocked_by_short_filter": blocked_by_short_filter,
+        "higher_timeframe_confirmation": higher_timeframe_confirmation,
+    }
+
+
 def normalize_analysis_signal(direction: str) -> str:
     """Expose analysis directions as BUY/SELL/HOLD without changing legacy values."""
     return {"LONG": "BUY", "SHORT": "SELL", "BEKLE": "HOLD"}.get(direction, "HOLD")
@@ -902,26 +1026,32 @@ def simulate_strategy(
                 mtf_confidences[timeframe] = higher.get("confidence")
                 if higher["direction"] != setup["direction"]:
                     mtf_direction = "BEKLE"
-            mtf_alignment = (
-                round(
-                    float(setup["confidence"]) * 0.25
-                    + float(mtf_confidences["1h"]) * 0.35
-                    + float(mtf_confidences["4h"]) * 0.40
-                )
-                if mtf_confidences["1h"] is not None and mtf_confidences["4h"] is not None
-                else None
+            timeframe_results = {
+                "1h": {
+                    "direction": analyze(mtf_candles["1h"][:mtf_indexes["1h"] + 1])["direction"] if mtf_indexes["1h"] >= mtf_warmup else "BEKLE",
+                    "confidence": mtf_confidences["1h"] if mtf_confidences["1h"] is not None else 0.0,
+                },
+                "4h": {
+                    "direction": analyze(mtf_candles["4h"][:mtf_indexes["4h"] + 1])["direction"] if mtf_indexes["4h"] >= mtf_warmup else "BEKLE",
+                    "confidence": mtf_confidences["4h"] if mtf_confidences["4h"] is not None else 0.0,
+                },
+            }
+            mtf_decision = shared_mtf_decision(
+                symbol=symbol or "",
+                entry_direction=setup["direction"],
+                confidence_15m=float(setup["confidence"]),
+                timeframe_results=timeframe_results,
+                short_filter=short_filter,
+                short_alignment_max=SHORT_MTF_ALIGNMENT_MAX,
             )
-            if mtf_direction != setup["direction"]:
+            mtf_direction = mtf_decision["direction"]
+            mtf_alignment = mtf_decision["alignment"]
+            mtf_entry_permission = mtf_decision["entry_permission"]
+            if mtf_direction != setup["direction"] or not mtf_entry_permission:
                 blocked_by_mtf += 1
                 index += step
                 continue
-            if (
-                short_filter
-                and
-                setup["direction"] == "SHORT"
-                and mtf_alignment is not None
-                and mtf_alignment >= SHORT_MTF_ALIGNMENT_MAX
-            ):
+            if mtf_decision["blocked_by_short_filter"]:
                 short_blocked_by_alignment += 1
                 index += step
                 continue
@@ -964,7 +1094,7 @@ def simulate_strategy(
                 "direction": setup["direction"],
                 "confidence_15m": setup.get("confidence"), "confidence_1h": confidence_1h,
                 "confidence_4h": confidence_4h, "mtf_alignment": mtf_alignment,
-                "mtf_entry_permission": mtf_direction == setup["direction"],
+                "mtf_entry_permission": mtf_entry_permission,
                 "entry_price": entry, "stop_loss": stop, "take_profit": target,
                 "exit_price": exit_price, "exit_reason": outcome,
                 "quantity": quantity, "risk_amount": risk_amount,
@@ -5786,15 +5916,33 @@ async def paper_bot_cycle() -> None:
                 remember(f"{adaptive['reason']} Seans eşiği %{confidence_floor}.", "Seans + Kalite", adaptive["mode"])
                 continue
             consensus = await multi_timeframe_consensus(candidate["symbol"])
-            consensus_opposes = consensus["direction"] in {"LONG", "SHORT"} and consensus["direction"] != candidate["direction"]
+            consensus_map = {item.get("timeframe"): item for item in consensus.get("timeframes", [])}
+            paper_mtf_decision = shared_mtf_decision(
+                symbol=candidate["symbol"],
+                entry_direction=candidate["direction"],
+                confidence_15m=float(candidate.get("confidence") or 0.0),
+                timeframe_results={
+                    "1h": {
+                        "direction": consensus_map.get("1h", {}).get("direction", "BEKLE"),
+                        "confidence": float(consensus_map.get("1h", {}).get("confidence") or 0.0),
+                    },
+                    "4h": {
+                        "direction": consensus_map.get("4h", {}).get("direction", "BEKLE"),
+                        "confidence": float(consensus_map.get("4h", {}).get("confidence") or 0.0),
+                    },
+                },
+                short_filter=True,
+                short_alignment_max=SHORT_MTF_ALIGNMENT_MAX,
+            )
+            consensus_opposes = paper_mtf_decision["direction"] in {"LONG", "SHORT"} and paper_mtf_decision["direction"] != candidate["direction"]
             consensus_allowed = (
-                consensus["entry_permission"] and consensus["direction"] == candidate["direction"]
+                paper_mtf_decision["entry_permission"] and paper_mtf_decision["direction"] == candidate["direction"]
             ) or (
-                training_mode and not (consensus_opposes and consensus.get("alignment", 0) >= 60)
+                training_mode and not (consensus_opposes and paper_mtf_decision.get("alignment", 0) >= 60)
             )
             if not consensus_allowed:
-                guard_note = guard_note or f"{candidate['display']}: {consensus['verdict']}"
-                remember(consensus["reason"], "Çoklu Zaman Onayı", consensus["verdict"])
+                guard_note = guard_note or f"{candidate['display']}: {paper_mtf_decision['verdict']}"
+                remember(paper_mtf_decision["reason"], "Çoklu Zaman Onayı", paper_mtf_decision["verdict"])
                 continue
             gate = await candle_close_gate(candidate["symbol"], "15m")
             gate_allowed = gate["direction"] == candidate["direction"] and (gate["entry_allowed"] or training_mode)
