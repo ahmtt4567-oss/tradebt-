@@ -3084,22 +3084,38 @@ async def smart_scan(limit: int = Query(18, ge=6, le=30), interval: str = "15m")
         try:
             async with semaphore:
                 result = analyze(await fetch_candles(market["symbol"], interval, 260))
+                mtf = await multi_timeframe_consensus(market["symbol"])
+            confidence = float(result["confidence"])
+            volume_ratio = float(result["volume_ratio"])
+            breakout_quality = float(result["radar"].get("breakout_quality") or 0.0)
+            trap_quality = 100.0 - float(result["radar"].get("trap_score") or 0.0)
+            opportunity_score = round(max(0.0, min(100.0, (
+                confidence * 0.40
+                + float(mtf["alignment"]) * 0.30
+                + max(0.0, min(100.0, volume_ratio * 100.0)) * 0.15
+                + max(0.0, min(100.0, breakout_quality)) * 0.10
+                + max(0.0, min(100.0, trap_quality)) * 0.05
+            ))), 2)
             return {
                 **market,
                 "direction": result["direction"],
                 "confidence": result["confidence"],
                 "trend": result["trend"],
-                "volume_ratio": round(result["volume_ratio"], 2),
+                "volume_ratio": round(volume_ratio, 2),
                 "trap_score": result["radar"]["trap_score"],
                 "trap_level": result["radar"]["trap_level"],
                 "breakout": result["volume_ratio"] >= 1.25 and result["direction"] != "BEKLE",
+                "mtf_direction": mtf["direction"],
+                "mtf_alignment": mtf["alignment"],
+                "mtf_entry_permission": mtf["entry_permission"],
+                "opportunity_score": opportunity_score,
             }
         except Exception:
             return None
 
     scanned = await asyncio.gather(*(inspect(market) for market in market_list))
     results = [item for item in scanned if item is not None]
-    results.sort(key=lambda item: (item["confidence"], item["volume_ratio"], item["volume"]), reverse=True)
+    results.sort(key=lambda item: (item["opportunity_score"], item["confidence"]), reverse=True)
     results = results[:limit]
     SCAN_CACHE[key] = (time.monotonic(), results)
     return {"cached": False, "results": results}
