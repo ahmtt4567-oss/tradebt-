@@ -111,6 +111,11 @@ V10_EVOLUTION_TICK_SECONDS = 45
 V10_EVENT_LIMIT = 100
 
 
+def normalize_analysis_signal(direction: str) -> str:
+    """Expose analysis directions as BUY/SELL/HOLD without changing legacy values."""
+    return {"LONG": "BUY", "SHORT": "SELL", "BEKLE": "HOLD"}.get(direction, "HOLD")
+
+
 def json_safe_payload(value):
     """API yanıtındaki NaN/Infinity değerlerini JSON için güvenli hale getirir.
 
@@ -680,7 +685,10 @@ async def technical_analysis(symbol: str, interval: str = "15m"):
     candles = await fetch_candles(symbol, interval, 500)
     if len(candles) < 220:
         raise HTTPException(422, "Analiz için yeterli mum verisi yok")
-    return analyze(candles)
+    result = analyze(candles)
+    # Keep the legacy direction for existing consumers and expose a normalized signal separately.
+    result["normalized_signal"] = normalize_analysis_signal(result["direction"])
+    return result
 
 
 async def candle_close_gate(symbol: str, interval: str = "15m") -> dict:
