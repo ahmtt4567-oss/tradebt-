@@ -66,6 +66,7 @@ WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=False)
 RISK_PER_TRADE = 0.01
+SHORT_MTF_ALIGNMENT_MAX = 80.0
 LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
 EXECUTION_MODE = "TESTNET_FIRST"
 ALLOWED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
@@ -851,12 +852,14 @@ def simulate_strategy(
     mtf_candles: dict[str, list[dict]] | None = None,
     capital: float = 10_000.0,
     symbol: str | None = None,
+    short_filter: bool = True,
 ) -> dict:
     """Geçmiş mumlarda mevcut giriş/stop/TP1 kurallarını konservatif olarak test eder."""
     warmup, horizon, step = 220, 16, 4
     fee_pct = 0.10  # Giriş + çıkış için örnek toplam maliyet yüzdesi.
     results: list[dict] = []
     blocked_by_mtf = 0
+    short_blocked_by_alignment = 0
     mtf_results: list[dict] = []
     mtf_equity = float(capital)
     mtf_peak_equity = mtf_equity
@@ -868,7 +871,7 @@ def simulate_strategy(
         raise ValueError("MTF backtest için 1h ve 4h candle verisi gerekli")
     index = max(warmup, start_index or warmup)
     terminal = min(len(candles) - horizon, end_index if end_index is not None else len(candles) - horizon)
-    while index < terminal and len(mtf_results if mtf else results) < max_results:
+    while index < terminal and (mtf or len(results) < max_results):
         setup = analyze(candles[index - warmup:index + 1])
         valid = (
             setup["direction"] in {"LONG", "SHORT"}
@@ -899,8 +902,27 @@ def simulate_strategy(
                 mtf_confidences[timeframe] = higher.get("confidence")
                 if higher["direction"] != setup["direction"]:
                     mtf_direction = "BEKLE"
+            mtf_alignment = (
+                round(
+                    float(setup["confidence"]) * 0.25
+                    + float(mtf_confidences["1h"]) * 0.35
+                    + float(mtf_confidences["4h"]) * 0.40
+                )
+                if mtf_confidences["1h"] is not None and mtf_confidences["4h"] is not None
+                else None
+            )
             if mtf_direction != setup["direction"]:
                 blocked_by_mtf += 1
+                index += step
+                continue
+            if (
+                short_filter
+                and
+                setup["direction"] == "SHORT"
+                and mtf_alignment is not None
+                and mtf_alignment >= SHORT_MTF_ALIGNMENT_MAX
+            ):
+                short_blocked_by_alignment += 1
                 index += step
                 continue
         entry, stop, target = setup["entry"], setup["stop_loss"], setup["tp1"]
@@ -935,11 +957,6 @@ def simulate_strategy(
             trade_duration = (exit_time - signal_time) / 60 if signal_time is not None and exit_time is not None else None
             confidence_1h = mtf_confidences.get("1h")
             confidence_4h = mtf_confidences.get("4h")
-            mtf_alignment = round(
-                float(setup["confidence"]) * 0.25
-                + float(confidence_1h) * 0.35
-                + float(confidence_4h) * 0.40
-            ) if confidence_1h is not None and confidence_4h is not None else None
             risk_reward = abs(target - entry) / stop_distance
             mtf_results.append({
                 "outcome": outcome, "net_pnl": net_pnl,
@@ -989,6 +1006,8 @@ def simulate_strategy(
             "max_drawdown": round(mtf_max_drawdown, 2),
             "max_drawdown_pct": round(mtf_max_drawdown, 2),
             "blocked_by_mtf": blocked_by_mtf, "mtf": True,
+            "short_blocked_by_alignment": short_blocked_by_alignment,
+            "short_filter": {"enabled": short_filter, "max_alignment": SHORT_MTF_ALIGNMENT_MAX},
             "capital": round(float(capital), 2), "fee_pct": fee_pct,
             "trade_log": mtf_results, "trade_log_count": total,
         }
@@ -1128,9 +1147,10 @@ async def strategy_lab(
     interval: str = "15m",
     mtf: bool = False,
     capital: float = Query(10_000.0, ge=100, le=1_000_000),
+    short_filter: bool = True,
 ):
     safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
-    key = (safe_symbol, interval, mtf, int(round(capital)))
+    key = (safe_symbol, interval, mtf, int(round(capital)), short_filter)
     cached = LAB_CACHE.get(key)
     if cached and time.monotonic() - cached[0] < 60:
         return {**cached[1], "cached": True}
@@ -1150,7 +1170,10 @@ async def strategy_lab(
         historical_mtf = {"1h": one_hour, "4h": four_hour}
     payload = {
         "symbol": safe_symbol, "interval": interval,
-        **simulate_strategy(candles, mtf=mtf, mtf_candles=historical_mtf, capital=capital, symbol=safe_symbol),
+        **simulate_strategy(
+            candles, mtf=mtf, mtf_candles=historical_mtf, capital=capital,
+            symbol=safe_symbol, short_filter=short_filter,
+        ),
     }
     if mtf:
         payload["historical_candles"] = {
