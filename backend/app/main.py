@@ -93,6 +93,7 @@ V8_FUTURE_CACHE: dict[tuple[str, str, int, int], tuple[float, dict]] = {}
 V10_EVOLUTION_CACHE: dict[tuple[str, str, int], tuple[float, dict]] = {}
 V11_RISK_CACHE: dict[tuple[tuple[str, ...], str, int, int, int], tuple[float, dict]] = {}
 V9_DEFAULT_UNIVERSE = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT")
+MTF_BACKTEST_SYMBOLS = frozenset({"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"})
 V9_STREAM_STALE_SECONDS = 8
 V9_EVENT_LIMIT = 100
 V9_FILL_LIMIT = 160
@@ -676,6 +677,58 @@ async def fetch_candles(symbol: str, interval: str, limit: int) -> list[dict]:
     ]
 
 
+async def historical_fetch_candles(symbol: str, interval: str, total_limit: int = 10_000) -> list[dict]:
+    """Fetch a bounded historical series backward without changing live candle fetches."""
+    if interval not in ALLOWED_INTERVALS:
+        raise HTTPException(400, "Desteklenmeyen zaman dilimi")
+    if total_limit < 1:
+        raise HTTPException(400, "Historical candle limiti pozitif olmalı")
+    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+    collected: dict[int, dict] = {}
+    end_time_ms: int | None = None
+    previous_oldest: int | None = None
+    max_retries = 3
+    while len(collected) < total_limit:
+        params = {"symbol": safe_symbol, "interval": interval, "limit": min(1000, total_limit - len(collected))}
+        if end_time_ms is not None:
+            params["endTime"] = end_time_ms
+        rows = None
+        for attempt in range(max_retries):
+            try:
+                response = await app.state.http.get(f"{BINANCE_API}/api/v3/klines", params=params)
+                if response.status_code == 429:
+                    if attempt == max_retries - 1:
+                        raise HTTPException(502, "Binance historical candle rate limitine ulaşıldı")
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    continue
+                response.raise_for_status()
+                rows = response.json()
+                break
+            except HTTPException:
+                raise
+            except (httpx.HTTPError, ValueError, TypeError) as exc:
+                if attempt == max_retries - 1:
+                    raise HTTPException(502, f"Binance historical mum verisi alınamadı: {exc}") from exc
+                await asyncio.sleep(0.5 * (2 ** attempt))
+        if not rows:
+            raise HTTPException(502, "Binance historical candle verisi eksik döndü")
+        oldest_open_time = None
+        for row in rows:
+            open_time_ms = int(row[0])
+            oldest_open_time = open_time_ms if oldest_open_time is None else min(oldest_open_time, open_time_ms)
+            collected[open_time_ms] = {
+                "time": int(open_time_ms / 1000), "open": float(row[1]), "high": float(row[2]),
+                "low": float(row[3]), "close": float(row[4]), "volume": float(row[5]),
+                "timeframe": interval,
+            }
+        if oldest_open_time is None or oldest_open_time == previous_oldest:
+            raise HTTPException(502, "Binance historical pagination ilerlemedi")
+        previous_oldest = oldest_open_time
+        end_time_ms = oldest_open_time - 1
+
+    return [collected[key] for key in sorted(collected)[:total_limit]]
+
+
 @app.get("/api/klines/{symbol}")
 async def klines(symbol: str, interval: str = "15m", limit: int = Query(500, ge=50, le=1000)):
     return await fetch_candles(symbol, interval, limit)
@@ -794,14 +847,28 @@ def simulate_strategy(
     start_index: int | None = None,
     end_index: int | None = None,
     max_results: int = 40,
+    mtf: bool = False,
+    mtf_candles: dict[str, list[dict]] | None = None,
+    capital: float = 10_000.0,
+    symbol: str | None = None,
 ) -> dict:
     """Geçmiş mumlarda mevcut giriş/stop/TP1 kurallarını konservatif olarak test eder."""
     warmup, horizon, step = 220, 16, 4
     fee_pct = 0.10  # Giriş + çıkış için örnek toplam maliyet yüzdesi.
     results: list[dict] = []
+    blocked_by_mtf = 0
+    mtf_results: list[dict] = []
+    mtf_equity = float(capital)
+    mtf_peak_equity = mtf_equity
+    mtf_max_drawdown = 0.0
+    mtf_indexes = {"1h": -1, "4h": -1}
+    mtf_intervals = {"1h": 60 * 60, "4h": 4 * 60 * 60}
+    mtf_warmup = 50
+    if mtf and not mtf_candles:
+        raise ValueError("MTF backtest için 1h ve 4h candle verisi gerekli")
     index = max(warmup, start_index or warmup)
     terminal = min(len(candles) - horizon, end_index if end_index is not None else len(candles) - horizon)
-    while index < terminal and len(results) < max_results:
+    while index < terminal and len(mtf_results if mtf else results) < max_results:
         setup = analyze(candles[index - warmup:index + 1])
         valid = (
             setup["direction"] in {"LONG", "SHORT"}
@@ -812,6 +879,30 @@ def simulate_strategy(
         if not valid:
             index += step
             continue
+        if mtf:
+            signal_close_time = int(candles[index]["time"]) + 15 * 60
+            mtf_direction = setup["direction"]
+            mtf_confidences = {"1h": None, "4h": None}
+            for timeframe, interval_seconds in mtf_intervals.items():
+                series = mtf_candles.get(timeframe, [])
+                cursor = mtf_indexes[timeframe]
+                while (
+                    cursor + 1 < len(series)
+                    and int(series[cursor + 1]["time"]) + interval_seconds <= signal_close_time
+                ):
+                    cursor += 1
+                mtf_indexes[timeframe] = cursor
+                if cursor < mtf_warmup:
+                    mtf_direction = "BEKLE"
+                    continue
+                higher = analyze(series[:cursor + 1])
+                mtf_confidences[timeframe] = higher.get("confidence")
+                if higher["direction"] != setup["direction"]:
+                    mtf_direction = "BEKLE"
+            if mtf_direction != setup["direction"]:
+                blocked_by_mtf += 1
+                index += step
+                continue
         entry, stop, target = setup["entry"], setup["stop_loss"], setup["tp1"]
         exit_price, outcome, exit_offset = candles[index + horizon]["close"], "SÜRE", horizon
         for offset, candle in enumerate(candles[index + 1:index + horizon + 1], start=1):
@@ -826,12 +917,81 @@ def simulate_strategy(
             if target_hit:
                 exit_price, outcome, exit_offset = target, "TP1", offset
                 break
+        if mtf:
+            stop_distance = abs(entry - stop)
+            if stop_distance <= 0:
+                index += max(step, exit_offset)
+                continue
+            risk_amount = mtf_equity * RISK_PER_TRADE
+            quantity = risk_amount / stop_distance
+            gross_pnl = quantity * (exit_price - entry)
+            if setup["direction"] == "SHORT":
+                gross_pnl *= -1
+            fee = entry * quantity * fee_pct / 100
+            net_pnl = gross_pnl - fee
+            signal_time = int(candles[index]["time"]) + 15 * 60 if "time" in candles[index] else None
+            exit_candle = candles[index + exit_offset]
+            exit_time = int(exit_candle["time"]) + 15 * 60 if "time" in exit_candle else None
+            trade_duration = (exit_time - signal_time) / 60 if signal_time is not None and exit_time is not None else None
+            confidence_1h = mtf_confidences.get("1h")
+            confidence_4h = mtf_confidences.get("4h")
+            mtf_alignment = round(
+                float(setup["confidence"]) * 0.25
+                + float(confidence_1h) * 0.35
+                + float(confidence_4h) * 0.40
+            ) if confidence_1h is not None and confidence_4h is not None else None
+            risk_reward = abs(target - entry) / stop_distance
+            mtf_results.append({
+                "outcome": outcome, "net_pnl": net_pnl,
+                "symbol": symbol, "entry_time": signal_time, "exit_time": exit_time,
+                "direction": setup["direction"],
+                "confidence_15m": setup.get("confidence"), "confidence_1h": confidence_1h,
+                "confidence_4h": confidence_4h, "mtf_alignment": mtf_alignment,
+                "mtf_entry_permission": mtf_direction == setup["direction"],
+                "entry_price": entry, "stop_loss": stop, "take_profit": target,
+                "exit_price": exit_price, "exit_reason": outcome,
+                "quantity": quantity, "risk_amount": risk_amount,
+                "position_amount": quantity * entry, "gross_pnl": gross_pnl,
+                "fee": fee, "trade_duration": trade_duration, "risk_reward": risk_reward,
+                "volume_ratio": setup.get("volume_ratio"),
+                "breakout_quality": setup.get("radar", {}).get("breakout_quality"),
+                "trap_score": setup.get("radar", {}).get("trap_score"),
+                "trap_level": setup.get("radar", {}).get("trap_level"),
+            })
+            mtf_equity += net_pnl
+            mtf_peak_equity = max(mtf_peak_equity, mtf_equity)
+            mtf_max_drawdown = min(
+                mtf_max_drawdown,
+                (mtf_equity / max(mtf_peak_equity, 0.00000001) - 1) * 100,
+            )
+            index += max(step, exit_offset)
+            continue
         gross_return = ((exit_price - entry) / entry) * 100
         if setup["direction"] == "SHORT":
             gross_return *= -1
         net_return = gross_return - fee_pct
         results.append({"outcome": outcome, "net_return": net_return})
         index += max(step, exit_offset)
+
+    if mtf:
+        total = len(mtf_results)
+        wins = sum(1 for item in mtf_results if item["net_pnl"] > 0)
+        losses = sum(1 for item in mtf_results if item["net_pnl"] < 0)
+        gross_wins = sum(item["net_pnl"] for item in mtf_results if item["net_pnl"] > 0)
+        gross_losses = abs(sum(item["net_pnl"] for item in mtf_results if item["net_pnl"] < 0))
+        net_pnl = mtf_equity - float(capital)
+        win_rate = round(wins / total * 100, 1) if total else 0.0
+        profit_factor = round(gross_wins / gross_losses, 2) if gross_losses else None
+        return {
+            "sampled_candles": len(candles), "total_trades": total, "trade_count": total,
+            "wins": wins, "losses": losses, "win_rate": win_rate,
+            "profit_factor": profit_factor, "net_pnl": round(net_pnl, 2),
+            "max_drawdown": round(mtf_max_drawdown, 2),
+            "max_drawdown_pct": round(mtf_max_drawdown, 2),
+            "blocked_by_mtf": blocked_by_mtf, "mtf": True,
+            "capital": round(float(capital), 2), "fee_pct": fee_pct,
+            "trade_log": mtf_results, "trade_log_count": total,
+        }
 
     total = len(results)
     wins = sum(1 for item in results if item["net_return"] > 0)
@@ -963,14 +1123,39 @@ def stress_test_validation(candles: list[dict]) -> dict:
 
 
 @app.get("/api/lab/{symbol}")
-async def strategy_lab(symbol: str, interval: str = "15m"):
+async def strategy_lab(
+    symbol: str,
+    interval: str = "15m",
+    mtf: bool = False,
+    capital: float = Query(10_000.0, ge=100, le=1_000_000),
+):
     safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
-    key = (safe_symbol, interval)
+    key = (safe_symbol, interval, mtf, int(round(capital)))
     cached = LAB_CACHE.get(key)
     if cached and time.monotonic() - cached[0] < 60:
         return {**cached[1], "cached": True}
-    candles = await fetch_candles(safe_symbol, interval, 700)
-    payload = {"symbol": safe_symbol, "interval": interval, **simulate_strategy(candles)}
+    if mtf and (safe_symbol not in MTF_BACKTEST_SYMBOLS or interval != "15m"):
+        raise HTTPException(422, "MTF backtest yalnızca desteklenen 6 sembol ve 15m ana sinyali destekler")
+    requested = 10_000 if mtf else 700
+    candles = await (
+        historical_fetch_candles(safe_symbol, interval, requested)
+        if mtf else fetch_candles(safe_symbol, interval, requested)
+    )
+    historical_mtf = {}
+    if mtf:
+        one_hour, four_hour = await asyncio.gather(
+            historical_fetch_candles(safe_symbol, "1h", 10_000),
+            historical_fetch_candles(safe_symbol, "4h", 10_000),
+        )
+        historical_mtf = {"1h": one_hour, "4h": four_hour}
+    payload = {
+        "symbol": safe_symbol, "interval": interval,
+        **simulate_strategy(candles, mtf=mtf, mtf_candles=historical_mtf, capital=capital, symbol=safe_symbol),
+    }
+    if mtf:
+        payload["historical_candles"] = {
+            "15m": len(candles), "1h": len(one_hour), "4h": len(four_hour),
+        }
     LAB_CACHE[key] = (time.monotonic(), payload)
     return {**payload, "cached": False}
 
