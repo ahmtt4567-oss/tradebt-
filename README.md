@@ -1,5 +1,7 @@
 # ProTreBot Elite X V28 — Uygulama İçi Borsa Bağlantıları
 
+Production deployment trigger verified through the repository commit pipeline.
+
 V28, V27 bulut operasyon ve kanıt altyapısını korur; Testnet ve gerçek Binance USD-M
 Futures API bağlantılarını doğrudan programın içine taşır. Render'a Binance anahtarı yazmak
 gerekmez. Yönetici panelindeki **Borsa Bağlantıları** sekmesinden API Key ve Secret Key
