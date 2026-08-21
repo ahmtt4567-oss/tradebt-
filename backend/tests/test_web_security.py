@@ -66,6 +66,10 @@ class WebSecurityTests(unittest.TestCase):
         self.assertEqual(cors_origins("https://app.example.com/, https://preview.example.com"), [
             "https://app.example.com", "https://preview.example.com",
         ])
+        self.assertEqual(
+            cors_origins("https://pro-tre-bot-web.vercel.app"),
+            ["https://pro-tre-bot-web.vercel.app"],
+        )
         old = os.environ.get("PROTREBOT_TEST_FLAG")
         try:
             os.environ["PROTREBOT_TEST_FLAG"] = "yes"
