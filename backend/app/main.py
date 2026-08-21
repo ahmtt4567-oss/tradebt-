@@ -63,7 +63,10 @@ DATABASE_URL = os.getenv(
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0").strip()
 WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
-WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
+WEB_CORS_ORIGINS = list(dict.fromkeys([
+    *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
+    "https://pro-tre-bot-web.vercel.app",
+]))
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
