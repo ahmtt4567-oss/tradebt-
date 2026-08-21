@@ -67,7 +67,7 @@ WEB_CORS_ORIGINS = list(dict.fromkeys([
     *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
     "https://pro-tre-bot-web.vercel.app",
 ]))
-WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-z0-9-]+-gezginci\.vercel\.app$"
+WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-z0-9-]+-gezginci9\.vercel\.app$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
