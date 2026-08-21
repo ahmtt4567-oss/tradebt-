@@ -67,6 +67,7 @@ WEB_CORS_ORIGINS = list(dict.fromkeys([
     *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
     "https://pro-tre-bot-web.vercel.app",
 ]))
+WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-z0-9-]+-gezginci\.vercel\.app$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
@@ -679,6 +680,7 @@ app = FastAPI(title="ProTreBot Elite X API", version="28.0.0", lifespan=lifespan
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
+    allow_origin_regex=WEB_CORS_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
