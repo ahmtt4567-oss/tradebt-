@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, Lo
 import { API_BASE } from './api'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
-const ExecutionCenter = lazy(() => import('./ExecutionCenter'))
+const CommercialHub = lazy(() => import('./CommercialHub'))
 const CloudOpsCenter = lazy(() => import('./CloudOpsCenter'))
 
 type View = 'testnet'|'ops'|'live'|'setup'
@@ -151,7 +151,7 @@ export default function TestnetFirstApp() {
       </Suspense>
     </>}
 
-    {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><ExecutionCenter/></Suspense>}
+    {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><CommercialHub active initialTab="execution"/></Suspense>}
 
     {view === 'ops' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Bulut operasyon merkezi hazırlanıyor…</div>}><CloudOpsCenter/></Suspense>}
 

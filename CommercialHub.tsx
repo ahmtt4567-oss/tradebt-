@@ -37,7 +37,7 @@ function detailMessage(detail:unknown):string {
   return 'İşlem tamamlanamadı; alanları ve API bağlantısını kontrol edin.'
 }
 
-export default function CommercialHub({active,onNavigate}:{active:boolean;onNavigate?:(target:NavigateTarget)=>void}) {
+export default function CommercialHub({active,onNavigate,initialTab='home'}:{active:boolean;onNavigate?:(target:NavigateTarget)=>void;initialTab?:Tab}) {
   const [info,setInfo] = useState<PublicInfo|null>(null)
   const [token,setToken] = useState(() => localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(V24_SESSION_KEY) || sessionStorage.getItem(V24_SESSION_KEY) || localStorage.getItem(V23_SESSION_KEY) || sessionStorage.getItem(V23_SESSION_KEY) || sessionStorage.getItem(LEGACY_SESSION_KEY) || '')
   const [remember,setRemember] = useState(() => localStorage.getItem(REMEMBER_KEY) === '1')
@@ -45,7 +45,7 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
   const [overview,setOverview] = useState<Overview|null>(null)
   const [readiness,setReadiness] = useState<Readiness|null>(null)
   const [operations,setOperations] = useState<Operations|null>(null)
-  const [tab,setTab] = useState<Tab>('home')
+  const [tab,setTab] = useState<Tab>(initialTab)
   const [busy,setBusy] = useState(false)
   const [notice,setNotice] = useState('V25 Live Guard & Commercial katmanı hazırlanıyor…')
   const [noticeKind,setNoticeKind] = useState<'ok'|'warn'|'error'>('warn')
