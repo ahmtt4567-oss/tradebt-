@@ -49,7 +49,17 @@ export default function ExchangeConnections() {
   const call = async <T,>(path:string,options:RequestInit={}):Promise<T> => {
     const headers = new Headers(options.headers)
     if (options.body) headers.set('Content-Type','application/json')
-    const response = await fetch(`${API_BASE}/exchange-connections${path}`,{...options,headers})
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(),15000)
+    let response:Response
+    try {
+      response = await fetch(`${API_BASE}/exchange-connections${path}`,{...options,headers,signal:controller.signal})
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw new Error('Borsa kasası yanıt vermedi. Backend ve PostgreSQL bağlantısını kontrol edin.')
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+    }
     const payload = await response.json().catch(() => null) as T|{detail?:unknown}|null
     if (!response.ok) {
       const detail = payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : payload
