@@ -342,7 +342,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   }
 
   const connect = () => runAction(() => apiCall('/connect',{method:'POST'}),'Bağlantı başarılı: Sanal Futures Demo hesabı okunuyor; gerçek hesap kilitli.')
-  const arm = () => runAction(() => apiCall('/arm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:armText})}),'Demo emir kilidi 10 dakika için açıldı.')
+  const arm = () => runAction(() => apiCall('/arm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'DEMO'})}),'Demo emir kilidi 10 dakika için açıldı.')
   const disarm = () => runAction(() => apiCall('/disarm',{method:'POST'}),'Yeni Demo giriş emirleri kilitlendi; mevcut korumalar açık kalır.')
   const testOrder = () => runAction(() => apiCall('/order/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())}),'Emir testi geçti; hiçbir emir veya pozisyon oluşturulmadı.')
   const submitOrder = () => {
