@@ -113,7 +113,9 @@ export default function TestnetFirstApp() {
   useEffect(() => {
     void refresh()
     const timer = window.setInterval(() => void refresh(),30000)
-    return () => window.clearInterval(timer)
+    const openExchangeSettings = () => setView('setup')
+    window.addEventListener('protrebot-open-exchange-settings', openExchangeSettings)
+    return () => {window.clearInterval(timer);window.removeEventListener('protrebot-open-exchange-settings', openExchangeSettings)}
   },[])
 
   return <main className="v26App">
