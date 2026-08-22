@@ -97,6 +97,7 @@ export default function TestnetFirstApp() {
   const [analysis,setAnalysis] = useState<Analysis|null>(null)
   const [health,setHealth] = useState<Health|null>(null)
   const [loading,setLoading] = useState(false)
+  const [demoCredentials,setDemoCredentials] = useState({apiKey:'',secretKey:''})
 
   const refresh = async () => {
     setLoading(true)
@@ -160,7 +161,7 @@ export default function TestnetFirstApp() {
     {view === 'setup' && <section className="v26Setup">
       <header><div><KeyRound/><span><small>SECRETS-ONLY TASARIM</small><h2>İki Ayrı Binance Kanalı</h2></span></div><b><ShieldCheck/>TARAYICIYA ANAHTAR GİRİLMEZ</b></header>
       <div className="v26SetupGrid">
-        <article className="primary"><TestTube2/><div><small>1 · ŞİMDİ KULLANILACAK</small><h3>Binance Futures Demo</h3><p>Demo API anahtarı Render’a eklenir. Gerçek para yoktur; emir, bakiye, pozisyon, Stop ve TP borsa Demo hesabında görünür.</p></div><ul><li><code>BINANCE_DEMO_API_KEY</code></li><li><code>BINANCE_DEMO_SECRET_KEY</code></li></ul><strong>{health?.testnet || 'ANAHTAR BEKLİYOR'}</strong></article>
+        <article className="primary"><TestTube2/><div><small>1 · ŞİMDİ KULLANILACAK</small><h3>Binance Futures Demo</h3><p>Demo API anahtarı Render’a eklenir. Gerçek para yoktur; emir, bakiye, pozisyon, Stop ve TP borsa Demo hesabında görünür.</p></div><div className="v26DemoCredentials"><label><span>BINANCE_DEMO_API_KEY</span><input type="text" value={demoCredentials.apiKey} onChange={event => setDemoCredentials(current => ({...current,apiKey:event.target.value}))} autoComplete="off" spellCheck={false} placeholder="Demo API anahtarı"/></label><label><span>BINANCE_DEMO_SECRET_KEY</span><input type="password" value={demoCredentials.secretKey} onChange={event => setDemoCredentials(current => ({...current,secretKey:event.target.value}))} autoComplete="new-password" spellCheck={false} placeholder="Demo Secret anahtarı"/></label><small>Değerler yalnızca bu formun geçici state’inde tutulur.</small></div><strong>{health?.testnet || 'ANAHTAR BEKLİYOR'}</strong></article>
         <article className="future"><LockKeyhole/><div><small>2 · DAHA SONRA</small><h3>Gerçek Binance Futures</h3><p>Canlı altyapı hazırdır. İki secret boş kaldığı sürece bağlantı, izin, kilit ve emir gönderimi açılamaz.</p></div><ul><li><code>BINANCE_LIVE_API_KEY</code></li><li><code>BINANCE_LIVE_SECRET_KEY</code></li></ul><strong>{health?.live_guard || 'API BEKLİYOR'}</strong></article>
       </div>
       <div className="v26GateList">
