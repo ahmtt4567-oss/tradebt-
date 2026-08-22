@@ -578,6 +578,266 @@ button, input, select, textarea { font-family: inherit; }
   .v26App .v26Footer em { width: 100%; margin-left: 0; text-align: left; }
 }
 
+@media (max-width: 640px) {
+  .v26App:has(.commercialAuth) .v26ModeBar > div,
+  .v26App:has(.commercialAuth) .v26ModeBar aside,
+  .v26App:has(.commercialAuth) .commercialAuthHero,
+  .v26App:has(.commercialAuth) .commercialAuthCard { min-width: 0; width: 100%; }
+  .v26App:has(.commercialAuth) .commercialAuthHero > div span,
+  .v26App:has(.commercialAuth) .commercialAuthCard > button { min-width: 0; max-width: 100%; }
+}
+
+/* V25 Live Guard presentation only. */
+.v26App:has(.commercialAuth) .v26ModeBar {
+  min-height: 142px;
+  margin-top: 24px;
+  padding: 28px 32px;
+  background: #fff !important;
+}
+.v26App:has(.commercialAuth) .v26ModeBar h1 {
+  margin: 8px 0 6px;
+  color: #0f172a !important;
+  font-size: 34px !important;
+  font-weight: 800 !important;
+}
+.v26App:has(.commercialAuth) .v26ModeBar p {
+  max-width: 760px;
+  color: #64748b !important;
+  font-size: 16px !important;
+}
+.v26App:has(.commercialAuth) .commercialAuth {
+  min-height: 0;
+  margin: 24px 0 0;
+  padding: 32px;
+  gap: 32px;
+  align-items: stretch;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 20px !important;
+  background: #f8fafc !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .06) !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthHero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 20px 24px 8px;
+}
+.v26App:has(.commercialAuth) .commercialEdition {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.v26App:has(.commercialAuth) .commercialAuthHero h2 {
+  max-width: 680px;
+  margin: 18px 0 10px;
+  color: #172033 !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+.v26App:has(.commercialAuth) .commercialAuthHero p {
+  max-width: 650px;
+  margin: 0;
+  color: #64748b !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthHero > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+.v26App:has(.commercialAuth) .commercialAuthHero > div span {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, .04);
+}
+.v26App:has(.commercialAuth) .commercialAuthHero > div span svg { flex: 0 0 18px; color: #2563eb; }
+.v26App:has(.commercialAuth) .commercialAuthCard {
+  align-self: center;
+  width: 100%;
+  max-width: 560px;
+  padding: 28px;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, .08) !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthTitle {
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.v26App:has(.commercialAuth) .commercialAuthTitle > svg {
+  width: 24px;
+  height: 24px;
+  padding: 11px;
+  border-radius: 12px;
+  background: #dbeafe !important;
+  color: #2563eb !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthTitle small {
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+.v26App:has(.commercialAuth) .commercialAuthTitle h3 {
+  margin: 4px 0 0;
+  color: #172033 !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthMode {
+  margin: 0 0 18px;
+  padding: 13px 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthMode.ready {
+  border-color: #bbf7d0;
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthMode b { font-size: 14px !important; font-weight: 700; }
+.v26App:has(.commercialAuth) .commercialAuthMode span { display: block; margin-top: 4px; color: #64748b !important; font-size: 14px !important; line-height: 1.45; }
+.v26App:has(.commercialAuth) .commercialAuthCard > label {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0;
+  color: #475569 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0;
+}
+.v26App:has(.commercialAuth) .commercialAuthCard > label > input {
+  width: 100%;
+  min-height: 52px;
+  padding: 13px 14px;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  font-size: 16px !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthCard > label > input::placeholder { color: #94a3b8 !important; }
+.v26App:has(.commercialAuth) .commercialAuthCard > label > input:focus { border-color: #2563eb !important; box-shadow: 0 0 0 4px rgba(37, 99, 235, .14) !important; }
+.v26App:has(.commercialAuth) .commercialAuthCard:has(.commercialRemember) > label:not(.commercialRemember) { margin-top: 14px; }
+.v26App:has(.commercialAuth) .commercialAuthCard:has(.commercialRemember) > label:not(.commercialRemember) { display: inline-grid; width: calc(50% - 8px); vertical-align: top; }
+.v26App:has(.commercialAuth) .commercialAuthRemember,
+.v26App:has(.commercialAuth) .commercialRemember {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 0 !important;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+  cursor: pointer;
+}
+.v26App:has(.commercialAuth) .commercialRemember input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: #2563eb;
+}
+.v26App:has(.commercialAuth) .commercialRemember span { display: grid; gap: 2px; }
+.v26App:has(.commercialAuth) .commercialRemember b { color: #334155 !important; font-size: 14px !important; font-weight: 600; }
+.v26App:has(.commercialAuth) .commercialRemember small { color: #64748b !important; font-size: 13px !important; }
+.v26App:has(.commercialAuth) .commercialAuthCard > button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 20px;
+  padding: 12px 18px;
+  border: 1px solid #2563eb !important;
+  border-radius: 12px !important;
+  background: #2563eb !important;
+  color: #fff !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, .2) !important;
+}
+.v26App:has(.commercialAuth) .commercialAuthCard > button:hover:not(:disabled) { background: #1d4ed8 !important; color: #fff !important; transform: translateY(-1px); }
+.v26App:has(.commercialAuth) .commercialAuthCard > button:active:not(:disabled) { transform: translateY(1px); }
+.v26App:has(.commercialAuth) .commercialAuthCard > button:focus-visible { outline: 3px solid rgba(37, 99, 235, .28); outline-offset: 3px; }
+.v26App:has(.commercialAuth) .commercialNotice {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  margin: 18px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+  font-size: 14px !important;
+  line-height: 1.4;
+}
+.v26App:has(.commercialAuth) .commercialNotice.ok { border-color: #bbf7d0; background: #f0fdf4 !important; color: #166534 !important; }
+.v26App:has(.commercialAuth) .commercialNotice.error { border-color: #fecaca; background: #fef2f2 !important; color: #991b1b !important; }
+.v26App:has(.commercialAuth) .commercialLocalNote { display: block; margin-top: 14px; color: #94a3b8 !important; font-size: 12px !important; line-height: 1.5; }
+
+.v26App .v26Footer {
+  gap: 10px;
+  padding: 14px;
+  background: #fff !important;
+}
+.v26App .v26Footer span {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b !important;
+  font-size: 13px !important;
+  font-weight: 600;
+}
+.v26App .v26Footer b { color: #166534 !important; font-size: 13px !important; }
+.v26App .v26Footer em { color: #64748b !important; font-size: 13px !important; }
+
+@media (max-width: 900px) {
+  .v26App:has(.commercialAuth) .commercialAuth { grid-template-columns: 1fr; padding: 24px; }
+  .v26App:has(.commercialAuth) .commercialAuthHero { padding: 8px 0; }
+  .v26App:has(.commercialAuth) .commercialAuthCard { max-width: none; }
+}
+@media (max-width: 640px) {
+  .v26App:has(.commercialAuth) .v26ModeBar { padding: 22px 18px; }
+  .v26App:has(.commercialAuth) .v26ModeBar h1 { font-size: 28px !important; }
+  .v26App:has(.commercialAuth) .v26ModeBar p { font-size: 15px !important; }
+  .v26App:has(.commercialAuth) .commercialAuth { margin-top: 16px; padding: 16px; gap: 18px; }
+  .v26App:has(.commercialAuth) .commercialAuthHero h2 { font-size: 24px !important; }
+  .v26App:has(.commercialAuth) .commercialAuthHero p { font-size: 15px !important; }
+  .v26App:has(.commercialAuth) .commercialAuthHero > div { grid-template-columns: 1fr; gap: 8px; margin-top: 18px; }
+  .v26App:has(.commercialAuth) .commercialAuthHero > div span { min-height: 46px; font-size: 14px; }
+  .v26App:has(.commercialAuth) .commercialAuthCard { padding: 20px 16px; }
+  .v26App:has(.commercialAuth) .commercialAuthCard:has(.commercialRemember) > label:not(.commercialRemember) { display: grid; width: 100%; }
+  .v26App .v26Footer span { font-size: 13px !important; }
+  .v26App .v26Footer em { width: 100%; margin-left: 0; text-align: left; }
+}
+
 /* Final light polish for loading, status, and nested operation surfaces. */
 .v26App .v26Loading,
 .v26App .executionLoading,
