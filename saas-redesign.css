@@ -1,0 +1,170 @@
+:root {
+  --ui-bg: #08111f;
+  --ui-surface: #0f1b2d;
+  --ui-surface-2: #14243a;
+  --ui-surface-3: #182a42;
+  --ui-line: rgba(154, 181, 215, .16);
+  --ui-line-strong: rgba(97, 159, 235, .42);
+  --ui-text: #f3f7fc;
+  --ui-muted: #91a4bb;
+  --ui-blue: #4e9cf5;
+  --ui-blue-bright: #79b7ff;
+  --ui-green: #43c98a;
+  --ui-red: #ef6b73;
+  --ui-yellow: #e4b85b;
+  --ui-shadow: 0 18px 45px rgba(0, 0, 0, .24);
+  --ui-radius: 12px;
+  --ui-radius-sm: 8px;
+}
+
+html, body, #root { min-width: 0; min-height: 100%; }
+body { margin: 0; background: var(--ui-bg) !important; color: var(--ui-text); font-family: "Segoe UI", sans-serif; }
+button, input, select, textarea { font-family: inherit; }
+button { transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
+
+.v26App {
+  min-height: 100vh;
+  padding: 24px;
+  color: var(--ui-text);
+  background: radial-gradient(circle at 80% -20%, rgba(58, 117, 184, .22), transparent 34%), linear-gradient(145deg, #08111f 0%, #0b1728 52%, #0a1423 100%);
+  font-family: "Segoe UI", sans-serif;
+}
+.v26App::before, .v26App::after { display: none; }
+.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v26Setup > header, .v26SetupGrid > article, .v26GateList article, .v26Footer {
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: rgba(15, 27, 45, .94) !important;
+  box-shadow: var(--ui-shadow) !important;
+  backdrop-filter: blur(16px);
+}
+.v26Header { height: 72px; padding: 0 20px; grid-template-columns: minmax(260px, 1fr) auto auto; }
+.v26Header::before { background: var(--ui-blue); opacity: .8; }
+.v26Brand > span { width: 40px; height: 40px; border-radius: 10px; background: var(--ui-blue); color: #061321; box-shadow: none; }
+.v26Brand b { color: var(--ui-text); letter-spacing: .2px; }
+.v26Brand small, .v26Nav small { color: var(--ui-muted); }
+.v26HeaderSignals { gap: 8px; }
+.v26HeaderSignals > span { border-color: var(--ui-line); background: #14243a; color: var(--ui-muted); }
+.v26HeaderSignals .ok { border-color: rgba(67, 201, 138, .35); background: rgba(67, 201, 138, .1); color: var(--ui-green); }
+.v26HeaderSignals .locked { border-color: rgba(228, 184, 91, .35); background: rgba(228, 184, 91, .1); color: var(--ui-yellow); }
+.v26Refresh { height: 38px; border: 1px solid var(--ui-line-strong); border-radius: var(--ui-radius-sm); background: var(--ui-blue); color: #061321; box-shadow: none; }
+.v26Refresh:hover:not(:disabled) { background: var(--ui-blue-bright); transform: translateY(-1px); }
+
+.v26Nav { position: sticky; top: 12px; gap: 4px; margin-top: 16px; padding: 6px; background: rgba(15, 27, 45, .96) !important; }
+.v26Nav button { min-height: 54px; border-radius: var(--ui-radius-sm); color: var(--ui-muted); }
+.v26Nav button:hover { background: var(--ui-surface-3); transform: none; }
+.v26Nav button.active { border-color: var(--ui-line-strong); background: rgba(78, 156, 245, .14); color: var(--ui-text); box-shadow: none; }
+.v26Nav button.active::after { left: 10px; right: 10px; background: var(--ui-blue); }
+.v26Nav button.liveTab.active { border-color: rgba(228, 184, 91, .45); background: rgba(228, 184, 91, .11); }
+.v26Nav button > svg { background: var(--ui-surface-3); color: var(--ui-blue-bright); }
+.v26Nav button.active > svg { background: var(--ui-blue); color: #061321; }
+.v26Nav b { font-size: 9px; }
+
+.v26ModeBar { min-height: 88px; margin-top: 16px; padding: 18px 20px; background: linear-gradient(110deg, #101e31, #132740) !important; }
+.v26ModeBar::after { display: none; }
+.v26ModeBar small, .v26Setup > header small { color: var(--ui-muted); }
+.v26ModeBar h1 { color: var(--ui-text); font-size: 22px; letter-spacing: 0; }
+.v26ModeBar p { color: var(--ui-muted); }
+.v26ModeBar aside { border-color: var(--ui-line); background: var(--ui-surface-2); box-shadow: none; }
+.v26ModeBar aside span, .v26ModeBar aside em { color: var(--ui-muted); }
+.v26ModeBar aside b { color: var(--ui-yellow); }
+
+.v26MarketBar { margin-top: 16px; padding: 10px; background: var(--ui-surface) !important; }
+.v26MarketTitle > svg { background: var(--ui-blue); color: #061321; }
+.v26MarketTitle small, .v26MarketPicker span { color: var(--ui-muted); }
+.v26MarketTitle b, .v26MarketPicker b { color: var(--ui-text); }
+.v26MarketTitle strong { background: var(--ui-surface-3); color: var(--ui-muted); }
+.v26MarketTitle strong.long { background: rgba(67, 201, 138, .14); color: var(--ui-green); }
+.v26MarketTitle strong.short { background: rgba(239, 107, 115, .14); color: var(--ui-red); }
+.v26MarketPicker button, .v26Intervals button { border-color: var(--ui-line); background: var(--ui-surface-2); color: var(--ui-muted); }
+.v26MarketPicker button:hover, .v26Intervals button:hover { border-color: var(--ui-line-strong); background: var(--ui-surface-3); }
+.v26MarketPicker button.active, .v26Intervals button.active { border-color: var(--ui-line-strong); background: rgba(78, 156, 245, .16); color: var(--ui-text); box-shadow: none; }
+
+.v26App .binanceDemoDeck, .v26App .executionV25, .v26App .commercialHub, .v26App .exchangeHub, .v26App .v27Ops { color: var(--ui-text); }
+.v26App .demoHero, .v26App .demoSetupCard, .v26App .demoCommandBar, .v26App .demoMessage, .v26App .demoAccountStrip, .v26App .demoLiveChart, .v26App .demoTicket, .v26App .demoPositions, .v26App .demoOrderPanel, .v26App .demoEventPanel, .v26App .executionHero, .v26App .executionCard, .v26App .executionPulse, .v26App .commercialPanel, .v26App .commercialMetrics article, .v26App .commercialPlans article, .v26App .commercialHero, .v26App .commercialTabs, .v26App .commercialAuthCard, .v26App .v27Panel {
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: var(--ui-surface) !important;
+  box-shadow: var(--ui-shadow) !important;
+  color: var(--ui-text);
+}
+.v26App .demoHero, .v26App .commercialHero { background: linear-gradient(110deg, #102039, #142a45) !important; }
+.v26App .demoHero h2, .v26App .demoHero p, .v26App .executionHero h2, .v26App .executionHero p, .v26App .commercialHero h2, .v26App .commercialHero p { color: var(--ui-text); }
+.v26App .demoHero p, .v26App .executionHero p, .v26App .commercialHero p, .v26App .demoTicketNote, .v26App .demoSetupCard p { color: var(--ui-muted); }
+.v26App .demoCommandBar, .v26App .executionActionBar { background: var(--ui-surface-2) !important; }
+.v26App .demoCommandBar > button, .v26App .executionActionBar button, .v26App .commercialTabs button, .v26App .commercialPrimary, .v26App .savePolicy, .v26App .testOrder, .v26App .liveOrder { border: 1px solid var(--ui-line); border-radius: var(--ui-radius-sm); background: var(--ui-surface-3); color: var(--ui-text); box-shadow: none; }
+.v26App .demoCommandBar > button:hover:not(:disabled), .v26App .executionActionBar button:hover:not(:disabled), .v26App .commercialTabs button:hover, .v26App .commercialPrimary:hover:not(:disabled), .v26App .savePolicy:hover:not(:disabled), .v26App .testOrder:hover:not(:disabled), .v26App .liveOrder:hover:not(:disabled) { border-color: var(--ui-line-strong); background: #203653; transform: translateY(-1px); }
+.v26App .demoConnect, .v26App .executionActionBar .arm, .v26App .executionActionBar .auto, .v26App .commercialPrimary, .v26App .liveOrder { background: var(--ui-blue); color: #061321; border-color: var(--ui-blue); }
+.v26App .demoEmergency, .v26App .executionActionBar .danger { background: var(--ui-red); color: #21070b; border-color: var(--ui-red); }
+.v26App .demoUnlock { background: var(--ui-yellow); color: #211807; }
+.v26App .demoMessage-info, .v26App .demoSetupCard { background: rgba(228, 184, 91, .1) !important; border-color: rgba(228, 184, 91, .35) !important; }
+.v26App .demoMessage-ok { background: rgba(67, 201, 138, .1) !important; border-color: rgba(67, 201, 138, .35) !important; color: var(--ui-green); }
+.v26App .demoMessage-error, .v26App .executionRiskBanner { background: rgba(239, 107, 115, .1) !important; border-color: rgba(239, 107, 115, .35) !important; color: var(--ui-red); }
+.v26App input, .v26App select, .v26App textarea, .v26App .demoFieldGrid input, .v26App .demoFieldGrid select, .v26App .executionFields input, .v26App .executionFields select { border-color: var(--ui-line) !important; background: #0a1626 !important; color: var(--ui-text) !important; border-radius: var(--ui-radius-sm); }
+.v26App input::placeholder, .v26App textarea::placeholder { color: #667c95; }
+.v26App input:focus, .v26App select:focus, .v26App textarea:focus { border-color: var(--ui-blue) !important; box-shadow: 0 0 0 3px rgba(78, 156, 245, .18) !important; outline: none; }
+.v26App .demoFieldGrid label > span, .v26App .executionFields label, .v26App .commercialPanel label { color: var(--ui-muted); }
+.v26App .demoAccountStrip article, .v26App .accountMetrics span, .v26App .positionRows article, .v26App .executionPulse article, .v26App .commercialMetrics article { background: var(--ui-surface-2) !important; border-color: var(--ui-line) !important; }
+.v26App .demoAccountStrip small, .v26App .executionPulse small, .v26App .commercialMetrics small { color: var(--ui-muted); }
+.v26App .demoAccountStrip b, .v26App .executionPulse b, .v26App .commercialMetrics b { color: var(--ui-text); }
+.v26App .demoChartCanvas, .v26App .v26ChartShell { background: #0a1626 !important; border-color: var(--ui-line) !important; }
+.v26App .demoPositionMap, .v26App .liveGates article, .v26App .readinessGates article { background: var(--ui-surface-2) !important; border-color: var(--ui-line) !important; }
+.v26App .executionHead h3, .v26App .commercialPanel h3, .v26App .commercialPlans h3, .v26App .demoTicket h3, .v26App .demoPositions h3 { color: var(--ui-text); }
+.v26App .executionHead small, .v26App .commercialPanel small, .v26App .commercialPanel p, .v26App .commercialPlans span, .v26App .executionCard > p { color: var(--ui-muted); }
+.v26App .positive, .v26App .statusOn, .v26App .passed { color: var(--ui-green) !important; }
+.v26App .negative, .v26App .statusOff { color: var(--ui-red) !important; }
+
+.v26SetupGrid > article { min-height: 0; }
+.v26SetupGrid > article::after { opacity: .06; }
+.v26SetupGrid article > svg, .v26Setup > header svg { background: rgba(78, 156, 245, .18); color: var(--ui-blue-bright); }
+.v26SetupGrid article.future > svg { background: rgba(228, 184, 91, .14); color: var(--ui-yellow); }
+.v26SetupGrid h3, .v26SetupGrid p, .v26SetupGrid strong, .v26SetupGrid code { color: var(--ui-text); }
+.v26SetupGrid p, .v26SetupGrid strong { color: var(--ui-muted); }
+.v26CredentialFields input { pointer-events: auto; }
+.v26CredentialFields label span { color: var(--ui-muted); }
+.v26CredentialFields small { color: var(--ui-muted); }
+.v26Setup > header > b { border-color: rgba(67, 201, 138, .35); background: rgba(67, 201, 138, .1); color: var(--ui-green); }
+.v26GateList article > span { background: rgba(78, 156, 245, .18); color: var(--ui-blue-bright); }
+.v26GateList b { color: var(--ui-text); }
+.v26GateList small, .v26GateList em { color: var(--ui-muted); }
+.v26GateList em { background: rgba(228, 184, 91, .12); }
+.v26Setup > footer, .v26Footer { color: var(--ui-muted); }
+.v26Setup > footer { background: rgba(67, 201, 138, .08) !important; border-color: rgba(67, 201, 138, .28) !important; }
+.v26Footer b { color: var(--ui-green); }
+
+@media (max-width: 1180px) {
+  body { min-width: 0 !important; }
+  .v26App { padding: 16px; }
+  .v26Header { grid-template-columns: 1fr auto; }
+  .v26HeaderSignals { display: none; }
+  .v26Nav { position: relative; top: auto; grid-template-columns: repeat(2, 1fr); }
+  .v26ModeBar { align-items: flex-start; flex-direction: column; }
+  .v26ModeBar aside { width: 100%; box-sizing: border-box; }
+  .v26SetupGrid { grid-template-columns: 1fr; }
+  .v26SetupGrid > article { grid-template-columns: auto 1fr; }
+  .v26CredentialFields { grid-column: 1 / -1; grid-row: auto; }
+  .v26SetupGrid strong { grid-column: 2; }
+  .v26Footer { flex-wrap: wrap; gap: 12px; }
+  .v26Footer em { width: 100%; margin-left: 0; text-align: left; }
+}
+
+@media (max-width: 640px) {
+  .v26App { padding: 10px; }
+  .v26Header { height: auto; min-height: 64px; padding: 10px 12px; }
+  .v26Brand b { font-size: 16px; }
+  .v26Brand small { font-size: 7px; letter-spacing: .8px; }
+  .v26Refresh { padding: 0 10px; font-size: 7px; }
+  .v26Nav { grid-template-columns: 1fr; margin-top: 10px; }
+  .v26Nav button { min-height: 48px; }
+  .v26ModeBar h1 { font-size: 18px; }
+  .v26ModeBar p { line-height: 1.5; }
+  .v26MarketPicker { grid-template-columns: repeat(2, 1fr); }
+  .v26Setup > header { align-items: flex-start; flex-direction: column; }
+  .v26SetupGrid > article { padding: 16px; }
+  .v26SetupGrid > article > svg { width: 23px; height: 23px; padding: 9px; }
+  .v26CredentialFields { gap: 8px; }
+  .v26CredentialFields input { min-height: 40px; font-size: 12px; }
+  .v26SetupGrid strong { grid-column: 1 / -1; }
+  .v26App .demoCommandBar, .v26App .executionActionBar { grid-template-columns: 1fr; }
+  .v26App .demoCommandBar > div { grid-column: auto; }
+  .v26App .executionActionBar button { min-height: 42px; }
+}

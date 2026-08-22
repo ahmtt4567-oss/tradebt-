@@ -10,6 +10,7 @@ import './execution-v25.css'
 import './web-access.css'
 import './testnet-first.css'
 import './cloud-ops-v27.css'
+import './saas-redesign.css'
 
 installAuthorizedFetch()
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AppErrorBoundary><WebAccessGate><TestnetFirstApp/></WebAccessGate></AppErrorBoundary></React.StrictMode>)
