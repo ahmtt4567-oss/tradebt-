@@ -577,3 +577,113 @@ button, input, select, textarea { font-family: inherit; }
   .v26App .v26Footer { gap: 12px; flex-wrap: wrap; }
   .v26App .v26Footer em { width: 100%; margin-left: 0; text-align: left; }
 }
+
+/* Final light polish for loading, status, and nested operation surfaces. */
+.v26App .v26Loading,
+.v26App .executionLoading,
+.v26App .commercialLoading,
+.v26App .v27Loading,
+.v26App .commerceLoading {
+  min-height: 260px;
+  padding: 32px;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-radius) !important;
+  background: #fff !important;
+  color: var(--ui-text) !important;
+  box-shadow: var(--ui-shadow) !important;
+  font-size: 16px !important;
+}
+.v26App .v26Loading svg,
+.v26App .executionLoading svg,
+.v26App .commercialLoading svg,
+.v26App .v27Loading svg,
+.v26App .commerceLoading svg { color: var(--ui-blue) !important; }
+.v26App .v26Loading span,
+.v26App .executionLoading span,
+.v26App .commercialLoading span,
+.v26App .v27Loading span { color: var(--ui-muted) !important; font-size: 14px !important; }
+.v26App .v27Error,
+.v26App .v26Loading button { border: 1px solid #fecaca !important; border-radius: var(--ui-radius-sm) !important; background: #fef2f2 !important; color: #991b1b !important; }
+.v26App .v27SleepNotice,
+.v26App .commercialRule,
+.v26App .demoCertificate,
+.v26App .productionWarning { border: 1px solid #fed7aa !important; border-radius: var(--ui-radius-sm) !important; background: #fff7ed !important; color: #9a3412 !important; }
+.v26App .v27Pulse article,
+.v26App .operationsPulse article,
+.v26App .serviceMatrix span,
+.v26App .miniAudit article,
+.v26App .liveGates article,
+.v26App .readinessGates article,
+.v26App .v21Card,
+.v26App .v21Workspace,
+.v26App .v21Pulse,
+.v26App .v21Tabs { border-color: var(--ui-line) !important; background: var(--ui-surface-2) !important; color: var(--ui-text) !important; box-shadow: none !important; }
+.v26App .v21Tabs button.active { background: #eff6ff !important; border-color: #bfdbfe !important; color: #1d4ed8 !important; }
+.v26App .v21Tabs button { min-height: 44px; color: #475569 !important; font-size: 14px !important; }
+.v26App .v21Tabs button b { font-size: 14px !important; }
+.v26App .v21Tabs button small { font-size: 12px !important; }
+.v26App .demoHeroStatus > span,
+.v26App .demoAccountStrip article,
+.v26App .accountMetrics span,
+.v26App .exchangeBadges span,
+.v26App .accountTiles article,
+.v26App .commercialMetrics article,
+.v26App .v27Metrics article { border-color: var(--ui-line) !important; background: var(--ui-surface-2) !important; }
+.v26App .demoHeroStatus small,
+.v26App .demoHeroStatus b,
+.v26App .demoAccountStrip small,
+.v26App .accountMetrics small,
+.v26App .accountTiles small,
+.v26App .commercialMetrics small,
+.v26App .v27Metrics small { font-size: 12px !important; }
+.v26App .demoHeroStatus b,
+.v26App .accountMetrics b,
+.v26App .accountTiles b,
+.v26App .commercialMetrics b,
+.v26App .v27Metrics b { color: var(--ui-text) !important; font-size: 18px !important; }
+.v26App .demoHeroStatus .demoOk b,
+.v26App .v27Pulse article.ok b { color: var(--ui-green) !important; }
+.v26App .demoHeroStatus .demoWait b,
+.v26App .v27Pulse article.wait b { color: var(--ui-yellow) !important; }
+.v26App .v26App .exchangeModeSwitch button.active { background: #eff6ff !important; border-color: #bfdbfe !important; color: var(--ui-blue) !important; }
+.v26App .exchangeModeSwitch button b { font-size: 15px !important; color: var(--ui-text) !important; }
+.v26App .exchangeModeSwitch button em { font-size: 13px !important; color: var(--ui-muted) !important; }
+.v26App .exchangeCardHead > b,
+.v26App .exchangeBadges span,
+.v26App .liveChartMeta span,
+.v26App .liveChartMeta em { font-size: 13px !important; font-weight: 700 !important; }
+.v26App .exchangeCardHead > b.ok,
+.v26App .exchangeBadges .ok { background: #f0fdf4 !important; color: #166534 !important; }
+.v26App .exchangeCardHead > b.wait,
+.v26App .exchangeBadges .wait { background: #f8fafc !important; color: #64748b !important; }
+.v26App .executionActionBar button,
+.v26App .orderButtons button,
+.v26App .exchangeActions button,
+.v26App .activationActions button { font-size: 14px !important; font-weight: 700 !important; }
+.v26App .executionActionBar button:hover:not(:disabled),
+.v26App .orderButtons button:hover:not(:disabled),
+.v26App .exchangeActions button:hover:not(:disabled),
+.v26App .activationActions button:hover:not(:disabled) { background: #eff6ff !important; color: #1d4ed8 !important; }
+.v26App .executionActionBar .arm:hover:not(:disabled),
+.v26App .executionActionBar .auto:hover:not(:disabled),
+.v26App .orderButtons .liveOrder:hover:not(:disabled),
+.v26App .exchangeActions .primary:hover:not(:disabled),
+.v26App .activationActions .activate:hover:not(:disabled) { background: #1d4ed8 !important; color: #fff !important; }
+.v26App .executionActionBar .danger:hover:not(:disabled),
+.v26App .activationActions .delete:hover:not(:disabled) { background: #b91c1c !important; color: #fff !important; }
+
+@media (max-width: 760px) {
+  .v26App .v26ModeBar h1 { font-size: 25px !important; }
+  .v26App .v26ModeBar p,
+  .v26App .v26SetupGrid p,
+  .v26App .v27Panel p,
+  .v26App .commercialPanel p { font-size: 14px !important; }
+  .v26App .v26Nav button { min-height: 58px; }
+  .v26App .v26Nav button > svg { width: 20px; height: 20px; padding: 8px; }
+  .v26App .v26MarketPicker button,
+  .v26App .v26Intervals button,
+  .v26App .executionActionBar button,
+  .v26App .orderButtons button,
+  .v26App .exchangeActions button,
+  .v26App .activationActions button { min-height: 46px; }
+}
