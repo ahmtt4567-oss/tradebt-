@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
-import { Activity, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
+import { Activity, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
@@ -17,6 +17,29 @@ type Analysis = {
   series:{ema20:Point[];ema50:Point[];ema200:Point[]}
 }
 type Health = {status:string;version:string;mode:string;testnet:string;live_guard:string;paper:string;database:string;cloud_evidence:string;web_access:string}
+type NotificationItem = {id:string;title:string;description:string;kind:'success'|'warning'|'error'|'info'}
+
+const notificationKind = (value:string):NotificationItem['kind'] => {
+  if (/error|hata|failed|down|unavailable/i.test(value)) return 'error'
+  if (/bek|kontrol|connecting|waiting|locked|kilit/i.test(value)) return 'warning'
+  if (/ok|bağlı|active|canlı|kalıcı|hazır/i.test(value)) return 'success'
+  return 'info'
+}
+
+const healthNotifications = (health:Health|null):NotificationItem[] => {
+  if (!health) return []
+  return [
+    ['api', 'API status', health.status],
+    ['database', 'Database status', health.database],
+    ['mode', 'Execution mode', health.mode],
+    ['testnet', 'Testnet status', health.testnet],
+    ['live-guard', 'Live Guard status', health.live_guard],
+    ['paper', 'Paper status', health.paper],
+    ['evidence', 'Evidence status', health.cloud_evidence],
+  ].filter(([, , value]) => Boolean(value)).map(([id,title,description]) => ({
+    id,title,description,kind:notificationKind(description),
+  }))
+}
 
 const format = (value:number) => value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
 
@@ -98,6 +121,9 @@ export default function TestnetFirstApp() {
   const [health,setHealth] = useState<Health|null>(null)
   const [loading,setLoading] = useState(false)
   const [credentials,setCredentials] = useState({demoApiKey:'',demoSecretKey:'',liveApiKey:'',liveSecretKey:''})
+  const [notificationsOpen,setNotificationsOpen] = useState(false)
+  const notificationRef = useRef<HTMLDivElement>(null)
+  const notifications = healthNotifications(health)
 
   const refresh = async () => {
     setLoading(true)
@@ -119,6 +145,17 @@ export default function TestnetFirstApp() {
     return () => {window.clearInterval(timer);window.removeEventListener('protrebot-open-exchange-settings', openExchangeSettings)}
   },[])
 
+  useEffect(() => {
+    if (!notificationsOpen) return
+    const closeOnOutsideClick = (event:MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) setNotificationsOpen(false)
+    }
+    const closeOnEscape = (event:KeyboardEvent) => {if (event.key === 'Escape') setNotificationsOpen(false)}
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {document.removeEventListener('mousedown', closeOnOutsideClick);document.removeEventListener('keydown', closeOnEscape)}
+  },[notificationsOpen])
+
   return <main className="v26App">
     <header className="v26Header">
       <div className="v26Brand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V27 · CLOUD OPERATIONS / TESTNET-FIRST</small></div></div>
@@ -127,6 +164,13 @@ export default function TestnetFirstApp() {
         <span className="ok"><i/>TESTNET ANA MOD</span>
         <span className={health?.cloud_evidence === 'KALICI' ? 'ok' : 'locked'}><Cloud/>{health?.cloud_evidence || 'KANIT BAĞLANIYOR'}</span>
         <span className={health?.live_guard === 'SALT OKUNUR BAĞLI' ? 'ok' : 'locked'}><LockKeyhole/>{health?.live_guard || 'CANLI API BEKLİYOR'}</span>
+      </div>
+      <div className="v26Notifications" ref={notificationRef}>
+        <button className="v26NotificationButton" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}><Bell/></button>
+        {notificationsOpen && <section className="v26NotificationPanel" role="dialog" aria-label="Notifications">
+          <header><div><small>STATUS CENTER</small><h2>Notifications</h2></div><span>{notifications.length}</span></header>
+          {notifications.length ? <div className="v26NotificationList">{notifications.map(item => <article key={item.id} className={item.kind}><i><Bell/></i><div><b>{item.title}</b><p>{item.description}</p><small>Current status</small></div></article>)}</div> : <div className="v26NotificationEmpty"><Bell/><b>No notifications</b><p>You're all caught up.<br/>New system notifications will appear here.</p></div>}
+        </section>}
       </div>
       <button className="v26Refresh" onClick={refresh} disabled={loading}><RefreshCw className={loading ? 'spin' : ''}/>{loading ? 'YENİLENİYOR' : 'YENİLE'}</button>
     </header>
