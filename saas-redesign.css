@@ -661,6 +661,57 @@ button, input, select, textarea { font-family: inherit; }
   .v26NotificationList article { min-height: 72px; }
 }
 
+/* Header alignment: the panel is anchored below the complete header row. */
+.v26App .v26Header {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  overflow: visible;
+}
+.v26App .v26Notifications {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.v26App .v26NotificationPanel {
+  top: calc(100% + 116px);
+  right: 0;
+  z-index: 100;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+}
+.v26App .v26Refresh {
+  width: auto;
+  min-width: 96px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid #c7d2fe !important;
+  border-radius: 11px;
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+.v26App .v26Refresh:hover:not(:disabled) { background: #e0e7ff !important; color: #4338ca !important; }
+.v26App .v26Refresh:active:not(:disabled) { transform: translateY(1px); }
+.v26App .v26Refresh:focus-visible { outline: 3px solid rgba(79, 70, 229, .2); outline-offset: 2px; }
+
+@media (max-width: 1180px) {
+  .v26App .v26Header { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .v26App .v26Notifications { grid-column: 2; grid-row: 1; }
+  .v26App .v26Refresh { grid-column: 3; grid-row: 1; }
+  .v26App .v26NotificationPanel { top: calc(100% + 190px); }
+}
+@media (max-width: 640px) {
+  .v26App .v26Header { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .v26App .v26NotificationPanel { position: absolute; top: calc(100% + 326px); right: -4px; width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: calc(100vh - 96px); }
+  .v26App .v26NotificationList { max-height: calc(100vh - 172px); }
+  .v26App .v26Refresh { min-width: 44px; width: 44px; padding: 0; font-size: 0 !important; }
+  .v26App .v26Refresh svg { width: 19px; height: 19px; margin: 0; }
+}
+
 /* Final premium light system for the active production surface. */
 :root {
   --ui-bg: #f5f7fa;
