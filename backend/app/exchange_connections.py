@@ -302,9 +302,27 @@ async def test_binance_credentials(http: httpx.AsyncClient, mode: str, api_key: 
     try:
         time_response = await http.get(f"{host}/fapi/v1/time")
         time_response.raise_for_status()
-        server_time = int(time_response.json()["serverTime"])
-    except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
-        raise VaultError("Binance saat servisi doğrulanamadı.") from exc
+    except httpx.TimeoutException as exc:
+        raise VaultError("Binance saat servisine ulaşırken zaman aşımı oluştu.") from exc
+    except httpx.ConnectError as exc:
+        raise VaultError("Binance saat servisine bağlantı veya DNS kurulamadı.") from exc
+    except httpx.NetworkError as exc:
+        raise VaultError("Binance saat servisine ağ bağlantısı kurulamadı.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise VaultError(f"Binance saat servisi HTTP {exc.response.status_code} döndürdü.") from exc
+    except httpx.HTTPError as exc:
+        raise VaultError("Binance saat servisi HTTP isteği başarısız oldu.") from exc
+
+    try:
+        time_payload = time_response.json()
+    except ValueError as exc:
+        raise VaultError("Binance saat servisi geçerli JSON döndürmedi.") from exc
+    if not isinstance(time_payload, dict) or "serverTime" not in time_payload:
+        raise VaultError("Binance saat servisi yanıtında serverTime alanı bulunamadı.")
+    try:
+        server_time = int(time_payload["serverTime"])
+    except (TypeError, ValueError) as exc:
+        raise VaultError("Binance saat servisi serverTime alanını geçerli bir sayıya dönüştüremedi.") from exc
     after = int(time.time() * 1000)
     offset = server_time - ((before + after) // 2)
     timestamp = int(time.time() * 1000) + offset
