@@ -121,6 +121,7 @@ export default function TestnetFirstApp() {
   const [health,setHealth] = useState<Health|null>(null)
   const [loading,setLoading] = useState(false)
   const [credentials,setCredentials] = useState({demoApiKey:'',demoSecretKey:'',liveApiKey:'',liveSecretKey:''})
+  const [demoVerification,setDemoVerification] = useState({busy:false,kind:'info',message:''})
   const [notificationsOpen,setNotificationsOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
   const notifications = healthNotifications(health)
@@ -135,6 +136,46 @@ export default function TestnetFirstApp() {
       if (marketResponse.ok) setMarkets(await marketResponse.json() as Market[])
       if (healthResponse.ok) setHealth(await healthResponse.json() as Health)
     } finally {setLoading(false)}
+  }
+
+  const verifyDemoConnection = async () => {
+    const apiKey = credentials.demoApiKey.trim()
+    const secretKey = credentials.demoSecretKey.trim()
+    if (!apiKey || !secretKey) {
+      setDemoVerification({busy:false,kind:'error',message:'Demo API Key ve Secret Key gerekli.'})
+      return
+    }
+    setDemoVerification({busy:true,kind:'info',message:'Demo bağlantısı doğrulanıyor…'})
+    try {
+      const testResponse = await fetch(`${API_BASE}/exchange-connections/test`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:'TESTNET',api_key:apiKey,secret_key:secretKey}),
+      })
+      const testPayload = await testResponse.json().catch(() => null) as {detail?:unknown;message?:string}|null
+      if (!testResponse.ok) throw new Error(typeof testPayload?.detail === 'string' ? testPayload.detail : 'Demo credential doğrulaması başarısız.')
+
+      const saveResponse = await fetch(`${API_BASE}/exchange-connections/save`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:'TESTNET',api_key:apiKey,secret_key:secretKey,confirmation:'TESTNET KASAYA KAYDET'}),
+      })
+      const savePayload = await saveResponse.json().catch(() => null) as {detail?:unknown}|null
+      if (!saveResponse.ok) throw new Error(typeof savePayload?.detail === 'string' ? savePayload.detail : 'Demo credential güvenli kasaya kaydedilemedi.')
+
+      const activateResponse = await fetch(`${API_BASE}/exchange-connections/activate`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:'TESTNET',confirmation:'TESTNET BAĞLANTIYI AÇ'}),
+      })
+      const activatePayload = await activateResponse.json().catch(() => null) as {detail?:unknown}|null
+      if (!activateResponse.ok) throw new Error(typeof activatePayload?.detail === 'string' ? activatePayload.detail : 'Demo bağlantısı aktifleştirilemedi.')
+
+      const connectResponse = await fetch(`${API_BASE}/binance-demo/connect`,{method:'POST'})
+      const connectPayload = await connectResponse.json().catch(() => null) as {detail?:unknown}|null
+      if (!connectResponse.ok) throw new Error(typeof connectPayload?.detail === 'string' ? connectPayload.detail : 'Binance Demo hesabı bağlanamadı.')
+      setDemoVerification({busy:false,kind:'ok',message:'DEMO CONNECTED · Demo hesabı doğrulandı ve bağlantı aktif.'})
+      await refresh()
+    } catch (error) {
+      setDemoVerification({busy:false,kind:'error',message:error instanceof Error ? error.message : 'Demo bağlantısı doğrulanamadı. Ağ ve vault durumunu kontrol edin.'})
+    }
   }
 
   useEffect(() => {
@@ -207,7 +248,7 @@ export default function TestnetFirstApp() {
     {view === 'setup' && <section className="v26Setup">
       <header><div><KeyRound/><span><small>SECRETS-ONLY TASARIM</small><h2>İki Ayrı Binance Kanalı</h2></span></div><b><ShieldCheck/>TARAYICIYA ANAHTAR GİRİLMEZ</b></header>
       <div className="v26SetupGrid">
-        <article className="primary"><TestTube2/><div><small>1 · ŞİMDİ KULLANILACAK</small><h3>Binance Futures Demo</h3><p>Demo API anahtarı Render’a eklenir. Gerçek para yoktur; emir, bakiye, pozisyon, Stop ve TP borsa Demo hesabında görünür.</p></div><div className="v26CredentialFields"><label><span>Demo API Key</span><input type="text" value={credentials.demoApiKey} onChange={event => setCredentials(current => ({...current,demoApiKey:event.target.value}))} autoComplete="off" spellCheck={false} placeholder="Demo API anahtarı"/></label><label><span>Demo Secret Key</span><input type="password" value={credentials.demoSecretKey} onChange={event => setCredentials(current => ({...current,demoSecretKey:event.target.value}))} autoComplete="new-password" spellCheck={false} placeholder="Demo Secret anahtarı"/></label><small>Değerler yalnızca bu formun geçici state’inde tutulur.</small></div><strong>{health?.testnet || 'ANAHTAR BEKLİYOR'}</strong></article>
+        <article className="primary"><TestTube2/><div><small>1 · ŞİMDİ KULLANILACAK</small><h3>Binance Futures Demo</h3><p>Demo API anahtarı yalnızca şifreli vault’a kaydedilir. Gerçek para yoktur; emir, bakiye, pozisyon, Stop ve TP borsa Demo hesabında görünür.</p></div><div className="v26CredentialFields"><label><span>Demo API Key</span><input type="text" value={credentials.demoApiKey} onChange={event => setCredentials(current => ({...current,demoApiKey:event.target.value}))} autoComplete="off" spellCheck={false} placeholder="Demo API anahtarı"/></label><label><span>Demo Secret Key</span><input type="password" value={credentials.demoSecretKey} onChange={event => setCredentials(current => ({...current,demoSecretKey:event.target.value}))} autoComplete="new-password" spellCheck={false} placeholder="Demo Secret anahtarı"/></label><button className="v26DemoVerify" type="button" onClick={verifyDemoConnection} disabled={demoVerification.busy}>{demoVerification.busy ? 'VERIFYING…' : 'VERIFY DEMO CONNECTION'}</button>{demoVerification.message && <small className={`v26DemoVerifyMessage ${demoVerification.kind}`}>{demoVerification.message}</small>}<small>Değerler geçici form state’inden mevcut şifreli vault akışına gönderilir; secret frontend’e geri dönmez.</small></div><strong>{demoVerification.kind === 'ok' ? 'DEMO CONNECTED' : health?.testnet || 'ANAHTAR BEKLİYOR'}</strong></article>
         <article className="future"><LockKeyhole/><div><small>2 · DAHA SONRA</small><h3>Gerçek Binance Futures</h3><p>Canlı altyapı hazırdır. İki secret boş kaldığı sürece bağlantı, izin, kilit ve emir gönderimi açılamaz.</p></div><div className="v26CredentialFields"><label><span>Live API Key</span><input type="text" value={credentials.liveApiKey} onChange={event => setCredentials(current => ({...current,liveApiKey:event.target.value}))} autoComplete="off" spellCheck={false} placeholder="Canlı API anahtarı"/></label><label><span>Live Secret Key</span><input type="password" value={credentials.liveSecretKey} onChange={event => setCredentials(current => ({...current,liveSecretKey:event.target.value}))} autoComplete="new-password" spellCheck={false} placeholder="Canlı Secret anahtarı"/></label><small>Değerler yalnızca bu formun geçici state’inde tutulur.</small></div><strong>{health?.live_guard || 'API BEKLİYOR'}</strong></article>
       </div>
       <div className="v26GateList">

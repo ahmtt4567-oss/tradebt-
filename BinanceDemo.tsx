@@ -59,6 +59,17 @@ type DemoOrder = {
   reduce_only:boolean
 }
 
+type DemoOrderResult = {
+  symbol?:string
+  order_id?:number
+  client_order_id?:string
+  status?:string
+  type?:string
+  side?:string
+  quantity?:string
+  price?:string|number
+}
+
 type DemoAlgoOrder = {
   symbol:string
   algo_id:number
@@ -232,6 +243,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [historyPayload,setHistoryPayload] = useState<{orders:Record<string,unknown>[];algo_orders:Record<string,unknown>[];trades:Record<string,unknown>[]} | null>(null)
   const [autoConfirm,setAutoConfirm] = useState('')
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
+  const [lastOrder,setLastOrder] = useState<DemoOrderResult|null>(null)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -348,7 +360,11 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const submitOrder = () => {
     const confirmation = window.prompt('Demo emrini açmak için DEMO yazın:') || ''
     if (!confirmation.trim()) return
-    return runAction(() => apiCall('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload(),confirmation:confirmation.trim()})}),'Emir yalnızca Binance Futures Demo hesabına gönderildi; koruma durumu yenileniyor.')
+    return runAction(async () => {
+      const result = await apiCall<{order?:DemoOrderResult}>('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload(),confirmation:confirmation.trim()})})
+      setLastOrder(result.order || null)
+      return result
+    },'Emir yalnızca Binance Futures Demo hesabına gönderildi; koruma durumu yenileniyor.')
   }
   const cancelOrder = (order:DemoOrder) => runAction(() => apiCall('/order/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:order.symbol,order_id:order.order_id})}),`${order.symbol} Demo emri iptal edildi.`)
   const cancelAlgo = (order:DemoAlgoOrder) => runAction(() => apiCall('/algo/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:order.symbol,algo_id:order.algo_id})}),`${order.symbol} koşullu Demo emri iptal edildi.`)
@@ -454,6 +470,11 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     </section>
 
     <div className={`demoMessage demoMessage-${messageKind}`}>{messageKind === 'error' ? <TriangleAlert/> : messageKind === 'ok' ? <ShieldCheck/> : <Activity/>}<span>{message}</span></div>
+
+    {lastOrder && <section className="demoOrderConfirmation" aria-live="polite">
+      <header><div><small>DEMO EMİR ONAYI</small><h3>Emir Binance Futures Demo hesabına iletildi</h3></div><CheckCircle2/></header>
+      <div><span><small>Order ID</small><b>{lastOrder.order_id ?? '—'}</b></span><span><small>Parite</small><b>{lastOrder.symbol ?? symbol}</b></span><span><small>Yön</small><b>{lastOrder.side ?? '—'}</b></span><span><small>Tip</small><b>{lastOrder.type ?? form.orderType}</b></span><span><small>Miktar</small><b>{lastOrder.quantity ?? '—'}</b></span><span><small>Fiyat</small><b>{lastOrder.price ?? 'MARKET'}</b></span><span><small>Durum</small><b>{lastOrder.status ?? '—'}</b></span></div>
+    </section>}
 
     <section className={`demoAccountStrip ${tab !== 'trade' ? 'demoTabHidden' : ''}`}>
       <article><Wallet/><span><small>SANAL CÜZDAN</small><b>{fmt(account?.wallet_balance)} USDT</b></span></article>

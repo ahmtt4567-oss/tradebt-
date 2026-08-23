@@ -740,6 +740,24 @@ button, input, select, textarea { font-family: inherit; }
   .v26App .v26HeaderActions .v26Refresh { width: 44px; min-width: 44px; padding: 0; font-size: 0 !important; }
 }
 
+.v26App .v26DemoVerify {
+  min-height: 44px;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #2563eb;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.v26App .v26DemoVerify:hover:not(:disabled) { background: #1d4ed8; }
+.v26App .v26DemoVerify:disabled { opacity: .55; cursor: wait; }
+.v26App .v26DemoVerifyMessage { display: block; margin-top: 6px; font-size: 13px !important; font-weight: 600 !important; }
+.v26App .v26DemoVerifyMessage.ok { color: #166534 !important; }
+.v26App .v26DemoVerifyMessage.error { color: #991b1b !important; }
+
 /* Final premium light system for the active production surface. */
 :root {
   --ui-bg: #f5f7fa;
@@ -860,6 +878,18 @@ body { background: var(--ui-bg) !important; color: var(--ui-text); font-family: 
 .v26App .v26Footer span { min-height: 34px; padding: 7px 10px; border: 1px solid var(--ui-line); border-radius: 999px; background: var(--ui-surface-2); color: var(--ui-muted) !important; font-size: 13px !important; font-weight: 600; }
 .v26App .v26Footer b { color: #166534 !important; font-size: 13px !important; }
 .v26App .v26Footer em { color: var(--ui-muted) !important; font-size: 13px !important; }
+.v26App .demoOrderConfirmation { padding: 20px; border: 1px solid #bbf7d0; border-radius: 16px; background: #f0fdf4; box-shadow: var(--ui-shadow); color: #166534; }
+.v26App .demoOrderConfirmation > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 14px; border: 0; border-bottom: 1px solid #bbf7d0; background: transparent; box-shadow: none; }
+.v26App .demoOrderConfirmation > header small { color: #16a34a; font-size: 12px !important; font-weight: 700; }
+.v26App .demoOrderConfirmation > header h3 { margin: 4px 0 0; color: #166534 !important; font-size: 18px !important; }
+.v26App .demoOrderConfirmation > header > svg { width: 24px; height: 24px; color: #16a34a; }
+.v26App .demoOrderConfirmation > div { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; padding-top: 14px; }
+.v26App .demoOrderConfirmation > div span { min-width: 0; padding: 10px; border: 1px solid #bbf7d0; border-radius: 10px; background: #fff; }
+.v26App .demoOrderConfirmation > div small, .v26App .demoOrderConfirmation > div b { display: block; }
+.v26App .demoOrderConfirmation > div small { color: #64748b; font-size: 12px !important; }
+.v26App .demoOrderConfirmation > div b { margin-top: 4px; color: #0f172a; font-size: 14px !important; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .v26App .demoOrderConfirmation > div { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .v26App .demoOrderConfirmation { padding: 16px; } .v26App .demoOrderConfirmation > header h3 { font-size: 16px !important; } .v26App .demoOrderConfirmation > div { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 @media (max-width: 1180px) {
   .v26App { padding: 20px; }
