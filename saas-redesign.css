@@ -712,6 +712,34 @@ button, input, select, textarea { font-family: inherit; }
   .v26App .v26Refresh svg { width: 19px; height: 19px; margin: 0; }
 }
 
+/* Keep header actions together so navigation remains a separate row. */
+.v26App .v26Header {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  overflow: visible;
+}
+.v26App .v26HeaderActions {
+  position: relative;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.v26App .v26HeaderActions .v26Notifications { display: flex; align-items: center; }
+.v26App .v26HeaderActions .v26NotificationPanel { top: calc(100% + 121px); right: 0; }
+.v26App .v26HeaderActions .v26Refresh { width: 104px; min-width: 104px; }
+@media (max-width: 1180px) {
+  .v26App .v26Header { grid-template-columns: minmax(0, 1fr) auto; }
+  .v26App .v26HeaderActions { grid-column: 2; grid-row: 1; }
+  .v26App .v26HeaderActions .v26NotificationPanel { top: calc(100% + 196px); }
+}
+@media (max-width: 640px) {
+  .v26App .v26Header { grid-template-columns: minmax(0, 1fr) auto; }
+  .v26App .v26HeaderActions { grid-column: 2; grid-row: 1; }
+  .v26App .v26HeaderActions .v26NotificationPanel { top: calc(100% + 351px); right: -26px; width: calc(100vw - 24px); max-width: calc(100vw - 24px); }
+  .v26App .v26HeaderActions .v26Refresh { width: 44px; min-width: 44px; padding: 0; font-size: 0 !important; }
+}
+
 /* Final premium light system for the active production surface. */
 :root {
   --ui-bg: #f5f7fa;

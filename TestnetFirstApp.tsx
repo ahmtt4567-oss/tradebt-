@@ -165,14 +165,16 @@ export default function TestnetFirstApp() {
         <span className={health?.cloud_evidence === 'KALICI' ? 'ok' : 'locked'}><Cloud/>{health?.cloud_evidence || 'KANIT BAĞLANIYOR'}</span>
         <span className={health?.live_guard === 'SALT OKUNUR BAĞLI' ? 'ok' : 'locked'}><LockKeyhole/>{health?.live_guard || 'CANLI API BEKLİYOR'}</span>
       </div>
-      <div className="v26Notifications" ref={notificationRef}>
-        <button className="v26NotificationButton" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}><Bell/></button>
-        {notificationsOpen && <section className="v26NotificationPanel" role="dialog" aria-label="Notifications">
-          <header><div><small>STATUS CENTER</small><h2>Notifications</h2></div><span>{notifications.length}</span></header>
-          {notifications.length ? <div className="v26NotificationList">{notifications.map(item => <article key={item.id} className={item.kind}><i><Bell/></i><div><b>{item.title}</b><p>{item.description}</p><small>Current status</small></div></article>)}</div> : <div className="v26NotificationEmpty"><Bell/><b>No notifications</b><p>You're all caught up.<br/>New system notifications will appear here.</p></div>}
-        </section>}
+      <div className="v26HeaderActions">
+        <button className="v26Refresh" onClick={refresh} disabled={loading}><RefreshCw className={loading ? 'spin' : ''}/>{loading ? 'YENİLENİYOR' : 'YENİLE'}</button>
+        <div className="v26Notifications" ref={notificationRef}>
+          <button className="v26NotificationButton" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}><Bell/></button>
+          {notificationsOpen && <section className="v26NotificationPanel" role="dialog" aria-label="Notifications">
+            <header><div><small>STATUS CENTER</small><h2>Notifications</h2></div><span>{notifications.length}</span></header>
+            {notifications.length ? <div className="v26NotificationList">{notifications.map(item => <article key={item.id} className={item.kind}><i><Bell/></i><div><b>{item.title}</b><p>{item.description}</p><small>Current status</small></div></article>)}</div> : <div className="v26NotificationEmpty"><Bell/><b>No notifications</b><p>You're all caught up.<br/>New system notifications will appear here.</p></div>}
+          </section>}
+        </div>
       </div>
-      <button className="v26Refresh" onClick={refresh} disabled={loading}><RefreshCw className={loading ? 'spin' : ''}/>{loading ? 'YENİLENİYOR' : 'YENİLE'}</button>
     </header>
 
     <nav className="v26Nav">
