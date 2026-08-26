@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
 import { Activity, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
@@ -42,6 +42,20 @@ const healthNotifications = (health:Health|null):NotificationItem[] => {
 }
 
 const format = (value:number) => value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
+
+const gateInteraction = (target:View,eventName?:string) => ({
+  role:'button' as const,
+  tabIndex:0,
+  style:{cursor:'pointer'},
+  onClick:() => {window.dispatchEvent(new CustomEvent('protrebot-navigate',{detail:target}));if (eventName) window.setTimeout(() => window.dispatchEvent(new Event(eventName)),0)},
+  onKeyDown:(event:KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      window.dispatchEvent(new CustomEvent('protrebot-navigate',{detail:target}))
+      if (eventName) window.setTimeout(() => window.dispatchEvent(new Event(eventName)),0)
+    }
+  },
+})
 
 function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval:string;onAnalysis:(analysis:Analysis|null)=>void}) {
   const host = useRef<HTMLDivElement>(null)
@@ -125,6 +139,12 @@ export default function TestnetFirstApp() {
   const [notificationsOpen,setNotificationsOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
   const notifications = healthNotifications(health)
+
+  useEffect(() => {
+    const navigate = (event:Event) => setView((event as CustomEvent<View>).detail)
+    window.addEventListener('protrebot-navigate',navigate)
+    return () => window.removeEventListener('protrebot-navigate',navigate)
+  },[])
 
   const refresh = async () => {
     setLoading(true)
@@ -252,11 +272,11 @@ export default function TestnetFirstApp() {
         <article className="future"><LockKeyhole/><div><small>2 · DAHA SONRA</small><h3>Gerçek Binance Futures</h3><p>Canlı altyapı hazırdır. İki secret boş kaldığı sürece bağlantı, izin, kilit ve emir gönderimi açılamaz.</p></div><div className="v26CredentialFields"><label><span>Live API Key</span><input type="text" value={credentials.liveApiKey} onChange={event => setCredentials(current => ({...current,liveApiKey:event.target.value}))} autoComplete="off" spellCheck={false} placeholder="Canlı API anahtarı"/></label><label><span>Live Secret Key</span><input type="password" value={credentials.liveSecretKey} onChange={event => setCredentials(current => ({...current,liveSecretKey:event.target.value}))} autoComplete="new-password" spellCheck={false} placeholder="Canlı Secret anahtarı"/></label><small>Değerler yalnızca bu formun geçici state’inde tutulur.</small></div><strong>{health?.live_guard || 'API BEKLİYOR'}</strong></article>
       </div>
       <div className="v26GateList">
-        <article><span>01</span><div><b>API anahtarları</b><small>Yalnızca Render Environment; GitHub, ekran görüntüsü ve sohbet yasak.</small></div><em>BEKLİYOR</em></article>
-        <article><span>02</span><div><b>Salt-okunur hesap testi</b><small>Bakiye, pozisyon modu ve saat farkı doğrulanır; emir oluşmaz.</small></div><em>KİLİTLİ</em></article>
-        <article><span>03</span><div><b>Demo kanıt sertifikası</b><small>30 aktif gün, 100 kapanmış Demo işlem, tatbikat ve drawdown sınırı.</small></div><em>KANIT TOPLAR</em></article>
-        <article><span>04</span><div><b>24 saatlik risk izni</b><small>Sunucu belleğinde tutulur; her yeniden başlatmada otomatik iptal olur.</small></div><em>KİLİTLİ</em></article>
-        <article><span>05</span><div><b>5 dakikalık son emir kilidi</b><small>Risk politikası onaylı değilse veya herhangi bir kapı eksikse açılamaz.</small></div><em>KİLİTLİ</em></article>
+        <article {...gateInteraction('setup')}><span>01</span><div><b>API anahtarları</b><small>Yalnızca Render Environment; GitHub, ekran görüntüsü ve sohbet yasak.</small></div><em>BEKLİYOR</em></article>
+        <article {...gateInteraction('live')}><span>02</span><div><b>Salt-okunur hesap testi</b><small>Bakiye, pozisyon modu ve saat farkı doğrulanır; emir oluşmaz.</small></div><em>KİLİTLİ</em></article>
+        <article {...gateInteraction('testnet','protrebot-open-demo-certificate')}><span>03</span><div><b>Demo kanıt sertifikası</b><small>30 aktif gün, 100 kapanmış Demo işlem, tatbikat ve drawdown sınırı.</small></div><em>KANIT TOPLAR</em></article>
+        <article {...gateInteraction('live')}><span>04</span><div><b>24 saatlik risk izni</b><small>Sunucu belleğinde tutulur; her yeniden başlatmada otomatik iptal olur.</small></div><em>KİLİTLİ</em></article>
+        <article {...gateInteraction('live')}><span>05</span><div><b>5 dakikalık son emir kilidi</b><small>Risk politikası onaylı değilse veya herhangi bir kapı eksikse açılamaz.</small></div><em>KİLİTLİ</em></article>
       </div>
       <footer><CheckCircle2/>Altyapı tamamlandıktan sonra ilk aşamada yalnızca Demo secret’larını ekleyeceğiz. Canlı secret’lar boş kalacak.</footer>
     </section>}

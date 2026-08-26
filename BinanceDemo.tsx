@@ -289,6 +289,12 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     return () => { mounted=false;window.clearInterval(timer);window.clearInterval(ticker) }
   },[active])
 
+  useEffect(() => {
+    const openCertificate = () => setTab('certificate')
+    window.addEventListener('protrebot-open-demo-certificate',openCertificate)
+    return () => window.removeEventListener('protrebot-open-demo-certificate',openCertificate)
+  },[])
+
   useEffect(() => { setBacktestSymbol(symbol) },[symbol])
 
   useEffect(() => {
