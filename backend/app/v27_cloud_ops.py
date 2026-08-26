@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from typing import Any
@@ -22,6 +23,7 @@ from .v27_cloud_core import VERSION, durable_payload, evidence_rows, json_safe, 
 
 
 router = APIRouter(prefix="/api/v27", tags=["V27 Cloud Operations"])
+logger = logging.getLogger(__name__)
 STATE_KEY = "testnet-primary"
 SYNC_SECONDS = 20
 DEPLOYMENT_TIER = os.getenv("PROTREBOT_DEPLOYMENT_TIER", "LOCAL").strip().upper() or "LOCAL"
@@ -106,6 +108,7 @@ async def sync_cloud_state(application: Any) -> dict[str, Any]:
             "evidence_count": count,
         })
     except Exception as exc:
+        logger.exception("v27 cloud evidence sync failed")
         state.update({"status": "YENİDEN DENİYOR", "persistent": False, "last_error": str(exc)[:240]})
     return state
 
