@@ -9,6 +9,7 @@ No endpoint in this module can create an exchange order.
 from __future__ import annotations
 
 import asyncio
+from datetime import date, datetime, timezone
 import json
 import logging
 import os
@@ -91,13 +92,27 @@ async def sync_cloud_state(application: Any) -> dict[str, Any]:
         )
         rows = evidence_rows(payload)
         if rows:
+            postgres_rows = []
+            for row in rows:
+                event_time = row[3]
+                if isinstance(event_time, datetime):
+                    parsed_event_time = event_time
+                elif isinstance(event_time, date):
+                    parsed_event_time = datetime.combine(event_time, datetime.min.time(), tzinfo=timezone.utc)
+                elif isinstance(event_time, str):
+                    parsed_event_time = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+                else:
+                    raise TypeError("event_time must be a date, datetime, or ISO-8601 string")
+                if parsed_event_time.tzinfo is None:
+                    raise ValueError("event_time must include timezone information")
+                postgres_rows.append((*row[:3], parsed_event_time, row[4]))
             await pool.executemany(
                 """
                 INSERT INTO protrebot_cloud_evidence (event_key, kind, symbol, event_time, payload)
                 VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
                 ON CONFLICT (event_key) DO NOTHING
                 """,
-                rows,
+                postgres_rows,
             )
         count = int(await pool.fetchval("SELECT COUNT(*) FROM protrebot_cloud_evidence") or 0)
         state.update({
