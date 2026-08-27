@@ -99,7 +99,7 @@ button { transition: background-color .16s ease, border-color .16s ease, color .
 .v26App .demoMessage-info, .v26App .demoSetupCard { background: rgba(228, 184, 91, .1) !important; border-color: rgba(228, 184, 91, .35) !important; }
 .v26App .demoMessage-ok { background: rgba(67, 201, 138, .1) !important; border-color: rgba(67, 201, 138, .35) !important; color: var(--ui-green); }
 .v26App .demoMessage-error, .v26App .executionRiskBanner { background: rgba(239, 107, 115, .1) !important; border-color: rgba(239, 107, 115, .35) !important; color: var(--ui-red); }
-.v26App input, .v26App select, .v26App textarea, .v26App .demoFieldGrid input, .v26App .demoFieldGrid select, .v26App .executionFields input, .v26App .executionFields select { border-color: var(--ui-line) !important; background: #0a1626 !important; color: var(--ui-text) !important; border-radius: var(--ui-radius-sm); }
+.v26App input, .v26App select, .v26App textarea, .v26App .demoFieldGrid input, .v26App .demoFieldGrid select, .v26App .executionFields input, .v26App .executionFields select { border-color: var(--ui-line) !important; background: #0a1626 !important; color: #f8fafc !important; border-radius: var(--ui-radius-sm); }
 .v26App input::placeholder, .v26App textarea::placeholder { color: #667c95; }
 .v26App input:focus, .v26App select:focus, .v26App textarea:focus { border-color: var(--ui-blue) !important; box-shadow: 0 0 0 3px rgba(78, 156, 245, .18) !important; outline: none; }
 .v26App .demoFieldGrid label > span, .v26App .executionFields label, .v26App .commercialPanel label { color: var(--ui-muted); }
