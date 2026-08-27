@@ -858,6 +858,8 @@ body { background: var(--ui-bg) !important; color: var(--ui-text); font-family: 
 .v26App .v26CredentialFields small { color: var(--ui-muted) !important; font-size: 12px !important; }
 .v26App .v26CredentialFields { position: relative; z-index: 2; }
 .v26App .v26SetupGrid > article::after { opacity: 0 !important; pointer-events: none; }
+.v26App .demoFieldGrid input, .v26App .demoFieldGrid select { color: #f8fafc !important; caret-color: #f8fafc !important; }
+.v26App .demoFieldGrid input::placeholder { color: #cbd5e1 !important; opacity: 1; }
 
 .v26App .demoAccountStrip article, .v26App .executionPulse article, .v26App .accountMetrics span, .v26App .positionRows article, .v26App .commercialMetrics article, .v26App .exchangeBadges span, .v26App .accountTiles article, .v26App .v27Metrics article, .v26App .v27Gates article { background: var(--ui-surface-2) !important; border-color: var(--ui-line) !important; }
 .v26App .demoAccountStrip small, .v26App .executionPulse small, .v26App .commercialMetrics small, .v26App .accountTiles small, .v26App .v27Metrics small { color: var(--ui-muted) !important; font-size: 12px !important; }
