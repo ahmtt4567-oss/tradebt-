@@ -22,7 +22,7 @@ def load_core():
     wanted = {
         "BinanceDemoError", "signed_query", "decimal_text", "floor_step", "round_tick", "normalize_symbol",
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
-        "set_isolated_margin", "apply_verified_leverage",
+        "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
@@ -33,6 +33,7 @@ def load_core():
         "Decimal": Decimal,
         "ROUND_DOWN": ROUND_DOWN,
         "ROUND_HALF_UP": ROUND_HALF_UP,
+        "DEMO_REST_BASE": "https://demo-fapi.binance.com",
         "re": re,
         "Any": object,
     }
@@ -146,6 +147,80 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
 
 
 class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_one_way_mode_cleans_demo_orders_before_mode_change(self):
+        class FakeClient:
+            def __init__(self):
+                self.calls = []
+                self.hedge = True
+                self.orders = [{"symbol": "BTCUSDT", "orderId": 11}]
+                self.algo_orders = [{"symbol": "ETHUSDT", "algoId": 22}]
+
+            async def signed(self, method, path, params=None):
+                self.calls.append((method, path, params or {}))
+                if path == "/fapi/v1/positionSide/dual" and method == "GET":
+                    return {"dualSidePosition": self.hedge}
+                if path == "/fapi/v1/openOrders":
+                    return list(self.orders)
+                if path == "/fapi/v1/openAlgoOrders":
+                    return list(self.algo_orders)
+                if path == "/fapi/v1/order" and method == "DELETE":
+                    self.orders.clear()
+                    return {"orderId": 11, "status": "CANCELED"}
+                if path == "/fapi/v1/algoOrder" and method == "DELETE":
+                    self.algo_orders.clear()
+                    return {"algoId": 22, "algoStatus": "CANCELED"}
+                if path == "/fapi/v1/positionSide/dual" and method == "POST":
+                    self.hedge = False
+                    return {"dualSidePosition": False}
+                raise AssertionError((method, path, params))
+
+        client = FakeClient()
+        self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 2)
+        self.assertEqual([call[1] for call in client.calls], [
+            "/fapi/v1/positionSide/dual", "/fapi/v1/openOrders", "/fapi/v1/openAlgoOrders",
+            "/fapi/v1/order", "/fapi/v1/algoOrder", "/fapi/v1/openOrders",
+            "/fapi/v1/openAlgoOrders", "/fapi/v1/positionSide/dual", "/fapi/v1/positionSide/dual",
+        ])
+
+    async def test_one_way_mode_is_noop_when_already_one_way(self):
+        class FakeClient:
+            async def signed(self, method, path, params=None):
+                self.calls = getattr(self, "calls", 0) + 1
+                return {"dualSidePosition": False}
+
+        client = FakeClient()
+        self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 0)
+        self.assertEqual(client.calls, 1)
+
+    async def test_one_way_mode_rechecks_orders_after_binance_4067(self):
+        class FakeClient:
+            def __init__(self):
+                self.hedge = True
+                self.mode_attempts = 0
+                self.orders = [{"symbol": "BTCUSDT", "orderId": 11}]
+
+            async def signed(self, method, path, params=None):
+                if path == "/fapi/v1/positionSide/dual" and method == "GET":
+                    return {"dualSidePosition": self.hedge}
+                if path == "/fapi/v1/openOrders":
+                    return list(self.orders)
+                if path == "/fapi/v1/openAlgoOrders":
+                    return []
+                if path == "/fapi/v1/order" and method == "DELETE":
+                    self.orders.clear()
+                    return {"orderId": 11, "status": "CANCELED"}
+                if path == "/fapi/v1/positionSide/dual" and method == "POST":
+                    self.mode_attempts += 1
+                    if self.mode_attempts == 1:
+                        raise CORE["BinanceDemoError"]("open orders", exchange_code=-4067)
+                    self.hedge = False
+                    return {"dualSidePosition": False}
+                raise AssertionError((method, path, params))
+
+        client = FakeClient()
+        self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 1)
+        self.assertEqual(client.mode_attempts, 2)
+
     async def test_isolated_margin_then_exact_leverage_and_symbol_config_are_required(self):
         class FakeClient:
             def __init__(self):
