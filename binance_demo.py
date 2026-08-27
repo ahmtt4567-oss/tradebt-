@@ -431,6 +431,50 @@ async def position_mode(client: BinanceDemoClient) -> bool:
     return value is True or str(value).lower() == "true"
 
 
+async def ensure_one_way_position_mode(client: BinanceDemoClient) -> int:
+    """Prepare the Demo account for one-way mode without racing mode changes."""
+    if not DEMO_REST_BASE.endswith("demo-fapi.binance.com"):
+        raise BinanceDemoError("Demo sunucu kilidi doğrulanamadı.", http_status=500)
+    if not await position_mode(client):
+        return 0
+
+    cancelled = 0
+    mode_attempts = 0
+    while mode_attempts < 2:
+        orders = response_rows(await client.signed("GET", "/fapi/v1/openOrders"))
+        algo_orders = response_rows(await client.signed("GET", "/fapi/v1/openAlgoOrders"))
+        for order in orders:
+            symbol = normalize_symbol(str(order.get("symbol") or ""))
+            order_id = int(order.get("orderId") or 0)
+            if order_id <= 0:
+                raise BinanceDemoError("Demo açık emri güvenli biçimde tanımlanamadı.", http_status=409)
+            await client.signed("DELETE", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id})
+            cancelled += 1
+        for order in algo_orders:
+            symbol = normalize_symbol(str(order.get("symbol") or ""))
+            algo_id = int(order.get("algoId") or 0)
+            if algo_id <= 0:
+                raise BinanceDemoError("Demo koşullu açık emri güvenli biçimde tanımlanamadı.", http_status=409)
+            await client.signed("DELETE", "/fapi/v1/algoOrder", {"symbol": symbol, "algoId": algo_id})
+            cancelled += 1
+
+        remaining = response_rows(await client.signed("GET", "/fapi/v1/openOrders"))
+        remaining_algos = response_rows(await client.signed("GET", "/fapi/v1/openAlgoOrders"))
+        if remaining or remaining_algos:
+            raise BinanceDemoError("Demo açık emirleri temizlenemedi; pozisyon modu değiştirilmedi.", http_status=409)
+        try:
+            await client.signed("POST", "/fapi/v1/positionSide/dual", {"dualSidePosition": "false"})
+        except BinanceDemoError as exc:
+            if exc.exchange_code != -4067 or mode_attempts > 0:
+                raise
+            mode_attempts += 1
+            continue
+        if await position_mode(client):
+            raise BinanceDemoError("Binance Demo Pozisyon Modu ONE-WAY olarak doğrulanamadı.", http_status=409)
+        return cancelled
+    raise BinanceDemoError("Binance Demo Pozisyon Modu değişikliği açık emir nedeniyle tamamlanamadı.", http_status=409, exchange_code=-4067)
+
+
 async def optional_symbol_configurations(client: BinanceDemoClient) -> Any:
     """Keep read-only account visibility if an older Demo deployment lacks this endpoint."""
     try:
@@ -984,9 +1028,8 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
         try:
             api_key, secret_key = load_demo_credentials()
             client = BinanceDemoClient(application.state.http, api_key, secret_key)
+            await ensure_one_way_position_mode(client)
             snapshot = await account_snapshot(client)
-            if snapshot["hedge_mode"]:
-                raise BinanceDemoError("Pozisyon Modu 'Tek Yön / One-way' olmalı.", http_status=409)
             symbol = normalize_symbol(body.symbol)
             if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:
                 raise BinanceDemoError("En fazla 3 açık Demo pozisyonuna izin verilir.", http_status=409)
@@ -1038,6 +1081,7 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
             if spec["order_type"] == "MARKET":
                 await install_protection(client, state, plan)
                 persist_runtime(state)
+            verified_snapshot = await account_snapshot(client)
             return {
                 "ok": True,
                 "message": f"Emir yalnızca Binance Futures Demo hesabına gönderildi; {leverage_audit['applied_leverage']}x ISOLATED doğrulandı.",
@@ -1050,6 +1094,8 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
                     "side": result.get("side", spec["side"]),
                 },
                 "plan": plan,
+                "open_order_count": len(verified_snapshot["open_orders"]),
+                "open_algo_order_count": len(verified_snapshot["open_algo_orders"]),
                 "real_trading_locked": True,
             }
         except BinanceDemoError as exc:

@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 ROOT = Path(__file__).parents[2]
 SOURCE_PATH = ROOT / "backend" / "app" / "binance_demo.py"
 SOURCE_TEXT = SOURCE_PATH.read_text(encoding="utf-8")
+ROOT_SOURCE_TEXT = (ROOT / "binance_demo.py").read_text(encoding="utf-8")
 MAIN_TEXT = (ROOT / "backend" / "app" / "main.py").read_text(encoding="utf-8")
 FRONTEND_TEXT = (ROOT / "frontend" / "src" / "BinanceDemo.tsx").read_text(encoding="utf-8")
 STYLE_TEXT = (ROOT / "frontend" / "src" / "binance-demo.css").read_text(encoding="utf-8")
@@ -142,6 +143,8 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn("KALDIRAÇ VE MARJİN DENETİMİ", FRONTEND_TEXT)
         self.assertIn("İstenen kaldıraç", FRONTEND_TEXT)
         self.assertIn("demoTicketFeedback", FRONTEND_TEXT)
+        self.assertIn("await ensure_one_way_position_mode(client)", SOURCE_TEXT)
+        self.assertIn("await ensure_one_way_position_mode(client)", ROOT_SOURCE_TEXT)
         self.assertIn(".demoPositionMap", STYLE_TEXT)
         self.assertIn(".appShell.view-v20-demo>.binanceDemoDeck", STYLE_TEXT)
 
