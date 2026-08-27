@@ -25,6 +25,7 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
   const host = useRef<HTMLDivElement>(null)
   const [stream,setStream] = useState<'YÜKLENİYOR'|'CANLI'|'HATA'>('YÜKLENİYOR')
   const [updated,setUpdated] = useState('—')
+  const [error,setError] = useState('')
 
   useEffect(() => {
     if (!host.current) return
@@ -65,18 +66,24 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
           fetch(`${API_BASE}/klines/${symbol}?interval=${interval}&limit=500`),
           fetch(`${API_BASE}/analysis/${symbol}?interval=${interval}`),
         ])
-        if (!candleResponse.ok || !analysisResponse.ok) throw new Error('Piyasa verisi alınamadı')
-        const rows = await candleResponse.json() as Candle[]
-        const analysis = await analysisResponse.json() as Analysis
+        const candlePayload = await candleResponse.json().catch(() => null) as Candle[] | {detail?:unknown} | null
+        const analysisPayload = await analysisResponse.json().catch(() => null) as Analysis | {detail?:unknown} | null
+        const candleError = candlePayload && typeof candlePayload === 'object' && !Array.isArray(candlePayload) ? candlePayload.detail : null
+        const analysisError = analysisPayload && typeof analysisPayload === 'object' && !Array.isArray(analysisPayload) ? (analysisPayload as {detail?:unknown}).detail : null
+        if (!candleResponse.ok) throw new Error(typeof candleError === 'string' ? candleError : `Piyasa verisi alınamadı (HTTP ${candleResponse.status}).`)
+        if (!analysisResponse.ok) throw new Error(typeof analysisError === 'string' ? analysisError : `Analiz alınamadı (HTTP ${analysisResponse.status}).`)
+        const rows = candlePayload as Candle[]
+        const analysis = analysisPayload as Analysis
         if (!active) return
         candles.setData(rows.map(row => ({time:row.time as never,open:row.open,high:row.high,low:row.low,close:row.close})))
         volume.setData(rows.map(row => ({time:row.time as never,value:row.volume,color:row.close >= row.open ? 'rgba(24,177,100,.32)' : 'rgba(239,89,74,.28)'})))
         applyAnalysis(analysis)
         chart.timeScale().fitContent()
         setStream('CANLI')
+        setError('')
         setUpdated(new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))
-      } catch {
-        if (active) {setStream('HATA');onAnalysis(null)}
+      } catch (reason) {
+        if (active) {setStream('HATA');setError(reason instanceof Error ? reason.message : 'Piyasa verisi alınamadı.');onAnalysis(null)}
       }
     }
     void load()
@@ -85,7 +92,7 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
   },[symbol,interval,onAnalysis])
 
   return <div className="v26ChartShell">
-    <div className="v26ChartStatus"><span className={stream === 'CANLI' ? 'live' : stream === 'HATA' ? 'error' : ''}><i/>{stream}</span><em>Binance piyasa verisi · 15 sn yenileme · {updated}</em></div>
+    <div className="v26ChartStatus"><span className={stream === 'CANLI' ? 'live' : stream === 'HATA' ? 'error' : ''}><i/>{stream}</span><em>{error || `Binance Futures piyasa verisi · 15 sn yenileme · ${updated}`}</em></div>
     <div className="v26Chart" ref={host}/>
   </div>
 }

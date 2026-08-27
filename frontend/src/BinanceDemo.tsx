@@ -297,13 +297,29 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     return map
   },[account?.plans])
 
-  const fillFromAnalysis = () => {
-    if (!analysis || analysis.direction === 'BEKLE') {
-      setMessage('Seçili paritede henüz LONG veya SHORT analiz planı oluşmadı.');setMessageKind('error');return
-    }
-    const direction:'LONG'|'SHORT' = analysis.direction
-    setForm(current => ({...current,direction,limitPrice:String(analysis.entry),stop:String(analysis.stop_loss),tp1:String(analysis.tp1),tp2:String(analysis.tp2),tp3:String(analysis.tp3)}))
+  const fillFromAnalysis = async () => {
+    setBusy(true);setMessageKind('info');setMessage('Seçili Futures paritesi için güncel analiz alınıyor…')
+    try {
+      let plan = analysis
+      if (!plan || plan.direction === 'BEKLE') {
+        const response = await fetch(`${API_BASE}/analysis/${encodeURIComponent(symbol)}?interval=15m`)
+        const payload = await response.json().catch(() => null) as AnalysisPlan | {detail?:unknown} | null
+        if (!response.ok) throw new Error(apiErrorMessage(payload && 'detail' in payload ? payload.detail : payload))
+        plan = payload as AnalysisPlan
+      }
+      if (!plan || !['LONG','SHORT'].includes(plan.direction)) throw new Error('Seçili paritede LONG veya SHORT analiz planı hazır değil.')
+      const levels = [plan.entry,plan.stop_loss,plan.tp1,plan.tp2,plan.tp3]
+      if (levels.some(value => !Number.isFinite(value) || value <= 0)) throw new Error('Analiz planında geçerli giriş, Stop ve TP seviyeleri bulunamadı.')
+      const ordered = plan.direction === 'LONG'
+        ? plan.stop_loss < plan.entry && plan.entry < plan.tp1 && plan.tp1 < plan.tp2 && plan.tp2 < plan.tp3
+        : plan.stop_loss > plan.entry && plan.entry > plan.tp1 && plan.tp1 > plan.tp2 && plan.tp2 > plan.tp3
+      if (!ordered) throw new Error(`${plan.direction} analizinde Stop, giriş ve TP seviyeleri yanlış sırada.`)
+      if (plan.direction !== 'LONG' && plan.direction !== 'SHORT') throw new Error('Seçili paritede LONG veya SHORT analiz planı hazır değil.')
+      const direction:'LONG'|'SHORT' = plan.direction
+      setForm(current => ({...current,direction,limitPrice:String(plan.entry),stop:String(plan.stop_loss),tp1:String(plan.tp1),tp2:String(plan.tp2),tp3:String(plan.tp3)}))
     setMessage('Giriş, Stop ve TP1–TP3 güncel analizden dolduruldu. Göndermeden önce mutlaka kontrol edin.');setMessageKind('ok')
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Güncel analiz planı alınamadı.');setMessageKind('error') }
+    finally { setBusy(false) }
   }
 
   const payload = () => {

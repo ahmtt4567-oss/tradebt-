@@ -23,6 +23,7 @@ from .exchange_connections import (
     router as exchange_connections_router,
 )
 from .binance_demo import (
+    DEMO_REST_BASE,
     armed as demo_armed,
     credentials_configured as demo_credentials_configured,
     init_binance_demo,
@@ -53,6 +54,7 @@ from .paper_autonomy import (
 from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 
 BINANCE_API = "https://api.binance.com"
+FUTURES_MARKET_DATA_API = DEMO_REST_BASE
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
 LEGACY_V25_API_CONTRACT = 'version="25.0.0"'
 DEPLOYMENT_PATCH = "28.0.0-in-app-encrypted-exchange-vault"
@@ -66,6 +68,8 @@ WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = list(dict.fromkeys([
     *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
     "https://pro-tre-bot-web.vercel.app",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]))
 WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-z0-9-]+-gezginci9\.vercel\.app$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
@@ -762,10 +766,10 @@ async def web_access_check():
 @app.get("/api/markets")
 async def markets(limit: int = Query(12, ge=1, le=50)):
     try:
-        response = await app.state.http.get(f"{BINANCE_API}/api/v3/ticker/24hr")
+        response = await app.state.http.get(f"{FUTURES_MARKET_DATA_API}/fapi/v1/ticker/24hr")
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Binance bağlantı hatası: {exc}") from exc
+        raise market_data_http_exception("Binance Futures piyasa özeti alınamadı", exc) from exc
     blocked = {"USDC", "FDUSD", "TUSD", "USDP", "DAI", "BUSD", "USD1", "USDE", "USDS"}
     result = []
     for item in response.json():
@@ -792,19 +796,51 @@ async def fetch_candles(symbol: str, interval: str, limit: int) -> list[dict]:
     safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
     try:
         response = await app.state.http.get(
-            f"{BINANCE_API}/api/v3/klines",
+            f"{FUTURES_MARKET_DATA_API}/fapi/v1/klines",
             params={"symbol": safe_symbol, "interval": interval, "limit": limit},
         )
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Binance mum verisi alınamadı: {exc}") from exc
+        raise market_data_http_exception("Binance Futures mum verisi alınamadı", exc) from exc
+    try:
+        rows = response.json()
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(502, "Binance Futures geçersiz mum verisi döndürdü.") from exc
+    if not isinstance(rows, list):
+        raise HTTPException(502, "Binance Futures mum verisi beklenen biçimde değil.")
     return [
         {
             "time": int(row[0] / 1000), "open": float(row[1]), "high": float(row[2]),
             "low": float(row[3]), "close": float(row[4]), "volume": float(row[5]),
         }
-        for row in response.json()
+        for row in rows
     ]
+
+
+def market_data_http_exception(prefix: str, error: httpx.HTTPError) -> HTTPException:
+    response = error.response if isinstance(error, httpx.HTTPStatusError) else None
+    status = response.status_code if response is not None else 503
+    detail = ""
+    if response is not None:
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                detail = str(payload.get("msg") or payload.get("message") or "").strip()
+        except (ValueError, json.JSONDecodeError):
+            detail = ""
+    if status == 418:
+        message = f"{prefix}: Binance Futures erişimi geçici olarak engelledi (HTTP 418)."
+    elif status == 429:
+        message = f"{prefix}: Binance Futures hız sınırına ulaşıldı (HTTP 429)."
+    elif status >= 500:
+        message = f"{prefix}: Binance Futures sunucu hatası (HTTP {status})."
+    elif response is None:
+        message = f"{prefix}: Binance Futures sunucusuna ulaşılamadı."
+    else:
+        message = f"{prefix}: HTTP {status}."
+    if detail:
+        message = f"{message} {detail}"
+    return HTTPException(status_code=429 if status == 429 else 502 if status >= 500 else status, detail=message)
 
 
 async def historical_fetch_candles(symbol: str, interval: str, total_limit: int = 10_000) -> list[dict]:
@@ -825,7 +861,7 @@ async def historical_fetch_candles(symbol: str, interval: str, total_limit: int 
         rows = None
         for attempt in range(max_retries):
             try:
-                response = await app.state.http.get(f"{BINANCE_API}/api/v3/klines", params=params)
+                response = await app.state.http.get(f"{FUTURES_MARKET_DATA_API}/fapi/v1/klines", params=params)
                 if response.status_code == 429:
                     if attempt == max_retries - 1:
                         raise HTTPException(502, "Binance historical candle rate limitine ulaşıldı")

@@ -47,6 +47,7 @@ from .paper_autonomy import (
 from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
 
 BINANCE_API = "https://api.binance.com"
+FUTURES_MARKET_DATA_API = "https://demo-fapi.binance.com"
 LEGACY_PAPER_CONTRACT = 'version="20.2.0"'
 LEGACY_V25_API_CONTRACT = 'version="25.0.0"'
 DEPLOYMENT_PATCH = "27.0.0-cloud-operations-evidence"
@@ -643,12 +644,12 @@ async def fetch_candles(symbol: str, interval: str, limit: int) -> list[dict]:
     safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
     try:
         response = await app.state.http.get(
-            f"{BINANCE_API}/api/v3/klines",
+            f"{FUTURES_MARKET_DATA_API}/fapi/v1/klines",
             params={"symbol": safe_symbol, "interval": interval, "limit": limit},
         )
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"Binance mum verisi alınamadı: {exc}") from exc
+        raise HTTPException(503, "Binance Futures piyasa verisine ulaşılamadı.") from exc
     return [
         {
             "time": int(row[0] / 1000), "open": float(row[1]), "high": float(row[2]),
