@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -702,7 +703,12 @@ async def owner_preview_gate(request, call_next):
         method=request.method,
     )
     if not decision.allowed:
-        return JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
+        response = JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
+        origin = request.headers.get("origin", "").strip().rstrip("/")
+        if origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+        return response
     request.state.web_owner_authenticated = bool(
         WEB_REQUIRE_AUTH
         and request.method.upper() != "OPTIONS"
