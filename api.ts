@@ -22,16 +22,6 @@ export function clearOwnerAccessToken(): void {
   sessionStorage.removeItem(TOKEN_KEY)
 }
 
-function isApiRequest(input: RequestInfo | URL): boolean {
-  try {
-    const target = new URL(input instanceof Request ? input.url : String(input), window.location.href)
-    const api = new URL(API_BASE, window.location.href)
-    return target.origin === api.origin && (target.pathname === api.pathname || target.pathname.startsWith(`${api.pathname}/`))
-  } catch {
-    return false
-  }
-}
-
 export function installAuthorizedFetch(): void {
   if (installed) return
   installed = true
@@ -39,7 +29,7 @@ export function installAuthorizedFetch(): void {
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
     new Headers(init.headers).forEach((value, key) => headers.set(key, value))
     const token = ownerAccessToken()
-    if (token && isApiRequest(input) && !headers.has('X-ProTreBot-Owner')) {
+    if (token && isOwnerAccessCheckRequest(input) && !headers.has('X-ProTreBot-Owner')) {
       headers.set('X-ProTreBot-Owner', token)
     }
     return originalFetch(input, {...init, headers})
