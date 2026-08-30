@@ -22,6 +22,16 @@ export function clearOwnerAccessToken(): void {
   sessionStorage.removeItem(TOKEN_KEY)
 }
 
+function isOwnerAccessCheckRequest(input: RequestInfo | URL): boolean {
+  try {
+    const target = new URL(input instanceof Request ? input.url : String(input), window.location.href)
+    const api = new URL(API_BASE, window.location.href)
+    return target.origin === api.origin && target.pathname === `${api.pathname}/web/access/check`
+  } catch {
+    return false
+  }
+}
+
 export function installAuthorizedFetch(): void {
   if (installed) return
   installed = true
