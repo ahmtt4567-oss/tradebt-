@@ -283,8 +283,10 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
   return <section className="commercialHub">
     <div className="commercialHero">
       <div className="commercialHeroTitle"><span><Building2/></span><div><small>V25 · LIVE GUARD</small><h2>Business & Robot Control Center</h2><p>Paper, Demo, lisans, canlı risk kasası ve fail-closed yürütme tek merkezde.</p></div></div>
-      <div className="commercialSafety"><b><ShieldCheck/> CANLI VARSAYILAN KİLİTLİ</b><span>Yerel kasa · Demo kanıtı · süreli çift onay</span></div>
-      <div className="commercialIdentity"><span>{session.user.display_name}</span><b>{session.user.role}</b><button onClick={() => {saveToken('');setSession(null)}}><LogOut/> Çıkış</button></div>
+      <div className="commercialHeroMeta">
+        <div className="commercialSafety"><ShieldCheck/><div><b>CANLI VARSAYILAN KİLİTLİ</b><span>Yerel kasa · Demo kanıtı · süreli çift onay</span></div></div>
+        <div className="commercialIdentity"><div><span>{session.user.display_name}</span><b>{session.user.role}</b><small>GÜVENLİ OTURUM</small></div><button onClick={() => {saveToken('');setSession(null)}}><LogOut/> <span>ÇIKIŞ</span></button></div>
+      </div>
     </div>
 
     <nav className="commercialTabs" aria-label="V25 çalışma alanları">
