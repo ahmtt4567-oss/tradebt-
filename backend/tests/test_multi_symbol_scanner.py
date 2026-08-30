@@ -1,13 +1,16 @@
 import sys
+import time
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 
 BACKEND = Path(__file__).parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.execution_core import HARD_MAX_POSITIONS, evaluate_entry_gates, sanitize_execution_policy  # noqa: E402
-from app.v25_execution import rank_market_tickers  # noqa: E402
+from app.v25_execution import automatic_cycle, initial_state, rank_market_tickers  # noqa: E402
 
 
 class MultiSymbolScannerTests(unittest.TestCase):
@@ -59,6 +62,22 @@ class MultiSymbolScannerTests(unittest.TestCase):
         )
         failed = {item["key"] for item in result["gates"] if not item["passed"]}
         self.assertIn("positions", failed)
+
+    def test_automatic_cycle_calls_scanner_when_automation_is_active(self):
+        state = initial_state()
+        state["auto"].update({"enabled": True, "session_until": time.time() + 3600})
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+        client = SimpleNamespace(last_scan_eligible_count=7)
+        with patch("app.v25_execution.readiness", return_value={"ready": True}), \
+                patch("app.v25_execution.client_for", return_value=client), \
+                patch("app.v25_execution.account_snapshot", new=AsyncMock(return_value={"positions": [], "open_orders": []})), \
+                patch("app.v25_execution.live_daily_metrics", return_value={"entries": 0, "realized_pnl": 0, "unverified_closures": 0}), \
+                patch("app.v25_execution.scan_market_candidates", new=AsyncMock(return_value=[])) as scan, \
+                patch("app.v25_execution.persist_state"):
+            import asyncio
+            asyncio.run(automatic_cycle(application))
+        scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []})
+        self.assertEqual(state["auto"]["last_scan_stats"]["deep_analysis_candidates"], 0)
 
 
 if __name__ == "__main__":

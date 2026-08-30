@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
@@ -59,6 +60,7 @@ from .v21_demo import certificate_payload
 from .v22_commercial import authenticated_user
 
 
+logger = logging.getLogger(__name__)
 LIVE_REST_BASE = "https://fapi.binance.com"
 LIVE_WS_BASE = "wss://fstream.binance.com/private"
 LIVE_ARM_SECONDS = 5 * 60
@@ -195,7 +197,7 @@ def initial_state() -> dict[str, Any]:
         "plans": {},
         "intents": {},
         "armed_until": 0.0,
-        "auto": {"enabled": False, "busy": False, "cycles": 0, "last_scan": None, "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None, "session_until": 0.0},
+        "auto": {"enabled": False, "busy": False, "cycles": 0, "last_scan": None, "last_scan_stats": None, "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None, "session_until": 0.0},
         "emergency": {"active": False, "triggered_at": None, "reason": None},
         # Web consent is deliberately memory-only. A deployment or process
         # restart revokes it even though the audit event remains persisted.
@@ -527,7 +529,17 @@ async def scan_market_candidates(client: BinanceLiveClient, snapshot: dict[str, 
         for item in (snapshot.get("positions", []) + snapshot.get("open_orders", []))
         if isinstance(item, dict) and item.get("symbol")
     }
-    return rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied)
+    eligible_count = sum(
+        1
+        for item in exchange_info.get("symbols", [])
+        if isinstance(item, dict)
+        and item.get("status") == "TRADING"
+        and item.get("contractType") == "PERPETUAL"
+        and item.get("quoteAsset") == "USDT"
+    ) if isinstance(exchange_info, dict) else 0
+    candidates = rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied)
+    client.last_scan_eligible_count = eligible_count
+    return candidates
 
 
 async def build_live_spec(
@@ -1303,6 +1315,11 @@ async def automatic_cycle(application: Any) -> None:
         snapshot = await account_snapshot(client)
         daily = live_daily_metrics(state)
         candidates = await scan_market_candidates(client, snapshot)
+        logger.info(
+            "MULTI_SYMBOL_SCAN started eligible symbols: %s top 100 selected deep analysis candidates: %s",
+            getattr(client, "last_scan_eligible_count", 0),
+            len(candidates),
+        )
         signals: list[dict[str, Any]] = []
         for candidate in candidates:
             symbol = candidate["symbol"]
@@ -1318,6 +1335,21 @@ async def automatic_cycle(application: Any) -> None:
                 continue
             signals.append({"candidate": candidate, "signal": signal, "intent_id": intent_id})
         signals.sort(key=lambda item: int(item["signal"].get("confidence") or 0), reverse=True)
+        selected_symbols = [item["candidate"]["symbol"] for item in signals]
+        state["auto"]["last_scan_stats"] = {
+            "eligible_symbols": getattr(client, "last_scan_eligible_count", 0),
+            "deep_analysis_candidates": len(candidates),
+            "signals_found": len(signals),
+            "selected_candidates": selected_symbols,
+            "positions_open": len(snapshot.get("positions", [])),
+            "position_capacity": 5,
+        }
+        logger.info(
+            "MULTI_SYMBOL_SCAN signals found: %s selected candidates: %s positions open: %s/5",
+            len(signals),
+            ",".join(selected_symbols) or "NONE",
+            len(snapshot.get("positions", [])),
+        )
         for item in signals:
             candidate = item["candidate"]
             signal = item["signal"]
