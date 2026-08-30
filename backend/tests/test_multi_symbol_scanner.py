@@ -1,5 +1,7 @@
 import sys
 import time
+import io
+import logging
 import unittest
 from types import SimpleNamespace
 from pathlib import Path
@@ -10,7 +12,7 @@ BACKEND = Path(__file__).parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.execution_core import HARD_MAX_POSITIONS, evaluate_entry_gates, sanitize_execution_policy  # noqa: E402
-from app.v25_execution import automatic_cycle, initial_state, rank_market_tickers  # noqa: E402
+from app.v25_execution import automation_telemetry, automatic_cycle, execution_loop, initial_state, rank_market_tickers  # noqa: E402
 
 
 class MultiSymbolScannerTests(unittest.TestCase):
@@ -78,6 +80,52 @@ class MultiSymbolScannerTests(unittest.TestCase):
             asyncio.run(automatic_cycle(application))
         scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []})
         self.assertEqual(state["auto"]["last_scan_stats"]["deep_analysis_candidates"], 0)
+
+    def test_execution_loop_calls_automatic_cycle_after_reconcile(self):
+        import asyncio
+
+        state = initial_state()
+        state["lock"] = asyncio.Lock()
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+
+        async def stop_loop(_seconds):
+            raise asyncio.CancelledError
+
+        with patch("app.v25_execution.live_credentials_status", return_value=("api-key-123456", "secret-key-123456", "fingerprint")), \
+                patch("app.v25_execution.reconcile", new=AsyncMock()), \
+                patch("app.v25_execution.automatic_cycle", new=AsyncMock()) as cycle, \
+                patch("app.v25_execution.automation_telemetry") as telemetry, \
+                patch("app.v25_execution.asyncio.sleep", new=stop_loop):
+            with self.assertRaises(asyncio.CancelledError):
+                asyncio.run(execution_loop(application))
+        cycle.assert_awaited_once_with(application)
+        telemetry.assert_any_call("AUTOMATION_LOOP running", reason="loop_running")
+
+    def test_inactive_and_expired_sessions_emit_distinct_skip_reasons(self):
+        import asyncio
+
+        for enabled, session_until, reason in ((False, time.time() + 3600, "automation_inactive"), (True, time.time() - 1, "session_expired")):
+            state = initial_state()
+            state["auto"].update({"enabled": enabled, "session_until": session_until})
+            application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+            with patch("app.v25_execution.automation_telemetry") as telemetry:
+                asyncio.run(automatic_cycle(application))
+            telemetry.assert_called_once_with(f"AUTOMATION_SKIP reason={reason}", reason=reason)
+
+    def test_automation_telemetry_reaches_logging_stream_once_per_interval(self):
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        logger = logging.getLogger("app.v25_execution")
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        try:
+            from app import v25_execution
+            v25_execution._automation_telemetry_at.clear()
+            automation_telemetry("AUTOMATION_LOOP running", reason="logger_test")
+            automation_telemetry("AUTOMATION_LOOP running", reason="logger_test")
+        finally:
+            logger.removeHandler(handler)
+        self.assertEqual(stream.getvalue().count("AUTOMATION_LOOP running"), 1)
 
 
 if __name__ == "__main__":

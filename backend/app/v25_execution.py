@@ -61,6 +61,19 @@ from .v22_commercial import authenticated_user
 
 
 logger = logging.getLogger(__name__)
+AUTOMATION_TELEMETRY_INTERVAL = 30.0
+_automation_telemetry_at: dict[str, float] = {}
+
+
+def automation_telemetry(message: str, *, reason: str | None = None) -> None:
+    key = reason or message
+    now = time.monotonic()
+    if now - _automation_telemetry_at.get(key, 0.0) < AUTOMATION_TELEMETRY_INTERVAL:
+        return
+    _automation_telemetry_at[key] = now
+    logger.info(message)
+
+
 LIVE_REST_BASE = "https://fapi.binance.com"
 LIVE_WS_BASE = "wss://fstream.binance.com/private"
 LIVE_ARM_SECONDS = 5 * 60
@@ -1294,9 +1307,14 @@ async def execute_live_order(
 
 async def automatic_cycle(application: Any) -> None:
     state = application.state.v25_execution
+    was_enabled = bool(state["auto"].get("enabled"))
+    session_until = float(state["auto"].get("session_until") or 0)
     if not auto_session_active(state):
+        reason = "session_expired" if was_enabled and session_until <= time.time() else "automation_inactive"
+        automation_telemetry(f"AUTOMATION_SKIP reason={reason}", reason=reason)
         return
     if not readiness(application, state)["ready"]:
+        automation_telemetry("AUTOMATION_SKIP reason=not_ready", reason="not_ready")
         state["auto"].update({
             "enabled": False,
             "session_until": 0.0,
@@ -1307,6 +1325,7 @@ async def automatic_cycle(application: Any) -> None:
         return
     last_scan = _iso_epoch_ms(state["auto"].get("last_scan")) if state["auto"].get("last_scan") else 0
     if int(time.time() * 1000) - last_scan < int(state["policy"]["scan_seconds"]) * 1000:
+        automation_telemetry("AUTOMATION_SKIP reason=scan_throttled", reason="scan_throttled")
         return
     state["auto"]["last_scan"] = now_iso()
     state["auto"]["busy"] = True
@@ -1430,8 +1449,10 @@ async def execution_loop(application: Any) -> None:
     backoff = 5
     while True:
         try:
+            automation_telemetry("AUTOMATION_LOOP running", reason="loop_running")
             _, secret, fingerprint = live_credentials_status()
             if not fingerprint or len(secret) < 10:
+                automation_telemetry("AUTOMATION_SKIP reason=no_credentials", reason="no_credentials")
                 await asyncio.sleep(5)
                 continue
             async with application.state.v25_execution["lock"]:
@@ -1442,6 +1463,7 @@ async def execution_loop(application: Any) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            automation_telemetry("AUTOMATION_SKIP reason=reconcile_failed", reason="reconcile_failed")
             state = application.state.v25_execution
             state["connected"] = False
             state["connection"].update({"last_checked": now_iso(), "last_error": str(exc)[:240]})
