@@ -69,6 +69,7 @@ WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = list(dict.fromkeys([
     *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
     "https://pro-tre-bot-web.vercel.app",
+    "https://pro-tre-bot-r4pjrxk8t-gezginci9.vercel.app",
     "https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app",
     "https://protrebot-web.vercel.app",
     "https://protrebot-app.vercel.app",
@@ -77,7 +78,7 @@ WEB_CORS_ORIGINS = list(dict.fromkeys([
     "http://localhost:5174",
     "http://127.0.0.1:5174",
 ]))
-WEB_CORS_ORIGIN_REGEX = r"^https://.*\.vercel\.app$|^http://localhost:\d+$|^http://127\.0\.0\.1:\d+$"
+WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[^.]+\.vercel\.app$|^http://localhost:\d+$|^http://127\.0\.0\.1:\d+$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
@@ -686,17 +687,6 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
-def add_cors_headers(response: JSONResponse, request) -> None:
-    origin = request.headers.get("origin", "").strip().rstrip("/")
-    if not origin:
-        return
-    if origin not in WEB_CORS_ORIGINS and not re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin):
-        return
-    response.headers["Access-Control-Allow-Origin"] = origin
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Vary"] = "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
-
-
 app = FastAPI(title="ProTreBot Elite X API", version="28.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -710,16 +700,6 @@ app.add_middleware(
 
 @app.middleware("http")
 async def owner_preview_gate(request, call_next):
-    origin = request.headers.get("origin", "").strip().rstrip("/")
-    if request.method.upper() == "OPTIONS":
-        response = JSONResponse({}, status_code=204)
-        add_cors_headers(response, request)
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = request.headers.get(
-            "access-control-request-headers", "authorization, x-protrebot-owner, content-type"
-        )
-        return response
-
     decision = evaluate_access(
         required=WEB_REQUIRE_AUTH,
         configured_token=WEB_ACCESS_TOKEN,
@@ -729,9 +709,7 @@ async def owner_preview_gate(request, call_next):
         method=request.method,
     )
     if not decision.allowed:
-        response = JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
-        add_cors_headers(response, request)
-        return response
+        return JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
     request.state.web_owner_authenticated = bool(
         WEB_REQUIRE_AUTH
         and request.method.upper() != "OPTIONS"
@@ -739,14 +717,11 @@ async def owner_preview_gate(request, call_next):
     )
     paper_prefixes = ("/api/paper", "/api/v6", "/api/v7", "/api/v10", "/api/v11", "/api/v9/paper")
     if not PAPER_ENABLED and request.method.upper() in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path.startswith(paper_prefixes):
-        response = JSONResponse(
+        return JSONResponse(
             {"detail": "Paper motoru V28 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
             status_code=410,
         )
-        add_cors_headers(response, request)
-        return response
     response = await call_next(request)
-    add_cors_headers(response, request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     if request.url.path.startswith("/api/"):
