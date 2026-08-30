@@ -691,14 +691,27 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
     allow_origin_regex=WEB_CORS_ORIGIN_REGEX,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 
 @app.middleware("http")
 async def owner_preview_gate(request, call_next):
+    if request.method.upper() == "OPTIONS":
+        response = JSONResponse({}, status_code=204)
+        origin = request.headers.get("origin", "").strip().rstrip("/")
+        if origin and (origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin)):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = request.headers.get(
+                "access-control-request-headers", "authorization, x-protrebot-owner, content-type"
+            )
+            response.headers["Vary"] = "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+        return response
+
     decision = evaluate_access(
         required=WEB_REQUIRE_AUTH,
         configured_token=WEB_ACCESS_TOKEN,
@@ -710,8 +723,9 @@ async def owner_preview_gate(request, call_next):
     if not decision.allowed:
         response = JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
         origin = request.headers.get("origin", "").strip().rstrip("/")
-        if origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin):
+        if origin and (origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin)):
             response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Vary"] = "Origin"
         return response
     request.state.web_owner_authenticated = bool(
