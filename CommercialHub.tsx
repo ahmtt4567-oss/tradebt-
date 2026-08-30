@@ -287,11 +287,11 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
       <div className="commercialIdentity"><span>{session.user.display_name}</span><b>{session.user.role}</b><button onClick={() => {saveToken('');setSession(null)}}><LogOut/> Çıkış</button></div>
     </div>
 
-    <nav className="commercialTabs">
+    <nav className="commercialTabs" aria-label="V25 çalışma alanları">
       {([
         ['home','Genel Bakış',Gauge],['execution','V25 Canlı Kasa',Bot],['commerce','Satış Merkezi',ShoppingBag],['customers','Müşteriler',Users],['license','Lisans & Ajan',Cpu],['operations','Operasyon',Activity],['fees','Net Kâr Koruması',Calculator],['audit','Güvenlik',FileClock],['readiness','Yayın Kapısı',ShieldCheck],
-      ] as const).map(([key,label,Icon]) => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}><Icon/><span>{label}</span></button>)}
-      <button className="commercialRefresh" onClick={() => refresh()} disabled={busy}><RefreshCw className={busy ? 'spin' : ''}/></button>
+      ] as const).map(([key,label,Icon]) => <button type="button" key={key} className={tab === key ? 'active' : ''} aria-current={tab === key ? 'page' : undefined} title={label} onClick={() => setTab(key)}><Icon/><span>{label}</span></button>)}
+      <button type="button" className="commercialRefresh" onClick={() => refresh()} disabled={busy} title="Yenile" aria-label="Yenile"><RefreshCw className={busy ? 'spin' : ''}/></button>
     </nav>
     <div className={`commercialNoticeBar ${noticeKind}`}>{notice}</div>
 
