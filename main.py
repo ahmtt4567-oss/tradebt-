@@ -58,7 +58,18 @@ DATABASE_URL = os.getenv(
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0").strip()
 WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
-WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
+WEB_CORS_ORIGINS = [
+    "https://pro-tre-bot-r4pjrxk8t-gezginci9.vercel.app",
+    "https://pro-tre-bot-web.vercel.app",
+    "https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app",
+    "https://protrebot-web.vercel.app",
+    "https://protrebot-app.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
+WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-zA-Z0-9-]+\.vercel\.app$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=False)
 LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
 EXECUTION_MODE = "TESTNET_FIRST"
@@ -535,8 +546,9 @@ app = FastAPI(title="ProTreBot Elite X API", version="27.0.0", lifespan=lifespan
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_origin_regex=WEB_CORS_ORIGIN_REGEX,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
