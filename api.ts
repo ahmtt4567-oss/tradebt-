@@ -22,14 +22,24 @@ export function clearOwnerAccessToken(): void {
   sessionStorage.removeItem(TOKEN_KEY)
 }
 
-function isOwnerAccessCheckRequest(input: RequestInfo | URL): boolean {
+function apiRequestPath(input: RequestInfo | URL): string | null {
   try {
     const target = new URL(input instanceof Request ? input.url : String(input), window.location.href)
     const api = new URL(API_BASE, window.location.href)
-    return target.origin === api.origin && target.pathname === `${api.pathname}/web/access/check`
+    return target.origin === api.origin && (target.pathname === api.pathname || target.pathname.startsWith(`${api.pathname}/`)) ? target.pathname : null
   } catch {
-    return false
+    return null
   }
+}
+
+function isOwnerAccessCheckRequest(input: RequestInfo | URL): boolean {
+  return apiRequestPath(input) === `${new URL(API_BASE, window.location.href).pathname}/web/access/check`
+}
+
+function isOwnerProtectedApiRequest(input: RequestInfo | URL): boolean {
+  const path = apiRequestPath(input)
+  if (!path || path === `${new URL(API_BASE, window.location.href).pathname}/health`) return false
+  return !['/api/v22', '/api/v24', '/api/v25'].some(prefix => path === prefix || path.startsWith(`${prefix}/`))
 }
 
 export function installAuthorizedFetch(): void {
@@ -39,7 +49,7 @@ export function installAuthorizedFetch(): void {
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
     new Headers(init.headers).forEach((value, key) => headers.set(key, value))
     const token = ownerAccessToken()
-    if (token && isOwnerAccessCheckRequest(input) && !headers.has('X-ProTreBot-Owner')) {
+    if (token && isOwnerProtectedApiRequest(input) && !headers.has('X-ProTreBot-Owner')) {
       headers.set('X-ProTreBot-Owner', token)
     }
     return originalFetch(input, {...init, headers})
