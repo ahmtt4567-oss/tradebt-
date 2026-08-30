@@ -12,7 +12,7 @@ BACKEND = Path(__file__).parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.execution_core import HARD_MAX_POSITIONS, evaluate_entry_gates, sanitize_execution_policy  # noqa: E402
-from app.v25_execution import automation_telemetry, automatic_cycle, execution_loop, initial_state, rank_market_tickers  # noqa: E402
+from app.v25_execution import Confirmation, automation_telemetry, automatic_cycle, execution_loop, initial_state, rank_market_tickers, v25_auto_start, v25_auto_stop  # noqa: E402
 
 
 class MultiSymbolScannerTests(unittest.TestCase):
@@ -126,6 +126,36 @@ class MultiSymbolScannerTests(unittest.TestCase):
         finally:
             logger.removeHandler(handler)
         self.assertEqual(stream.getvalue().count("AUTOMATION_LOOP running"), 1)
+
+    def test_start_endpoint_activates_reset_state_with_future_session(self):
+        import asyncio
+
+        state = initial_state()
+        state["auto"].update({"enabled": False, "session_until": 0.0})
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+        request = SimpleNamespace(app=application)
+        with patch("app.v25_execution.execution_owner", return_value={"id": "TEST"}), \
+                patch("app.v25_execution.is_armed", return_value=True), \
+                patch("app.v25_execution.readiness", return_value={"ready": True}), \
+                patch("app.v25_execution.persist_state"), \
+                patch("app.v25_execution.public_status", return_value={}):
+            asyncio.run(v25_auto_start(request, Confirmation(confirmation="CANLI OTOMATİK")))
+        self.assertTrue(state["auto"]["enabled"])
+        self.assertGreater(state["auto"]["session_until"], time.time())
+
+    def test_stop_endpoint_disables_active_session(self):
+        import asyncio
+
+        state = initial_state()
+        state["auto"].update({"enabled": True, "session_until": time.time() + 3600})
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+        request = SimpleNamespace(app=application)
+        with patch("app.v25_execution.execution_owner", return_value={"id": "TEST"}), \
+                patch("app.v25_execution.persist_state"), \
+                patch("app.v25_execution.public_status", return_value={}):
+            asyncio.run(v25_auto_stop(request))
+        self.assertFalse(state["auto"]["enabled"])
+        self.assertEqual(state["auto"]["session_until"], 0.0)
 
 
 if __name__ == "__main__":

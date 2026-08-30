@@ -1664,6 +1664,7 @@ async def v25_auto_start(request: Request, body: Confirmation) -> dict[str, Any]
     state["auto"].update({"enabled": True, "session_until": time.time() + LIVE_AUTO_SESSION_SECONDS, "last_error": None, "last_decision": "Bir saatlik gözetimli canlı tarama başlatıldı."})
     state["armed_until"] = 0.0
     add_event(state, "LIVE_AUTO_START", "Canlı otomasyon 5 dakikalık kilit içinden bir saatlik gözetimli oturum için açıldı.", actor=user["id"])
+    persist_state(state)
     return public_status(request.app)
 
 
@@ -1675,6 +1676,7 @@ async def v25_auto_stop(request: Request) -> dict[str, Any]:
     state["auto"]["session_until"] = 0.0
     state["auto"]["last_decision"] = "Yeni otomatik canlı girişler durduruldu."
     add_event(state, "LIVE_AUTO_STOP", "Canlı otomasyon durduruldu; mevcut Stop/TP korumaları açık.", actor=user["id"])
+    persist_state(state)
     return public_status(request.app)
 
 

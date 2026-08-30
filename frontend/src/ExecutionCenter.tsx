@@ -258,7 +258,7 @@ export default function ExecutionCenter({token=''}:{token?:string}) {
       <article className={status.stream.status === 'CANLI' ? 'ok' : 'wait'}><RefreshCw/><small>EMİR / POZİSYON AKIŞI</small><b>{status.stream.status}</b><span>{status.stream.last_error || `${status.stream.event_count} olay · ${status.stream.transport}`}</span></article>
       <article className={status.consent.active ? 'ok' : 'wait'}><LockKeyhole/><small>CANLI RİSK İZNİ</small><b>{status.consent.active ? '24 SAATLİK AKTİF' : 'KAPALI'}</b><span>{status.consent.active ? `${date(status.consent.expires_at)} · ${status.consent.storage || ''}` : 'API’den sonra elle onaylanır'}</span></article>
       <article className={status.armed ? 'hot' : 'wait'}><Power/><small>EMİR KİLİDİ</small><b>{status.armed ? '5 DK AÇIK' : 'KİLİTLİ'}</b><span>{status.armed_until ? date(status.armed_until) : 'Her açılışta sıfırlanır'}</span></article>
-      <article className={status.auto.enabled ? 'hot' : 'wait'}><Bot/><small>OTOMASYON</small><b>{status.auto.enabled ? '1 SAATLİK OTURUM' : 'DURDU'}</b><span>{status.auto.enabled ? `${date(status.auto_session_until)} · ` : ''}{status.auto.cycles} tur · {status.auto.last_decision}</span></article>
+      <article className={status.auto.enabled ? 'hot' : 'wait'}><Bot/><small>V25 LIVE AUTOMATION</small><b>{status.auto.enabled ? 'ACTIVE' : 'INACTIVE'}</b><span>{status.auto.enabled ? `Session until ${date(status.auto_session_until)} · ` : 'Session inactive · '}{status.auto.cycles} tur · {status.auto.last_decision}</span></article>
     </section>
 
     <section className="executionActionBar">
