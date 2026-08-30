@@ -698,6 +698,15 @@ app.add_middleware(
 )
 
 
+def apply_cors_headers(request, response):
+    origin = request.headers.get("origin")
+    if origin and (origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin)):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers.setdefault("Vary", "Origin")
+    return response
+
+
 @app.middleware("http")
 async def owner_preview_gate(request, call_next):
     decision = evaluate_access(
@@ -709,7 +718,7 @@ async def owner_preview_gate(request, call_next):
         method=request.method,
     )
     if not decision.allowed:
-        return JSONResponse({"detail": decision.detail}, status_code=decision.status_code)
+        return apply_cors_headers(request, JSONResponse({"detail": decision.detail}, status_code=decision.status_code))
     request.state.web_owner_authenticated = bool(
         WEB_REQUIRE_AUTH
         and request.method.upper() != "OPTIONS"
