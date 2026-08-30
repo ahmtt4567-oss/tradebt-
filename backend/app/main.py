@@ -741,6 +741,7 @@ app.include_router(exchange_connections_router)
 async def health():
     return {
         "status": "ok", "version": "28.0.0", "patch": DEPLOYMENT_PATCH,
+        "build_commit": os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or None,
         "mode": "TESTNET_FIRST_CLOUD_DURABLE", "execution_mode": EXECUTION_MODE, "time": datetime.now(timezone.utc),
         **app.state.infrastructure,
         "paper": "DEVRE DIŞI",

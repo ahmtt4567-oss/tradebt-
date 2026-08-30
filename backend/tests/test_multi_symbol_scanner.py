@@ -12,7 +12,7 @@ BACKEND = Path(__file__).parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.execution_core import HARD_MAX_POSITIONS, evaluate_entry_gates, sanitize_execution_policy  # noqa: E402
-from app.v25_execution import Confirmation, automation_telemetry, automatic_cycle, execution_loop, initial_state, rank_market_tickers, v25_auto_start, v25_auto_stop  # noqa: E402
+from app.v25_execution import Confirmation, automation_telemetry, automatic_cycle, execution_loop, initial_state, public_status, rank_market_tickers, v25_auto_start, v25_auto_stop  # noqa: E402
 
 
 class MultiSymbolScannerTests(unittest.TestCase):
@@ -193,6 +193,27 @@ class MultiSymbolScannerTests(unittest.TestCase):
             asyncio.run(v25_auto_stop(request))
         self.assertFalse(state["auto"]["enabled"])
         self.assertEqual(state["auto"]["session_until"], 0.0)
+
+    def test_status_exposes_scanner_observation_summary(self):
+        state = initial_state()
+        state["auto"]["last_scan"] = "2026-08-30T17:00:00+00:00"
+        state["auto"]["last_skip_reason"] = None
+        state["auto"]["last_cycle_stage"] = "completed"
+        state["auto"]["last_scan_stats"] = {
+            "candidate_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+            "deep_analysis_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+            "candidate_count": 3,
+            "deep_analysis_count": 3,
+        }
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+        with patch("app.v25_execution.consent_status", return_value={"fingerprint": None}), \
+                patch("app.v25_execution.readiness", return_value={"ready": False, "score": 0, "gates": [], "demo_certificate": {}}), \
+                patch("app.v25_execution.is_armed", return_value=False), \
+                patch("app.v25_execution.auto_session_active", return_value=False):
+            payload = public_status(application)
+        self.assertEqual(payload["scanner"]["deep_analysis_symbols"], ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+        self.assertEqual(payload["scanner"]["candidate_count"], 3)
+        self.assertEqual(payload["scanner"]["last_cycle_stage"], "completed")
 
 
 if __name__ == "__main__":

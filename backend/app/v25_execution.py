@@ -210,7 +210,7 @@ def initial_state() -> dict[str, Any]:
         "plans": {},
         "intents": {},
         "armed_until": 0.0,
-        "auto": {"enabled": False, "busy": False, "cycles": 0, "last_scan": None, "last_scan_stats": None, "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None, "session_until": 0.0},
+        "auto": {"enabled": False, "busy": False, "cycles": 0, "last_scan": None, "last_scan_stats": None, "last_skip_reason": None, "last_cycle_stage": "idle", "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None, "session_until": 0.0},
         "emergency": {"active": False, "triggered_at": None, "reason": None},
         # Web consent is deliberately memory-only. A deployment or process
         # restart revokes it even though the audit event remains persisted.
@@ -1192,6 +1192,7 @@ def public_status(application: Any) -> dict[str, Any]:
     consent = consent_status(state)
     release = readiness(application, state)
     snapshot = state.get("snapshot") or {}
+    scan_stats = state["auto"].get("last_scan_stats") or {}
     return {
         "version": V25_VERSION,
         "mode": "LIVE_GUARD",
@@ -1205,6 +1206,15 @@ def public_status(application: Any) -> dict[str, Any]:
         "armed": is_armed(state),
         "armed_until": datetime.fromtimestamp(state["armed_until"], timezone.utc).isoformat() if is_armed(state) else None,
         "auto": state["auto"],
+        "scanner": {
+            "last_scan_at": state["auto"].get("last_scan"),
+            "candidate_symbols": scan_stats.get("candidate_symbols", scan_stats.get("selected_candidates", [])),
+            "deep_analysis_symbols": scan_stats.get("deep_analysis_symbols", []),
+            "candidate_count": scan_stats.get("candidate_count", scan_stats.get("deep_analysis_candidates", 0)),
+            "deep_analysis_count": scan_stats.get("deep_analysis_count", len(scan_stats.get("deep_analysis_symbols", []))),
+            "last_skip_reason": state["auto"].get("last_skip_reason"),
+            "last_cycle_stage": state["auto"].get("last_cycle_stage"),
+        },
         "auto_session_until": datetime.fromtimestamp(float(state["auto"].get("session_until") or 0), timezone.utc).isoformat() if auto_session_active(state) else None,
         "policy": state["policy"],
         "policy_digest": policy_digest(state["policy"]),
@@ -1316,9 +1326,13 @@ async def automatic_cycle(application: Any) -> None:
     session_until = float(state["auto"].get("session_until") or 0)
     if not auto_session_active(state):
         reason = "session_expired" if was_enabled and session_until <= time.time() else "automation_inactive"
+        state["auto"]["last_skip_reason"] = reason
+        state["auto"]["last_cycle_stage"] = "skipped"
         automation_telemetry(f"AUTOMATION_SKIP reason={reason}", reason=reason)
         return
     if not readiness(application, state)["ready"]:
+        state["auto"]["last_skip_reason"] = "not_ready"
+        state["auto"]["last_cycle_stage"] = "skipped"
         automation_telemetry("AUTOMATION_SKIP reason=not_ready", reason="not_ready")
         state["auto"].update({
             "enabled": False,
@@ -1330,6 +1344,8 @@ async def automatic_cycle(application: Any) -> None:
         return
     last_scan = _iso_epoch_ms(state["auto"].get("last_scan")) if state["auto"].get("last_scan") else 0
     if int(time.time() * 1000) - last_scan < int(state["policy"]["scan_seconds"]) * 1000:
+        state["auto"]["last_skip_reason"] = "scan_throttled"
+        state["auto"]["last_cycle_stage"] = "skipped"
         automation_telemetry("AUTOMATION_SKIP reason=scan_throttled", reason="scan_throttled")
         return
     state["auto"]["last_scan"] = now_iso()
@@ -1338,6 +1354,8 @@ async def automatic_cycle(application: Any) -> None:
         client = client_for(application)
         snapshot = await account_snapshot(client)
         daily = live_daily_metrics(state)
+        state["auto"]["last_skip_reason"] = None
+        state["auto"]["last_cycle_stage"] = "scanning"
         candidates = await scan_market_candidates(client, snapshot, state["policy"]["allowed_symbols"])
         logger.info(
             "MULTI_SYMBOL_SCAN started eligible symbols: %s top 100 selected deep analysis candidates: %s",
@@ -1346,6 +1364,7 @@ async def automatic_cycle(application: Any) -> None:
         )
         signals: list[dict[str, Any]] = []
         analyzed_symbols: list[str] = []
+        state["auto"]["last_cycle_stage"] = "deep_analysis"
         for candidate in candidates:
             symbol = candidate["symbol"]
             candles, candle_id = await live_candles(client, symbol, state["policy"]["interval"])
@@ -1369,6 +1388,8 @@ async def automatic_cycle(application: Any) -> None:
         )
         state["auto"]["last_scan_stats"] = {
             "eligible_symbols": getattr(client, "last_scan_eligible_count", 0),
+            "candidate_symbols": [item["symbol"] for item in candidates],
+            "candidate_count": len(candidates),
             "deep_analysis_candidates": len(candidates),
             "deep_analysis_symbols": analyzed_symbols,
             "signals_found": len(signals),
@@ -1404,8 +1425,11 @@ async def automatic_cycle(application: Any) -> None:
             await execute_live_order(application, body, source="V25_AUTO", allowed_symbols=[symbol])
             state["auto"]["last_decision"] = f"{symbol} {signal['direction']} canlı işlem açıldı; Stop/TP doğrulandı."
             break
+        state["auto"]["last_cycle_stage"] = "completed"
         state["auto"]["cycles"] += 1
     except Exception as exc:
+        state["auto"]["last_skip_reason"] = "reconcile_failed"
+        state["auto"]["last_cycle_stage"] = "error"
         state["auto"].update({"last_error": str(exc)[:240], "last_decision": "Canlı otomasyon turu güvenli biçimde durduruldu."})
         add_event(state, "AUTO_ERROR", "Canlı otomasyon turu hata nedeniyle yeni emir göndermedi.")
     finally:
@@ -1465,6 +1489,8 @@ async def execution_loop(application: Any) -> None:
             automation_telemetry("AUTOMATION_LOOP running", reason="loop_running")
             _, secret, fingerprint = live_credentials_status()
             if not fingerprint or len(secret) < 10:
+                application.state.v25_execution["auto"]["last_skip_reason"] = "no_credentials"
+                application.state.v25_execution["auto"]["last_cycle_stage"] = "skipped"
                 automation_telemetry("AUTOMATION_SKIP reason=no_credentials", reason="no_credentials")
                 await asyncio.sleep(5)
                 continue
