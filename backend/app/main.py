@@ -69,10 +69,15 @@ WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
 WEB_CORS_ORIGINS = list(dict.fromkeys([
     *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
     "https://pro-tre-bot-web.vercel.app",
+    "https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app",
+    "https://protrebot-web.vercel.app",
+    "https://protrebot-app.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
 ]))
-WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-z0-9-]+-gezginci9\.vercel\.app$"
+WEB_CORS_ORIGIN_REGEX = r"^https://.*\.vercel\.app$|^http://localhost:\d+$|^http://127\.0\.0\.1:\d+$"
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
