@@ -488,6 +488,7 @@ def rank_market_tickers(
     market_limit: int = MARKET_SCAN_LIMIT,
     candidate_limit: int = DEEP_ANALYSIS_LIMIT,
     excluded_symbols: set[str] | None = None,
+    allowed_symbols: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     eligible = {
         item.get("symbol")
@@ -504,7 +505,7 @@ def rank_market_tickers(
             continue
         symbol = str(ticker.get("symbol") or "")
         base = symbol[:-4] if symbol.endswith("USDT") else ""
-        if symbol not in eligible or symbol in excluded or base in BLOCKED_BASE_ASSETS:
+        if symbol not in eligible or symbol in excluded or (allowed_symbols is not None and symbol not in allowed_symbols) or base in BLOCKED_BASE_ASSETS:
             continue
         if any(word in base for word in ("UP", "DOWN", "BULL", "BEAR")):
             continue
@@ -532,7 +533,11 @@ def rank_market_tickers(
     return ranked[:min(market_limit, candidate_limit)]
 
 
-async def scan_market_candidates(client: BinanceLiveClient, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+async def scan_market_candidates(
+    client: BinanceLiveClient,
+    snapshot: dict[str, Any],
+    allowed_symbols: list[str] | None = None,
+) -> list[dict[str, Any]]:
     exchange_info, tickers = await asyncio.gather(
         client.public_get("/fapi/v1/exchangeInfo"),
         client.public_get("/fapi/v1/ticker/24hr"),
@@ -550,7 +555,7 @@ async def scan_market_candidates(client: BinanceLiveClient, snapshot: dict[str, 
         and item.get("contractType") == "PERPETUAL"
         and item.get("quoteAsset") == "USDT"
     ) if isinstance(exchange_info, dict) else 0
-    candidates = rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied)
+    candidates = rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied, allowed_symbols=set(allowed_symbols) if allowed_symbols is not None else None)
     client.last_scan_eligible_count = eligible_count
     return candidates
 
@@ -1333,18 +1338,20 @@ async def automatic_cycle(application: Any) -> None:
         client = client_for(application)
         snapshot = await account_snapshot(client)
         daily = live_daily_metrics(state)
-        candidates = await scan_market_candidates(client, snapshot)
+        candidates = await scan_market_candidates(client, snapshot, state["policy"]["allowed_symbols"])
         logger.info(
             "MULTI_SYMBOL_SCAN started eligible symbols: %s top 100 selected deep analysis candidates: %s",
             getattr(client, "last_scan_eligible_count", 0),
             len(candidates),
         )
         signals: list[dict[str, Any]] = []
+        analyzed_symbols: list[str] = []
         for candidate in candidates:
             symbol = candidate["symbol"]
             candles, candle_id = await live_candles(client, symbol, state["policy"]["interval"])
             if len(candles) < 220:
                 continue
+            analyzed_symbols.append(symbol)
             signal = analyze(candles[:-1])
             intent_id = f"auto-{symbol}-{state['policy']['interval']}-{candle_id}"
             if intent_id in state["intents"]:
@@ -1355,9 +1362,15 @@ async def automatic_cycle(application: Any) -> None:
             signals.append({"candidate": candidate, "signal": signal, "intent_id": intent_id})
         signals.sort(key=lambda item: int(item["signal"].get("confidence") or 0), reverse=True)
         selected_symbols = [item["candidate"]["symbol"] for item in signals]
+        logger.info(
+            "MULTI_SYMBOL_SCAN deep analysis completed: %s symbols: %s",
+            len(analyzed_symbols),
+            ",".join(analyzed_symbols) or "NONE",
+        )
         state["auto"]["last_scan_stats"] = {
             "eligible_symbols": getattr(client, "last_scan_eligible_count", 0),
             "deep_analysis_candidates": len(candidates),
+            "deep_analysis_symbols": analyzed_symbols,
             "signals_found": len(signals),
             "selected_candidates": selected_symbols,
             "positions_open": len(snapshot.get("positions", [])),

@@ -78,8 +78,45 @@ class MultiSymbolScannerTests(unittest.TestCase):
                 patch("app.v25_execution.persist_state"):
             import asyncio
             asyncio.run(automatic_cycle(application))
-        scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []})
+        scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []}, state["policy"]["allowed_symbols"])
         self.assertEqual(state["auto"]["last_scan_stats"]["deep_analysis_candidates"], 0)
+
+    def test_automatic_cycle_deep_analyzes_all_candidates(self):
+        import asyncio
+
+        state = initial_state()
+        state["auto"].update({"enabled": True, "session_until": time.time() + 3600})
+        application = SimpleNamespace(state=SimpleNamespace(v25_execution=state))
+        client = SimpleNamespace(last_scan_eligible_count=3)
+        candidates = [{"symbol": symbol} for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT")]
+        candles = [{"time": index, "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1} for index in range(220)]
+        with patch("app.v25_execution.readiness", return_value={"ready": True}), \
+                patch("app.v25_execution.client_for", return_value=client), \
+                patch("app.v25_execution.account_snapshot", new=AsyncMock(return_value={"positions": [], "open_orders": []})), \
+                patch("app.v25_execution.live_daily_metrics", return_value={"entries": 0, "realized_pnl": 0, "unverified_closures": 0}), \
+                patch("app.v25_execution.scan_market_candidates", new=AsyncMock(return_value=candidates)), \
+                patch("app.v25_execution.live_candles", new=AsyncMock(side_effect=[(candles, index) for index in range(3)])) as candle_fetch, \
+                patch("app.v25_execution.analyze", side_effect=[
+                    {"direction": "BEKLE", "confidence": 10},
+                    {"direction": "LONG", "confidence": 80},
+                    {"direction": "SHORT", "confidence": 79},
+                ]), \
+                patch("app.v25_execution.persist_state"):
+            asyncio.run(automatic_cycle(application))
+        self.assertEqual([call.args[1] for call in candle_fetch.await_args_list], ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+        self.assertEqual(state["auto"]["last_scan_stats"]["deep_analysis_symbols"], ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+
+    def test_scanner_respects_multiple_policy_symbols(self):
+        exchange_info = {"symbols": [
+            {"symbol": symbol, "status": "TRADING", "contractType": "PERPETUAL", "quoteAsset": "USDT"}
+            for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+        ]}
+        tickers = [
+            {"symbol": symbol, "lastPrice": "100", "quoteVolume": "20000000", "priceChangePercent": "3"}
+            for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+        ]
+        result = rank_market_tickers(exchange_info, tickers, allowed_symbols={"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+        self.assertEqual({item["symbol"] for item in result}, {"BTCUSDT", "ETHUSDT", "SOLUSDT"})
 
     def test_execution_loop_calls_automatic_cycle_after_reconcile(self):
         import asyncio
