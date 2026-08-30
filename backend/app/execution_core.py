@@ -18,7 +18,7 @@ V25_VERSION = "25.0.0"
 LIVE_CLIENT_PREFIX = "PTBLV_"
 HARD_MAX_MARGIN_USDT = 100.0
 HARD_MAX_LEVERAGE = 3
-HARD_MAX_POSITIONS = 3
+HARD_MAX_POSITIONS = 5
 HARD_MAX_DAILY_LOSS_USDT = 100.0
 HARD_MAX_DAILY_TRADES = 12
 
@@ -31,7 +31,7 @@ DEFAULT_EXECUTION_POLICY: dict[str, Any] = {
     "max_margin_per_trade": 25.0,
     "max_loss_per_trade": 3.0,
     "max_leverage": 2,
-    "max_positions": 1,
+    "max_positions": 5,
     "daily_loss_limit": 10.0,
     "daily_trade_limit": 3,
     "min_confidence": 86,
@@ -92,7 +92,7 @@ def sanitize_execution_policy(payload: Any) -> dict[str, Any]:
     base["max_margin_per_trade"] = _number(source.get("max_margin_per_trade"), 25, 5, HARD_MAX_MARGIN_USDT)
     base["max_loss_per_trade"] = _number(source.get("max_loss_per_trade"), 3, 0.5, 25)
     base["max_leverage"] = _integer(source.get("max_leverage"), 2, 1, HARD_MAX_LEVERAGE)
-    base["max_positions"] = _integer(source.get("max_positions"), 1, 1, HARD_MAX_POSITIONS)
+    base["max_positions"] = _integer(source.get("max_positions"), 5, 1, HARD_MAX_POSITIONS)
     base["daily_loss_limit"] = _number(source.get("daily_loss_limit"), 10, 5, HARD_MAX_DAILY_LOSS_USDT)
     base["daily_trade_limit"] = _integer(source.get("daily_trade_limit"), 3, 1, HARD_MAX_DAILY_TRADES)
     base["min_confidence"] = _integer(source.get("min_confidence"), 86, 70, 95)
@@ -189,9 +189,11 @@ def evaluate_entry_gates(
     daily: dict[str, Any],
     spread_bps: float,
     armed: bool,
+    allowed_symbols: list[str] | None = None,
 ) -> dict[str, Any]:
     settings = sanitize_execution_policy(policy)
     safe_symbol = normalize_live_symbol(symbol)
+    symbol_scope = allowed_symbols if allowed_symbols is not None else settings["allowed_symbols"]
     direction = str(signal.get("direction") or "BEKLE").upper()
     confidence = int(signal.get("confidence") or 0)
     radar = signal.get("radar") if isinstance(signal.get("radar"), dict) else {}
@@ -200,7 +202,7 @@ def evaluate_entry_gates(
     orders = snapshot.get("open_orders", []) if isinstance(snapshot.get("open_orders"), list) else []
     gates = [
         GateResult(armed, "arm", "Süreli canlı kilit", "Canlı kilit yalnızca kısa süreli kullanıcı onayıyla açılır."),
-        GateResult(safe_symbol in settings["allowed_symbols"], "symbol", "Parite izin listesi", safe_symbol),
+        GateResult(safe_symbol in symbol_scope, "symbol", "Parite izin listesi", safe_symbol),
         GateResult(direction in {"LONG", "SHORT"}, "direction", "Net yön", direction),
         GateResult(direction != "LONG" or settings["allow_long"], "long", "LONG izni", "Açık" if settings["allow_long"] else "Kapalı"),
         GateResult(direction != "SHORT" or settings["allow_short"], "short", "SHORT izni", "Açık" if settings["allow_short"] else "Kapalı"),

@@ -66,6 +66,11 @@ LIVE_AUTO_SESSION_SECONDS = 60 * 60
 RECONCILE_SECONDS = 10
 MAX_EVENTS = 500
 MAX_PLANS = 250
+MARKET_SCAN_LIMIT = 100
+DEEP_ANALYSIS_LIMIT = 25
+MIN_24H_QUOTE_VOLUME = 1_000_000.0
+MIN_24H_MOVE_PCT = 0.25
+BLOCKED_BASE_ASSETS = {"USDC", "FDUSD", "TUSD", "USDP", "DAI", "BUSD", "USD1", "USDE", "USDS"}
 
 PUBLIC_PATHS = {
     "/fapi/v1/time",
@@ -121,7 +126,7 @@ class PolicyUpdate(BaseModel):
     max_margin_per_trade: float | None = Field(default=None, ge=5, le=100)
     max_loss_per_trade: float | None = Field(default=None, ge=0.5, le=25)
     max_leverage: int | None = Field(default=None, ge=1, le=3)
-    max_positions: int | None = Field(default=None, ge=1, le=3)
+    max_positions: int | None = Field(default=None, ge=1, le=5)
     daily_loss_limit: float | None = Field(default=None, ge=5, le=100)
     daily_trade_limit: int | None = Field(default=None, ge=1, le=12)
     min_confidence: int | None = Field(default=None, ge=70, le=95)
@@ -461,10 +466,81 @@ async def spread_bps(client: BinanceLiveClient, symbol: str) -> float:
     return float((ask - bid) / midpoint * Decimal("10000"))
 
 
-async def build_live_spec(client: BinanceLiveClient, order: LiveOrderRequest, policy: dict[str, Any]) -> dict[str, Any]:
+def rank_market_tickers(
+    exchange_info: Any,
+    tickers: Any,
+    *,
+    market_limit: int = MARKET_SCAN_LIMIT,
+    candidate_limit: int = DEEP_ANALYSIS_LIMIT,
+    excluded_symbols: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    eligible = {
+        item.get("symbol")
+        for item in exchange_info.get("symbols", [])
+        if isinstance(item, dict)
+        and item.get("status") == "TRADING"
+        and item.get("contractType") == "PERPETUAL"
+        and item.get("quoteAsset") == "USDT"
+    } if isinstance(exchange_info, dict) else set()
+    excluded = excluded_symbols or set()
+    liquid: list[dict[str, Any]] = []
+    for ticker in tickers if isinstance(tickers, list) else []:
+        if not isinstance(ticker, dict):
+            continue
+        symbol = str(ticker.get("symbol") or "")
+        base = symbol[:-4] if symbol.endswith("USDT") else ""
+        if symbol not in eligible or symbol in excluded or base in BLOCKED_BASE_ASSETS:
+            continue
+        if any(word in base for word in ("UP", "DOWN", "BULL", "BEAR")):
+            continue
+        try:
+            volume = float(ticker.get("quoteVolume") or 0)
+            move = abs(float(ticker.get("priceChangePercent") or 0))
+            price = float(ticker.get("lastPrice") or 0)
+        except (TypeError, ValueError):
+            continue
+        if volume < MIN_24H_QUOTE_VOLUME or move < MIN_24H_MOVE_PCT or price <= 0:
+            continue
+        liquid.append({
+            "symbol": symbol,
+            "price": price,
+            "volume": volume,
+            "change": float(ticker.get("priceChangePercent") or 0),
+            "_move": move,
+        })
+    liquid.sort(key=lambda item: item["volume"], reverse=True)
+    ranked = []
+    for item in liquid[:market_limit]:
+        item["opportunity_score"] = round(item.pop("_move") * 0.35 + min(item["volume"] / 10_000_000, 100) * 0.65, 4)
+        ranked.append(item)
+    ranked.sort(key=lambda item: (item["opportunity_score"], item["volume"]), reverse=True)
+    return ranked[:min(market_limit, candidate_limit)]
+
+
+async def scan_market_candidates(client: BinanceLiveClient, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    exchange_info, tickers = await asyncio.gather(
+        client.public_get("/fapi/v1/exchangeInfo"),
+        client.public_get("/fapi/v1/ticker/24hr"),
+    )
+    occupied = {
+        str(item.get("symbol"))
+        for item in (snapshot.get("positions", []) + snapshot.get("open_orders", []))
+        if isinstance(item, dict) and item.get("symbol")
+    }
+    return rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied)
+
+
+async def build_live_spec(
+    client: BinanceLiveClient,
+    order: LiveOrderRequest,
+    policy: dict[str, Any],
+    *,
+    allowed_symbols: list[str] | None = None,
+) -> dict[str, Any]:
     settings = sanitize_execution_policy(policy)
     symbol = normalize_symbol(order.symbol)
-    if symbol not in settings["allowed_symbols"]:
+    symbol_scope = allowed_symbols if allowed_symbols is not None else settings["allowed_symbols"]
+    if symbol not in symbol_scope:
         raise LiveExchangeError(f"{symbol} canlı izin listesinde değil.", http_status=422)
     if order.direction == "LONG" and not settings["allow_long"]:
         raise LiveExchangeError("Canlı LONG işlemleri risk politikasında kapalı.", http_status=422)
@@ -1127,7 +1203,13 @@ async def live_candles(client: BinanceLiveClient, symbol: str, interval: str, li
     return candles, last_open_time
 
 
-async def execute_live_order(application: Any, body: LiveOrderRequest, *, source: str) -> dict[str, Any]:
+async def execute_live_order(
+    application: Any,
+    body: LiveOrderRequest,
+    *,
+    source: str,
+    allowed_symbols: list[str] | None = None,
+) -> dict[str, Any]:
     state = application.state.v25_execution
     if source == "V25_AUTO":
         if not auto_session_active(state):
@@ -1145,12 +1227,12 @@ async def execute_live_order(application: Any, body: LiveOrderRequest, *, source
             symbol = normalize_symbol(body.symbol)
             daily = live_daily_metrics(state)
             manual_signal = {"direction": body.direction, "confidence": 100, "radar": {"trap_score": 0}}
-            guard = evaluate_entry_gates(symbol=symbol, signal=manual_signal, snapshot=snapshot, policy=state["policy"], daily=daily, spread_bps=await spread_bps(client, symbol), armed=True)
+            guard = evaluate_entry_gates(symbol=symbol, signal=manual_signal, snapshot=snapshot, policy=state["policy"], daily=daily, spread_bps=await spread_bps(client, symbol), armed=True, allowed_symbols=allowed_symbols)
             if not guard["passed"]:
                 raise LiveExchangeError(f"Canlı risk kapısı: {guard['reason']}", http_status=409)
             if float(snapshot.get("available_balance") or 0) < body.margin_usdt:
                 raise LiveExchangeError("Canlı hesap kullanılabilir bakiyesi seçilen marjinden düşük.", http_status=409)
-            spec = await build_live_spec(client, body, state["policy"])
+            spec = await build_live_spec(client, body, state["policy"], allowed_symbols=allowed_symbols)
             await set_live_isolated_margin(client, spec["symbol"])
             leverage_audit = await apply_live_verified_leverage(client, spec["symbol"], spec["leverage"])
             intent_id = body.intent_id or f"manual-{uuid.uuid4().hex}"
@@ -1220,7 +1302,10 @@ async def automatic_cycle(application: Any) -> None:
         client = client_for(application)
         snapshot = await account_snapshot(client)
         daily = live_daily_metrics(state)
-        for symbol in state["policy"]["allowed_symbols"]:
+        candidates = await scan_market_candidates(client, snapshot)
+        signals: list[dict[str, Any]] = []
+        for candidate in candidates:
+            symbol = candidate["symbol"]
             candles, candle_id = await live_candles(client, symbol, state["policy"]["interval"])
             if len(candles) < 220:
                 continue
@@ -1229,8 +1314,17 @@ async def automatic_cycle(application: Any) -> None:
             if intent_id in state["intents"]:
                 state["duplicate_blocks"] += 1
                 continue
+            if str(signal.get("direction") or "").upper() not in {"LONG", "SHORT"}:
+                continue
+            signals.append({"candidate": candidate, "signal": signal, "intent_id": intent_id})
+        signals.sort(key=lambda item: int(item["signal"].get("confidence") or 0), reverse=True)
+        for item in signals:
+            candidate = item["candidate"]
+            signal = item["signal"]
+            symbol = candidate["symbol"]
+            intent_id = item["intent_id"]
             spread = await spread_bps(client, symbol)
-            guard = evaluate_entry_gates(symbol=symbol, signal=signal, snapshot=snapshot, policy=state["policy"], daily=daily, spread_bps=spread, armed=True)
+            guard = evaluate_entry_gates(symbol=symbol, signal=signal, snapshot=snapshot, policy=state["policy"], daily=daily, spread_bps=spread, armed=True, allowed_symbols=[symbol])
             if not guard["passed"]:
                 state["auto"]["last_decision"] = f"{symbol}: BEKLE · {guard['reason']}"
                 continue
@@ -1243,7 +1337,7 @@ async def automatic_cycle(application: Any) -> None:
                 margin_usdt=risk["margin_usdt"], leverage=risk["leverage"], stop_loss=signal["stop_loss"],
                 tp1=signal["tp1"], tp2=signal["tp2"], tp3=signal["tp3"], intent_id=intent_id,
             )
-            await execute_live_order(application, body, source="V25_AUTO")
+            await execute_live_order(application, body, source="V25_AUTO", allowed_symbols=[symbol])
             state["auto"]["last_decision"] = f"{symbol} {signal['direction']} canlı işlem açıldı; Stop/TP doğrulandı."
             break
         state["auto"]["cycles"] += 1
