@@ -27,7 +27,7 @@ def load_core():
         "BinanceDemoError", "signed_query", "decimal_text", "floor_step", "round_tick", "normalize_symbol",
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
         "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
-        "update_position_lifecycle", "reconcile_demo_plans", "mark_cancelled_protection", "duplicate_entry_reason",
+        "update_position_lifecycle", "position_amount", "position_risk_summary", "reconcile_demo_plans", "mark_cancelled_protection", "duplicate_entry_reason",
         "close_symbol_position",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
@@ -74,12 +74,21 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertEqual(result["stale_positions_removed"], 1)
 
     def test_raw_exchange_position_amount_zero_vs_nonzero_is_explicit(self):
-        reconcile = CORE["reconcile_demo_plans"]
-        state = {"plans": {}}
-        zero = reconcile(state, {"positions": []})
-        actual = reconcile(state, {"positions": [{"symbol": "BTCUSDT", "quantity": 0.001}]})
-        self.assertEqual(zero["reconciled_active_positions"], 0)
-        self.assertEqual(actual["reconciled_active_positions"], 1)
+        summarize = CORE["position_risk_summary"]
+        for raw_amount, expected in ((None, 0), (0, 0), ("0.000", 0), ("0.001", 1), ("-0.001", 1)):
+            result = summarize([{"symbol": "BTCUSDT", "positionAmt": raw_amount}])
+            self.assertEqual(result["actual_exchange_open_positions"], expected)
+            self.assertEqual(result["exchange_position_diagnostics"][0]["positionAmt"], str(Decimal(str(raw_amount)) if raw_amount is not None else Decimal("0")))
+
+    def test_raw_position_risk_fields_are_returned_without_local_state(self):
+        result = CORE["position_risk_summary"]([{
+            "symbol": "BTCUSDT", "positionAmt": "-0.001", "positionSide": "BOTH",
+            "markPrice": "65000", "entryPrice": "64000", "unRealizedProfit": "-1.25",
+        }])
+        self.assertEqual(result["raw_position_risk_count"], 1)
+        self.assertEqual(result["actual_exchange_open_positions"], 1)
+        self.assertEqual(result["exchange_position_diagnostics"][0]["positionSide"], "BOTH")
+        self.assertEqual(result["exchange_position_diagnostics"][0]["unrealizedProfit"], "-1.25")
 
     def test_reconciled_position_count_matches_zero_one_and_three_exchange_positions(self):
         reconcile = CORE["reconcile_demo_plans"]
@@ -94,6 +103,7 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn('if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertNotIn('if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertIn('"exchange_position_diagnostics"', SOURCE_TEXT)
+        self.assertIn('"raw_position_risk_count"', SOURCE_TEXT)
 
     def test_all_demo_position_cards_use_canonical_reconciled_count(self):
         self.assertIn("account?.reconciliation?.reconciled_active_positions", PRODUCTION_FRONTEND_TEXT)

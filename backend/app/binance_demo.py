@@ -13,12 +13,13 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import time
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlencode
@@ -38,6 +39,7 @@ MAX_NOTIONAL_USDT = MAX_MARGIN_USDT * MAX_LEVERAGE
 MAX_OPEN_POSITIONS = 3
 ARM_SECONDS = 10 * 60
 CLIENT_PREFIX = "PTB_"
+logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = BACKEND_ROOT / ".env"
@@ -210,6 +212,13 @@ def decimal_text(value: Decimal) -> str:
     return "0" if text in {"-0", ""} else text
 
 
+def position_amount(value: Any) -> Decimal:
+    try:
+        return Decimal("0") if value is None else Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
+
+
 def floor_step(value: Decimal, step: Decimal) -> Decimal:
     if step <= 0:
         return value
@@ -376,6 +385,31 @@ def public_status(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def position_risk_summary(payload: Any) -> dict[str, Any]:
+    """Classify raw Binance positionRisk rows without consulting local state."""
+    diagnostics = []
+    actual_count = 0
+    for item in response_rows(payload):
+        amount = position_amount(item.get("positionAmt"))
+        is_actual = amount != 0
+        if is_actual:
+            actual_count += 1
+        diagnostics.append({
+            "symbol": str(item.get("symbol") or "").upper(),
+            "positionAmt": str(amount),
+            "positionSide": str(item.get("positionSide") or "BOTH").upper(),
+            "markPrice": str(item.get("markPrice") or "0"),
+            "entryPrice": str(item.get("entryPrice") or "0"),
+            "unrealizedProfit": str(item.get("unRealizedProfit", item.get("unrealizedProfit", "0")) or "0"),
+            "exchange_actual_position": is_actual,
+        })
+    return {
+        "raw_position_risk_count": len(diagnostics),
+        "actual_exchange_open_positions": actual_count,
+        "exchange_position_diagnostics": diagnostics,
+    }
+
+
 def reconcile_demo_plans(state: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     """Make durable plans follow the exchange position snapshot, never vice versa."""
     actual_positions = [
@@ -403,7 +437,7 @@ def reconcile_demo_plans(state: dict[str, Any], snapshot: dict[str, Any]) -> dic
         plan["last_reconciled"] = utc_now()
         changed = changed or before != (plan.get("remaining_quantity"), plan.get("position_status"))
     state["reconciliation"] = {
-        "actual_exchange_open_positions": len(actual_positions),
+        "actual_exchange_open_positions": int(snapshot.get("actual_exchange_open_positions", len(actual_positions))),
         "internal_active_plans": internal_active - stale_removed,
         "reconciled_active_positions": len(actual_positions),
         "stale_positions_removed": stale_removed,
@@ -554,16 +588,17 @@ async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
         for item in response_rows(configurations)
         if item.get("symbol")
     }
-    raw_position_diagnostics = []
+    position_risk = position_risk_summary(positions)
+    logger.info(
+        "DEMO_POSITION_RECONCILIATION raw_position_risk_count=%s actual_exchange_open_positions=%s entries=%s",
+        position_risk["raw_position_risk_count"],
+        position_risk["actual_exchange_open_positions"],
+        position_risk["exchange_position_diagnostics"],
+    )
     open_positions = []
     for item in response_rows(positions):
-        amount = Decimal(str(item.get("positionAmt", "0")))
+        amount = position_amount(item.get("positionAmt"))
         symbol = str(item.get("symbol") or "").upper()
-        raw_position_diagnostics.append({
-            "symbol": symbol,
-            "position_amount": str(amount),
-            "exchange_actual_position": amount != 0,
-        })
         if amount == 0:
             continue
         configuration = config_by_symbol.get(symbol, {})
@@ -622,7 +657,7 @@ async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
         "open_orders": open_orders,
         "open_algo_orders": open_algos,
         "hedge_mode": hedge_mode,
-        "exchange_position_diagnostics": raw_position_diagnostics,
+        **position_risk,
     }
 
 
@@ -810,10 +845,10 @@ async def close_symbol_position(client: BinanceDemoClient, symbol: str, position
     normalized_side = str(position_side or "BOTH").upper()
     row = next((item for item in response_rows(rows)
                 if str(item.get("positionSide") or "BOTH").upper() == normalized_side
-                and Decimal(str(item.get("positionAmt", "0"))) != 0), None)
+                and position_amount(item.get("positionAmt")) != 0), None)
     if row is None:
         return None
-    amount = Decimal(str(row["positionAmt"]))
+    amount = position_amount(row.get("positionAmt"))
     params = {
         "symbol": symbol,
         "side": "SELL" if amount > 0 else "BUY",
@@ -894,11 +929,11 @@ async def install_protection(client: BinanceDemoClient, state: dict[str, Any], p
     if plan.get("stop_protection_cancelled"):
         return
     rows = await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol})
-    position = next((item for item in response_rows(rows) if Decimal(str(item.get("positionAmt", "0"))) != 0), None)
+    position = next((item for item in response_rows(rows) if position_amount(item.get("positionAmt")) != 0), None)
     if position is None:
         plan["status"] = "DOLUM BEKLİYOR"
         return
-    amount = Decimal(str(position["positionAmt"]))
+    amount = position_amount(position.get("positionAmt"))
     update_position_lifecycle(plan, amount)
     actual_direction = "LONG" if amount > 0 else "SHORT"
     if actual_direction != plan["direction"]:
