@@ -31,6 +31,7 @@ MAIN_SOURCE = (BACKEND / "app" / "main.py").read_text(encoding="utf-8")
 FRONTEND_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
 ACTIVE_COMMERCIAL_SOURCE = (ROOT / "CommercialHub.tsx").read_text(encoding="utf-8")
 ACTIVE_EXECUTION_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
+ACTIVE_API_SOURCE = (ROOT / "api.ts").read_text(encoding="utf-8")
 
 
 class V25LiveGuardCoreTests(unittest.TestCase):
@@ -202,6 +203,12 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("setLoadError", ACTIVE_COMMERCIAL_SOURCE)
         self.assertIn("setLoadError", ACTIVE_EXECUTION_SOURCE)
         self.assertIn("V25 Live Guard geçersiz yanıt döndürdü", ACTIVE_EXECUTION_SOURCE)
+
+    def test_active_v25_requests_forward_the_verified_owner_access_header(self):
+        self.assertIn("'/api/v22', '/api/v24'", ACTIVE_API_SOURCE)
+        self.assertNotIn("'/api/v25'", ACTIVE_API_SOURCE)
+        self.assertIn("X-ProTreBot-Owner", ACTIVE_API_SOURCE)
+        self.assertIn("ownerAccessToken()", ACTIVE_API_SOURCE)
 
     def test_manual_live_order_requires_second_explicit_confirmation(self):
         self.assertIn("class ManualLiveOrderRequest", EXECUTION_SOURCE)

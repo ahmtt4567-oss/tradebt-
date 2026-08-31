@@ -39,7 +39,7 @@ function isOwnerAccessCheckRequest(input: RequestInfo | URL): boolean {
 function isOwnerProtectedApiRequest(input: RequestInfo | URL): boolean {
   const path = apiRequestPath(input)
   if (!path || path === `${new URL(API_BASE, window.location.href).pathname}/health`) return false
-  return !['/api/v22', '/api/v24', '/api/v25'].some(prefix => path === prefix || path.startsWith(`${prefix}/`))
+  return !['/api/v22', '/api/v24'].some(prefix => path === prefix || path.startsWith(`${prefix}/`))
 }
 
 export function installAuthorizedFetch(): void {
