@@ -24,10 +24,9 @@ function normalizeAnalysisPlan(payload:unknown):AnalysisPlan|null {
     : row.plan && typeof row.plan === 'object' && !Array.isArray(row.plan)
       ? row.plan as AnalysisPlanPayload
       : row
-  const rawDirection = String(nested.direction || '').toUpperCase()
-  const direction = rawDirection === 'LONG' || rawDirection === 'SHORT'
-    ? rawDirection
-    : nested.normalized_signal === 'BUY' ? 'LONG' : nested.normalized_signal === 'SELL' ? 'SHORT' : 'BEKLE'
+  const rawDirection = String(nested.direction || nested.normalized_signal || '').trim().toUpperCase()
+  const direction = rawDirection === 'LONG' || rawDirection === 'BUY'
+    ? 'LONG' : rawDirection === 'SHORT' || rawDirection === 'SELL' ? 'SHORT' : 'BEKLE'
   return {
     direction,
     entry:Number(nested.entry),
@@ -52,6 +51,7 @@ type DemoStatus = {
   last_checked:string|null
   last_error:string|null
   events:{kind:string;message:string;created_at:string}[]
+  reconciliation?:{actual_exchange_open_positions:number;internal_active_plans:number;reconciled_active_positions:number;stale_positions_removed:number}
 }
 
 type DemoPosition = {
@@ -138,6 +138,7 @@ type DemoAccount = DemoStatus & {
   open_algo_orders:DemoAlgoOrder[]
   hedge_mode:boolean
   plans:DemoPlan[]
+  exchange_position_diagnostics?:{symbol:string;position_amount:string;exchange_actual_position:boolean}[]
 }
 
 type FormState = {
@@ -351,7 +352,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
         if (!response.ok) throw new Error(apiErrorMessage(payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : payload))
         plan = normalizeAnalysisPlan(payload)
       }
-      if (!plan || !['LONG','SHORT'].includes(plan.direction)) throw new Error('Seçili paritede LONG veya SHORT analiz planı hazır değil.')
+      if (!plan || !['LONG','SHORT'].includes(plan.direction)) throw new Error('Yön belirlenemedi; mevcut yön korunuyor.')
       const levels = [plan.entry,plan.stop_loss,plan.tp1,plan.tp2,plan.tp3]
       if (levels.some(value => !Number.isFinite(value) || value <= 0)) throw new Error('Analiz planında geçerli giriş, Stop ve TP seviyeleri bulunamadı.')
       const ordered = plan.direction === 'LONG'
@@ -528,7 +529,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <article><Wallet/><span><small>SANAL CÜZDAN</small><b>{fmt(account?.wallet_balance)} USDT</b></span></article>
       <article><CircleDollarSign/><span><small>KULLANILABİLİR</small><b>{fmt(account?.available_balance)} USDT</b></span></article>
       <article><Activity/><span><small>AÇIK PnL</small><b className={(account?.unrealized_pnl || 0) >= 0 ? 'demoProfit' : 'demoLoss'}>{(account?.unrealized_pnl || 0) >= 0 ? '+' : ''}{fmt(account?.unrealized_pnl)} USDT</b></span></article>
-      <article><Crosshair/><span><small>POZİSYON</small><b>{account?.positions.length ?? 0} / {status?.limits.max_open_positions ?? 3}</b></span></article>
+      <article><Crosshair/><span><small>POZİSYON</small><b>{account?.reconciliation?.reconciled_active_positions ?? 0} / {status?.limits.max_open_positions ?? 3}</b></span></article>
       <article><Target/><span><small>AÇIK EMİRLER</small><b>{(account?.open_orders.length || 0)+(account?.open_algo_orders.length || 0)}</b></span></article>
       <article className={account?.hedge_mode ? 'demoModeBad' : 'demoModeGood'}><ShieldCheck/><span><small>POZİSYON MODU</small><b>{account ? account.hedge_mode ? 'HEDGE · DEĞİŞTİR' : 'ONE-WAY · UYGUN' : '—'}</b></span></article>
     </section>
@@ -561,7 +562,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       </div>
 
       <div className="demoPositions">
-        <header><div><span>CANLI DEMO POZİSYONLARI</span><h3>Giriş, Stop, TP ve Seviye Haritası</h3></div><b>{account?.positions.length ?? 0} AÇIK</b></header>
+        <header><div><span>CANLI DEMO POZİSYONLARI</span><h3>Giriş, Stop, TP ve Seviye Haritası</h3></div><b>{account?.reconciliation?.reconciled_active_positions ?? 0} AÇIK</b></header>
         <div className="demoPositionList">{account?.positions.length ? account.positions.map(position => <article key={position.symbol}>
           <header><div><b>{position.symbol.replace('USDT','/USDT')}</b><span className={position.direction === 'LONG' ? 'demoLong' : 'demoShort'}>{position.direction}</span><em className={position.leverage_verified ? 'demoVerified' : 'demoPending'}>{position.leverage_verified ? <ShieldCheck/> : <TriangleAlert/>}{position.leverage ? `${position.leverage}x` : '—'} · {(position.margin_type || 'DOĞRULANIYOR').toUpperCase()}</em></div><strong className={position.unrealized_pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{position.unrealized_pnl >= 0 ? '+' : ''}{fmt(position.unrealized_pnl)} USDT</strong></header>
           <div className="demoPositionMetrics"><span><small>Miktar</small><b>{fmt(position.quantity)}</b></span><span><small>Giriş</small><b>{fmt(position.entry_price)}</b></span><span><small>Canlı</small><b>{fmt(position.mark_price)}</b></span><span><small>Likidasyon</small><b>{fmt(position.liquidation_price)}</b></span><span><small>İstenen kaldıraç</small><b>{position.requested_leverage || activePlanBySymbol.get(position.symbol)?.requested_leverage || activePlanBySymbol.get(position.symbol)?.leverage || '—'}x</b></span><span><small>Uygulanan kaldıraç</small><b>{position.applied_leverage || position.leverage || '—'}x · {(position.margin_type || '—').toUpperCase()}</b></span></div>

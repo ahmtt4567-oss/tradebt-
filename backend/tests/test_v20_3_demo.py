@@ -14,6 +14,7 @@ SOURCE_TEXT = SOURCE_PATH.read_text(encoding="utf-8")
 ROOT_SOURCE_TEXT = (ROOT / "binance_demo.py").read_text(encoding="utf-8")
 MAIN_TEXT = (ROOT / "backend" / "app" / "main.py").read_text(encoding="utf-8")
 FRONTEND_TEXT = (ROOT / "frontend" / "src" / "BinanceDemo.tsx").read_text(encoding="utf-8")
+PRODUCTION_FRONTEND_TEXT = (ROOT / "BinanceDemo.tsx").read_text(encoding="utf-8")
 STYLE_TEXT = (ROOT / "frontend" / "src" / "binance-demo.css").read_text(encoding="utf-8")
 CONFIG_TEXT = (ROOT / "backend" / "configure_demo.py").read_text(encoding="utf-8")
 TREE = ast.parse(SOURCE_TEXT)
@@ -62,6 +63,22 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertEqual(state["plans"]["stale"]["position_status"], "CLOSED")
         self.assertEqual(state["plans"]["real"]["position_status"], "OPEN")
 
+    def test_raw_zero_and_restored_local_position_never_count_as_reconciled(self):
+        reconcile = CORE["reconcile_demo_plans"]
+        state = {"plans": {"restored": {"symbol": "BTCUSDT", "status": "OPEN", "position_status": "OPEN", "remaining_quantity": "0.001"}}}
+        result = reconcile(state, {"positions": []})
+        self.assertEqual(result["actual_exchange_open_positions"], 0)
+        self.assertEqual(result["reconciled_active_positions"], 0)
+        self.assertEqual(result["stale_positions_removed"], 1)
+
+    def test_raw_exchange_position_amount_zero_vs_nonzero_is_explicit(self):
+        reconcile = CORE["reconcile_demo_plans"]
+        state = {"plans": {}}
+        zero = reconcile(state, {"positions": []})
+        actual = reconcile(state, {"positions": [{"symbol": "BTCUSDT", "quantity": 0.001}]})
+        self.assertEqual(zero["reconciled_active_positions"], 0)
+        self.assertEqual(actual["reconciled_active_positions"], 1)
+
     def test_reconciled_position_count_matches_zero_one_and_three_exchange_positions(self):
         reconcile = CORE["reconcile_demo_plans"]
         state = {"plans": {}}
@@ -74,6 +91,7 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
     def test_position_limit_uses_exchange_reconciled_count_not_stale_plans(self):
         self.assertIn('if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertNotIn('if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
+        self.assertIn('"exchange_position_diagnostics"', SOURCE_TEXT)
 
     def test_analysis_direction_mapping_has_no_short_fallback(self):
         for value in ("LONG", "SHORT", "BUY", "SELL"):
@@ -81,6 +99,11 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn("return null", FRONTEND_TEXT)
         self.assertIn("Yön belirlenemedi; mevcut yön korunuyor.", FRONTEND_TEXT)
         self.assertNotIn("|| 'SHORT'", FRONTEND_TEXT)
+
+    def test_production_frontend_uses_reconciled_count_and_analysis_mapping(self):
+        self.assertIn("reconciled_active_positions", PRODUCTION_FRONTEND_TEXT)
+        self.assertIn("normalizeAnalysisPlan", PRODUCTION_FRONTEND_TEXT)
+        self.assertIn("nested.normalized_signal", PRODUCTION_FRONTEND_TEXT)
 
     def test_connector_is_hard_locked_to_official_demo_hosts(self):
         self.assertIn('DEMO_REST_BASE = "https://demo-fapi.binance.com"', SOURCE_TEXT)

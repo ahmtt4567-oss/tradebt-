@@ -554,12 +554,18 @@ async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
         for item in response_rows(configurations)
         if item.get("symbol")
     }
+    raw_position_diagnostics = []
     open_positions = []
     for item in response_rows(positions):
         amount = Decimal(str(item.get("positionAmt", "0")))
+        symbol = str(item.get("symbol") or "").upper()
+        raw_position_diagnostics.append({
+            "symbol": symbol,
+            "position_amount": str(amount),
+            "exchange_actual_position": amount != 0,
+        })
         if amount == 0:
             continue
-        symbol = str(item.get("symbol") or "").upper()
         configuration = config_by_symbol.get(symbol, {})
         raw_leverage = item.get("leverage", configuration.get("leverage"))
         raw_margin_type = item.get("marginType", configuration.get("marginType"))
@@ -616,6 +622,7 @@ async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
         "open_orders": open_orders,
         "open_algo_orders": open_algos,
         "hedge_mode": hedge_mode,
+        "exchange_position_diagnostics": raw_position_diagnostics,
     }
 
 

@@ -108,6 +108,7 @@ type DemoAccount = DemoStatus & {
   open_algo_orders:DemoAlgoOrder[]
   hedge_mode:boolean
   plans:DemoPlan[]
+  exchange_position_diagnostics?:{symbol:string;position_amount:string;exchange_actual_position:boolean}[]
 }
 
 type Direction = 'LONG'|'SHORT'
