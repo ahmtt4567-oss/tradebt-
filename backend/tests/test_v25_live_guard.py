@@ -32,6 +32,7 @@ FRONTEND_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
 ACTIVE_COMMERCIAL_SOURCE = (ROOT / "CommercialHub.tsx").read_text(encoding="utf-8")
 ACTIVE_EXECUTION_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
 ACTIVE_API_SOURCE = (ROOT / "api.ts").read_text(encoding="utf-8")
+VERCEL_SOURCE = (ROOT / "vercel.json").read_text(encoding="utf-8")
 
 
 class V25LiveGuardCoreTests(unittest.TestCase):
@@ -209,6 +210,10 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertNotIn("'/api/v25'", ACTIVE_API_SOURCE)
         self.assertIn("X-ProTreBot-Owner", ACTIVE_API_SOURCE)
         self.assertIn("ownerAccessToken()", ACTIVE_API_SOURCE)
+
+    def test_vercel_build_targets_current_render_api(self):
+        self.assertIn('"VITE_API_URL": "https://protrebot-api.onrender.com"', VERCEL_SOURCE)
+        self.assertNotIn("tradebt8.onrender.com", VERCEL_SOURCE)
 
     def test_manual_live_order_requires_second_explicit_confirmation(self):
         self.assertIn("class ManualLiveOrderRequest", EXECUTION_SOURCE)
