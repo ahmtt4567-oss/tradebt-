@@ -155,6 +155,13 @@ class V21DemoSafetyTests(unittest.TestCase):
         self.assertIn("DEMO OTOMATİK", FRONTEND_SOURCE)
         self.assertIn("MASAÜSTÜ BİLDİRİMLERİNİ AÇ", FRONTEND_SOURCE)
 
+    def test_demo_scanner_uses_exchange_symbols_and_auto_source(self):
+        self.assertIn('exchange_info.get("symbols", [])', V21_SOURCE)
+        self.assertIn('symbols = symbols[:100]', V21_SOURCE)
+        self.assertIn('source="AUTO_SCANNER"', V21_SOURCE)
+        self.assertIn('"opportunity_score"', V21_SOURCE)
+        self.assertIn('"top_candidates": top_candidates', V21_SOURCE)
+
     def test_credentials_and_runtime_state_are_excluded_from_package_source_control(self):
         self.assertIn("backend/.env", GITIGNORE_SOURCE)
         self.assertIn("backend/data/demo_credentials.dat", GITIGNORE_SOURCE)

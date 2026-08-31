@@ -72,7 +72,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "max_correlation_pct": 82,
     "schedule_start_hour": 0,
     "schedule_end_hour": 24,
-    "scan_seconds": 30,
+    "scan_seconds": 300,
     "breakeven_enabled": True,
     "breakeven_trigger_r": 1.0,
     "trailing_enabled": False,
@@ -148,6 +148,10 @@ def initial_state() -> dict[str, Any]:
             "enabled": False, "busy": False, "cycles": 0, "last_scan": None,
             "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None,
         },
+        "scanner": {
+            "active": False, "scanned_count": 0, "eligible_count": 0, "last_scan": None,
+            "next_scan": None, "top_candidates": [], "selected_symbols": [], "last_stage": "BEKLEMEDE",
+        },
         "stream": {
             "status": "BEKLEMEDE", "transport": "REST EŞLEŞTİRME", "last_event": None,
             "last_sync": None, "reconnect_count": 0, "error_count": 0, "last_error": None,
@@ -177,7 +181,7 @@ def load_state() -> dict[str, Any]:
         base["settings"].update({key: value for key, value in saved["settings"].items() if key in DEFAULT_SETTINGS})
     for key in (
         "journal", "seen_event_ids", "backtest", "drills", "duplicate_blocks",
-        "duplicate_submissions", "protection_repairs",
+        "duplicate_submissions", "protection_repairs", "scanner",
     ):
         if key in saved:
             base[key] = saved[key]
@@ -196,6 +200,7 @@ def serializable_state(state: dict[str, Any]) -> dict[str, Any]:
         "duplicate_blocks": state.get("duplicate_blocks", 0),
         "duplicate_submissions": state.get("duplicate_submissions", 0),
         "protection_repairs": state.get("protection_repairs", 0),
+        "scanner": state.get("scanner", {}),
         "saved_at": now_iso(),
     }
 
@@ -286,6 +291,66 @@ def normalize_candles(rows: Any) -> list[dict[str, float]]:
 async def demo_candles(client: BinanceDemoClient, symbol: str, interval: str, limit: int) -> list[dict[str, float]]:
     rows = await client.public_get("/fapi/v1/klines", {"symbol": symbol, "interval": interval, "limit": limit})
     return normalize_candles(rows)
+
+
+async def scan_demo_universe(client: BinanceDemoClient, occupied: set[str], settings: dict[str, Any]) -> list[dict[str, Any]]:
+    """Analyze the largest liquid Demo perpetual universe and rank opportunities."""
+    exchange_info, tickers = await asyncio.gather(
+        client.public_get("/fapi/v1/exchangeInfo"),
+        client.public_get("/fapi/v1/ticker/24hr"),
+    )
+    exchange_symbols = exchange_info.get("symbols", []) if isinstance(exchange_info, dict) else exchange_info
+    ticker_by_symbol = {
+        str(item.get("symbol")): item for item in response_rows(tickers)
+        if item.get("symbol")
+    }
+    symbols = []
+    for item in exchange_symbols if isinstance(exchange_symbols, list) else []:
+        if item.get("status") != "TRADING" or item.get("contractType") != "PERPETUAL":
+            continue
+        symbol = str(item.get("symbol") or "")
+        if item.get("quoteAsset") == "USDT" and symbol.endswith("USDT") and symbol not in occupied:
+            symbols.append(symbol)
+    symbols.sort(key=lambda value: float(ticker_by_symbol.get(value, {}).get("quoteVolume") or 0), reverse=True)
+    symbols = symbols[:100]
+
+    async def evaluate(symbol: str) -> dict[str, Any] | None:
+        try:
+            candles = await demo_candles(client, symbol, "15m", 260)
+            if len(candles) < 220:
+                return None
+            decision = analyze(candles[:-1])
+            direction = decision["direction"]
+            confidence = int(decision["confidence"])
+            volatility = float(decision["atr"]) / max(float(decision["entry"]), 1e-9) * 100
+            if direction == "BEKLE" or confidence < int(settings["min_confidence"]):
+                return None
+            if (direction == "LONG" and not settings["allow_long"]) or (direction == "SHORT" and not settings["allow_short"]):
+                return None
+            if volatility > float(settings["max_volatility_pct"]):
+                return None
+            score = (
+                confidence * 0.45
+                + min(100.0, float(decision["adx"]) * 2.5) * 0.15
+                + min(100.0, float(decision["volume_ratio"]) * 50) * 0.15
+                + float(decision["radar"]["breakout_quality"]) * 0.15
+                + min(100.0, float(decision["risk_reward"]) * 25) * 0.10
+            )
+            return {
+                "symbol": symbol, "direction": direction, "opportunity_score": round(score, 2),
+                "confidence": confidence, "entry": decision["entry"], "stop_loss": decision["stop_loss"],
+                "tp1": decision["tp1"], "tp2": decision["tp2"], "tp3": decision["tp3"],
+                "volatility_pct": round(volatility, 3), "risk_reward": decision["risk_reward"],
+                "trend": decision["trend"], "momentum": decision["momentum"],
+            }
+        except (BinanceDemoError, TypeError, ValueError, KeyError, ZeroDivisionError):
+            return None
+
+    results: list[dict[str, Any]] = []
+    for offset in range(0, len(symbols), 10):
+        batch = await asyncio.gather(*(evaluate(symbol) for symbol in symbols[offset:offset + 10]))
+        results.extend(item for item in batch if item is not None)
+    return sorted(results, key=lambda item: item["opportunity_score"], reverse=True)
 
 
 def daily_metrics(state: dict[str, Any]) -> dict[str, Any]:
@@ -614,64 +679,53 @@ async def automatic_cycle(application: Any) -> None:
         return
     client = client_for(application)
     snapshot = await account_snapshot(client)
-    if len(snapshot["positions"]) >= min(settings["max_positions"], MAX_OPEN_POSITIONS):
+    max_positions = min(settings["max_positions"], MAX_OPEN_POSITIONS)
+    available_slots = max_positions - len(snapshot["positions"])
+    if available_slots <= 0:
         auto["last_decision"] = "Açık pozisyon sınırı dolu."
+        state["scanner"].update({"active": True, "last_stage": "DOLU", "selected_symbols": []})
+        persist_state(state)
         return
     occupied = {item["symbol"] for item in snapshot["positions"] + snapshot["open_orders"]}
-    btc_candles: list[dict[str, float]] | None = None
-    for raw_symbol in settings["allowed_symbols"]:
-        symbol = normalize_symbol(raw_symbol)
-        if symbol in occupied:
-            state["duplicate_blocks"] += 1
-            continue
-        candles = await demo_candles(client, symbol, "15m", 260)
-        if len(candles) < 220:
-            continue
-        decision = analyze(candles[:-1])
-        direction = decision["direction"]
-        confidence = int(decision["confidence"])
-        if direction == "BEKLE" or confidence < int(settings["min_confidence"]):
-            auto["last_decision"] = f"{symbol}: güven %{confidence}; eşik %{settings['min_confidence']}."
-            continue
-        if (direction == "LONG" and not settings["allow_long"]) or (direction == "SHORT" and not settings["allow_short"]):
-            auto["last_decision"] = f"{symbol}: {direction} yönü kullanıcı ayarında kapalı."
-            continue
-        volatility = float(decision["atr"]) / float(decision["entry"]) * 100
-        if volatility > float(settings["max_volatility_pct"]):
-            auto["last_decision"] = f"{symbol}: volatilite %{volatility:.2f}; güvenlik tavanını aşıyor."
-            continue
-        if symbol != "BTCUSDT" and any(item["symbol"] == "BTCUSDT" and item["direction"] == direction for item in snapshot["positions"]):
-            btc_candles = btc_candles or await demo_candles(client, "BTCUSDT", "15m", 260)
-            correlation = abs(return_correlation(candles, btc_candles)) * 100
-            if correlation >= float(settings["max_correlation_pct"]):
-                auto["last_decision"] = f"{symbol}: BTC korelasyonu %{correlation:.0f}; yoğunlaşma engeli."
-                continue
+    state["scanner"].update({"active": True, "last_stage": "TARAMA", "selected_symbols": []})
+    ranked = await scan_demo_universe(client, occupied, settings)
+    top_candidates = ranked[:3]
+    scanner = state["scanner"]
+    scanner.update({
+        "scanned_count": 100, "eligible_count": len(ranked),
+        "last_scan": now_iso(), "next_scan": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
+        "top_candidates": top_candidates, "last_stage": "SIRALANDI",
+    })
+    selected: list[str] = []
+    for candidate in top_candidates[:available_slots]:
+        symbol = candidate["symbol"]
+        direction = candidate["direction"]
         sizing = risk_size_values(
-            float(decision["entry"]), float(decision["stop_loss"]), float(settings["max_loss_per_trade"]),
+            float(candidate["entry"]), float(candidate["stop_loss"]), float(settings["max_loss_per_trade"]),
             MAX_LEVERAGE, min(float(settings["max_margin_per_trade"]), float(MAX_MARGIN_USDT)),
         )
         margin = max(5.0, min(float(MAX_MARGIN_USDT), sizing["margin_usdt"]))
         body = DemoOrderRequest(
             symbol=symbol, direction=direction, order_type="MARKET", margin_usdt=margin,
-            leverage=MAX_LEVERAGE, stop_loss=decision["stop_loss"], tp1=decision["tp1"],
-            tp2=decision["tp2"], tp3=decision["tp3"],
+            leverage=MAX_LEVERAGE, stop_loss=candidate["stop_loss"], tp1=candidate["tp1"],
+            tp2=candidate["tp2"], tp3=candidate["tp3"],
         )
         try:
-            await execute_demo_order(application, body, source="V21_AUTO")
+            await execute_demo_order(application, body, source="AUTO_SCANNER")
         except BinanceDemoError as exc:
             auto["last_decision"] = f"{symbol}: Demo emir reddi · {exc}"
             continue
+        selected.append(symbol)
         record_event(
-            state, "AUTO_ORDER", f"{symbol} {direction} otomatik Demo girişi gönderildi.", symbol=symbol,
-            side=direction, price=float(decision["entry"]), quantity=None,
-            reason=f"Güven %{confidence}; ATR %{volatility:.2f}; tahmini stop riski {sizing['estimated_stop_loss_usdt']:.2f} USDT",
-            source="V21_AUTO",
+            state, "AUTO_ORDER", f"{symbol} {direction} otomatik tarayıcı Demo girişi gönderildi.", symbol=symbol,
+            side=direction, price=float(candidate["entry"]), quantity=None,
+            reason=f"Skor {candidate['opportunity_score']:.2f}; güven %{candidate['confidence']}; tahmini stop riski {sizing['estimated_stop_loss_usdt']:.2f} USDT",
+            source="AUTO_SCANNER",
         )
-        auto["last_decision"] = f"{symbol} {direction}: güven %{confidence}; Demo emir gönderildi ve Stop önce kuruluyor."
-        persist_state(state)
-        return
-    if not auto["last_decision"]:
-        auto["last_decision"] = "İzinli paritelerde yeni giriş bulunamadı."
+    scanner["selected_symbols"] = selected
+    scanner["last_stage"] = "EMİRLER YÖNETİLİYOR"
+    auto["last_decision"] = f"100 coin tarandı; {len(selected)} yeni Demo pozisyonu açıldı; en iyi 3: {', '.join(item['symbol'] for item in top_candidates) or 'yok'}."
+    persist_state(state)
 
 
 async def automation_loop(application: Any) -> None:
@@ -810,7 +864,7 @@ def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     snapshot = state.get("snapshot") or {}
     return {
         "version": "21.0.0", "mode": "BINANCE_FUTURES_DEMO_ONLY", "settings": state["settings"],
-        "auto": state["auto"], "stream": state["stream"], "daily": daily_metrics(state),
+        "auto": state["auto"], "scanner": state.get("scanner", {}), "stream": state["stream"], "daily": daily_metrics(state),
         "account": {
             "wallet_balance": snapshot.get("wallet_balance"), "available_balance": snapshot.get("available_balance"),
             "unrealized_pnl": snapshot.get("unrealized_pnl"), "positions": len(snapshot.get("positions", [])),
