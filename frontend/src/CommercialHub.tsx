@@ -12,7 +12,7 @@ const LEGACY_SESSION_KEY = 'protrebot-v22-session'
 const REMEMBER_KEY = 'protrebot-v25-remember'
 
 type Plan = {name:string;monthly_usd:number;days:number;agents:number;bots:number;features:string[]}
-type PublicInfo = {version:string;edition:string;setup_required:boolean;plans:Record<string,Plan>;billing:{provider:string;live:boolean};security:Record<string,boolean>;account_storage?:string;message:string}
+type PublicInfo = {version:string;edition:string;setup_required:boolean;auth_available?:boolean;plans:Record<string,Plan>;billing:{provider:string;live:boolean};security:Record<string,boolean>;account_storage?:string;message:string}
 type User = {id:string;email:string;display_name:string;role:'OWNER'|'CUSTOMER';active:boolean;created_at:string}
 type License = {id:string;user_id:string;plan:string;status:string;starts_at:string;expires_at:string;source:string;demo_only:boolean}
 type Session = {user:User;license:License|null;demo_only:boolean}
@@ -40,7 +40,7 @@ function detailMessage(detail:unknown):string {
 export default function CommercialHub({active,onNavigate}:{active:boolean;onNavigate?:(target:NavigateTarget)=>void}) {
   const [info,setInfo] = useState<PublicInfo|null>(null)
   const [token,setToken] = useState(() => localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(V24_SESSION_KEY) || sessionStorage.getItem(V24_SESSION_KEY) || localStorage.getItem(V23_SESSION_KEY) || sessionStorage.getItem(V23_SESSION_KEY) || sessionStorage.getItem(LEGACY_SESSION_KEY) || '')
-  const [remember,setRemember] = useState(() => localStorage.getItem(REMEMBER_KEY) === '1')
+  const [remember,setRemember] = useState(() => localStorage.getItem(REMEMBER_KEY) !== '0')
   const [session,setSession] = useState<Session|null>(null)
   const [overview,setOverview] = useState<Overview|null>(null)
   const [readiness,setReadiness] = useState<Readiness|null>(null)
@@ -104,7 +104,12 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
     }
   }
 
-  useEffect(() => { if (active) void refresh(true) },[active,token])
+  useEffect(() => {
+    if (!active) return
+    void refresh(true)
+    const timer = window.setInterval(() => void refresh(true),15000)
+    return () => window.clearInterval(timer)
+  },[active,token])
 
   const authenticate = async (mode:'bootstrap'|'login') => {
     setBusy(true)
@@ -117,6 +122,11 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
       setNotice(mode === 'bootstrap' ? 'V25 sahibi oluşturuldu; yönetim merkezi açıldı.' : 'Güvenli oturum açıldı.');setNoticeKind('ok')
     } catch (error) {setNotice(error instanceof Error ? error.message : 'Oturum açılamadı.');setNoticeKind('error')}
     finally {setBusy(false)}
+  }
+
+  const logout = async () => {
+    try { if (token) await request('/auth/logout',{method:'POST'}) } catch {}
+    saveToken('');setSession(null);setOverview(null);setReadiness(null);setOperations(null)
   }
 
   const createCustomer = async () => {
@@ -259,6 +269,8 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
 
   if (!info) return <section className="commercialLoading"><RefreshCw className="spin"/><b>V25 LIVE GUARD BAĞLANIYOR</b><span>Üyelik, lisans, risk ve canlı yürütme kasası kontrol ediliyor…</span></section>
 
+  if (info.auth_available === false) return <section className="commercialLoading"><RefreshCw className="spin"/><b>KALICI HESAP VERİTABANI BEKLENİYOR</b><span>PostgreSQL bağlantısı doğrulanmadan kayıt veya giriş ekranı açılmaz.</span></section>
+
   if (!session) return <section className="commercialAuth">
     <div className="commercialAuthHero"><span className="commercialEdition">V25 LIVE GUARD</span><h2>Robotunu yönetilebilir ve kontrollü bir ürüne dönüştüren merkez</h2><p>Müşterinin parası borsasında kalır. Canlı API anahtarı yalnızca kullanıcının Windows kasasında; canlı girişler varsayılan kilitlidir.</p><div><span><ShieldCheck/> Fail-closed yürütme</span><span><LockKeyhole/> Anahtar merkezde tutulmaz</span><span><BadgeDollarSign/> Kâr garantisi yok</span></div></div>
     <div className="commercialAuthCard">
@@ -284,7 +296,7 @@ export default function CommercialHub({active,onNavigate}:{active:boolean;onNavi
     <div className="commercialHero">
       <div className="commercialHeroTitle"><span><Building2/></span><div><small>V25 · LIVE GUARD</small><h2>Business & Robot Control Center</h2><p>Paper, Demo, lisans, canlı risk kasası ve fail-closed yürütme tek merkezde.</p></div></div>
       <div className="commercialSafety"><b><ShieldCheck/> CANLI VARSAYILAN KİLİTLİ</b><span>Yerel kasa · Demo kanıtı · süreli çift onay</span></div>
-      <div className="commercialIdentity"><span>{session.user.display_name}</span><b>{session.user.role}</b><button onClick={() => {saveToken('');setSession(null)}}><LogOut/> Çıkış</button></div>
+      <div className="commercialIdentity"><span>{session.user.display_name}</span><b>{session.user.role}</b><button onClick={() => void logout()}><LogOut/> Çıkış</button></div>
     </div>
 
     <nav className="commercialTabs">

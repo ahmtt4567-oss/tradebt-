@@ -8,6 +8,7 @@ remain disabled so this package cannot move real money or place real orders.
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import os
@@ -54,6 +55,7 @@ LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 STANDARD_SESSION_SECONDS = 8 * 60 * 60
 REMEMBER_SESSION_SECONDS = 30 * 24 * 60 * 60
 COMMERCIAL_STATE_KEY = "v22-commercial"
+DURABLE_AUTH_REQUIRED = str(os.getenv("PROTREBOT_DURABLE_AUTH_REQUIRED", "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def now_iso() -> str:
@@ -92,11 +94,13 @@ def sanitize_state(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return base
     for key in (
-        "owner_user_id", "users", "subscriptions", "licenses", "pairing_codes", "agents", "audit",
-        "plans", "release_evidence", "leads", "demo_invoices", "support_tickets", "acceptances",
+        "users", "subscriptions", "licenses", "pairing_codes", "agents", "audit", "plans",
+        "release_evidence", "leads", "demo_invoices", "support_tickets", "acceptances",
     ):
         if key in payload and isinstance(payload[key], type(base[key])):
             base[key] = payload[key]
+    if isinstance(payload.get("owner_user_id"), str) or payload.get("owner_user_id") is None:
+        base["owner_user_id"] = payload.get("owner_user_id")
     base["business"] = sanitize_business_settings(payload.get("business"))
     # These safety switches are never restored from disk as enabled values.
     base["security"] = default_commercial_state()["security"]
@@ -442,10 +446,12 @@ class ReleaseEvidenceRequest(BaseModel):
 async def v22_public(request: Request):
     rt = runtime(request)
     state = rt["state"]
+    storage_ready = rt.get("storage_status") == "POSTGRESQL_KALICI" or not DURABLE_AUTH_REQUIRED
     return {
         "version": V22_VERSION,
         "edition": "COMMERCIAL COMPLETE · LAUNCH LAB",
-        "setup_required": not bool(state.get("owner_user_id")),
+        "setup_required": storage_ready and not bool(state.get("owner_user_id")),
+        "auth_available": storage_ready,
         "plans": state["plans"],
         "billing": state["billing"],
         "security": state["security"],
@@ -457,6 +463,8 @@ async def v22_public(request: Request):
 @router.post("/bootstrap")
 async def v22_bootstrap(payload: BootstrapRequest, request: Request):
     rt = runtime(request)
+    if DURABLE_AUTH_REQUIRED and rt.get("storage_status") != "POSTGRESQL_KALICI":
+        raise HTTPException(503, "Kalıcı hesap veritabanı hazır değil; kayıt güvenli şekilde başlatılamıyor")
     host = request.client.host if request.client else ""
     if not bootstrap_access_allowed(
         host,
@@ -467,6 +475,7 @@ async def v22_bootstrap(payload: BootstrapRequest, request: Request):
         state = rt["state"]
         if state.get("owner_user_id"):
             raise HTTPException(409, "İlk yönetici daha önce oluşturuldu")
+        previous_state = copy.deepcopy(state)
         email = normalize_email(payload.email)
         if "@" not in email:
             raise HTTPException(422, "Geçerli bir e-posta yazın")
@@ -487,7 +496,12 @@ async def v22_bootstrap(payload: BootstrapRequest, request: Request):
         state["licenses"].append({"id": uuid.uuid4().hex, "user_id": user_id, "plan": "ELITE", "status": "ACTIVE", "starts_at": now_iso(), "expires_at": expires_at, "source": "OWNER_BOOTSTRAP", "demo_only": True})
         add_audit(state, "OWNER_CREATED", "Yerel V24 sahibi ve geliştirme lisansı oluşturuldu.", actor=user_id, subject=user_id)
         save_state(state)
-    await persist_v22_commercial(request.app)
+    persisted = await persist_v22_commercial(request.app)
+    if DURABLE_AUTH_REQUIRED and not persisted:
+        async with rt["lock"]:
+            rt["state"] = previous_state
+            save_state(previous_state)
+        raise HTTPException(503, "Hesap PostgreSQL'e yazılamadı; kayıt tamamlanmadı")
     token = issue_token(
         user_id,
         "OWNER",
@@ -526,6 +540,17 @@ async def v22_login(payload: LoginRequest, request: Request):
 async def v22_session(request: Request):
     user = authenticated_user(request)
     return {"user": public_user(user), "license": active_license(runtime(request)["state"], user["id"]), "demo_only": True}
+
+
+@router.post("/auth/logout")
+async def v22_logout(request: Request):
+    user = authenticated_user(request)
+    rt = runtime(request)
+    async with rt["lock"]:
+        user["auth_version"] = int(user.get("auth_version", 1)) + 1
+        save_state(rt["state"])
+    await persist_v22_commercial(request.app)
+    return {"ok": True}
 
 
 @router.get("/admin/overview")

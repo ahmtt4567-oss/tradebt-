@@ -1,5 +1,7 @@
+import asyncio
 import sys
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -17,6 +19,7 @@ from app.commercial_core import (  # noqa: E402
     verify_password,
     verify_token,
 )
+from app.v22_commercial import sync_v22_storage  # noqa: E402
 
 
 MAIN_SOURCE = (BACKEND / "app" / "main.py").read_text(encoding="utf-8")
@@ -29,6 +32,36 @@ GITIGNORE_SOURCE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
 
 class V22CommercialTests(unittest.TestCase):
+    def test_postgres_snapshot_restores_owner_after_runtime_restart(self):
+        restored_state = default_commercial_state()
+        restored_state["owner_user_id"] = "owner-from-postgres"
+        restored_state["users"] = [{"id": "owner-from-postgres", "email": "owner@example.com", "role": "OWNER", "active": True}]
+
+        class SnapshotPool:
+            async def execute(self, query, *args):
+                return "OK"
+
+            async def fetchrow(self, query, *args):
+                return {"payload": restored_state}
+
+        application = SimpleNamespace()
+        application.state = SimpleNamespace(
+            db_pool=SnapshotPool(),
+            v22_commercial={
+                "state": default_commercial_state(),
+                "storage_lock": asyncio.Lock(),
+                "storage_ready": False,
+                "restore_attempted": False,
+                "storage_status": "YEREL_YEDEK",
+            },
+        )
+
+        asyncio.run(sync_v22_storage(application))
+
+        runtime = application.state.v22_commercial
+        self.assertEqual(runtime["state"]["owner_user_id"], "owner-from-postgres")
+        self.assertEqual(runtime["storage_status"], "POSTGRESQL_KALICI")
+
     def test_passwords_are_scrypt_hashed_and_verified(self):
         record = hash_password("CokGuvenli-Parola-22")
         self.assertTrue(verify_password("CokGuvenli-Parola-22", record))
@@ -99,6 +132,13 @@ class V22CommercialTests(unittest.TestCase):
             self.assertIn(route, V22_SOURCE)
         self.assertIn("def monitor", AGENT_SOURCE)
         self.assertIn("HEARTBEAT_SECONDS = 45", AGENT_SOURCE)
+
+    def test_logout_invalidates_existing_sessions_and_persistence_is_configured(self):
+        self.assertIn('@router.post("/auth/logout")', V22_SOURCE)
+        self.assertIn('user["auth_version"] = int(user.get("auth_version", 1)) + 1', V22_SOURCE)
+        self.assertIn("PROTREBOT_DURABLE_AUTH_REQUIRED", V22_SOURCE)
+        self.assertIn("PROTREBOT_DURABLE_AUTH_REQUIRED", (ROOT / "render.yaml").read_text(encoding="utf-8"))
+        self.assertIn("/auth/logout", FRONTEND_SOURCE)
 
     def test_owner_registration_is_one_time_and_later_opens_login(self):
         self.assertIn("info.setup_required", FRONTEND_SOURCE)

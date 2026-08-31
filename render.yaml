@@ -31,6 +31,8 @@ services:
         value: "true"
       - key: PROTREBOT_DEPLOYMENT_TIER
         value: "FREE_PREVIEW"
+      - key: PROTREBOT_DURABLE_AUTH_REQUIRED
+        value: "true"
 
 databases:
   - name: protrebot-db
