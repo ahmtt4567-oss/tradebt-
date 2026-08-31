@@ -142,15 +142,19 @@ type V21Settings = {
 
 type V21Journal = {id:string;created_at:string;kind:string;symbol?:string|null;status?:string|null;side?:string|null;price?:number|null;quantity?:number|null;realized_pnl?:number|null;reason?:string|null;message:string;source:string;reduce_only:boolean}
 type V21Gate = {name:string;passed:boolean;value:string|number;target:string|number}
+type ScannerCandidate = {rank:number;symbol:string;score:number;direction:string;confidence:string;confidence_value:number;trend:string;mtf_trend:string;volume:number;volume_ratio:number;rsi:number;status:string;reasons:string[];entry?:number;stop_loss?:number;tp1?:number;tp2?:number;tp3?:number}
+type ScannerState = {scan_status:string;last_scan_at:string|null;next_scan_at:string|null;scan_interval_seconds:number;coins_scanned:number;selected_count:number;scan_duration_seconds:number;top_candidates:ScannerCandidate[];all_candidates:ScannerCandidate[];last_error:string|null}
+type AutomationTrade = {symbol:string;side:string;scanner_rank:number;scanner_score:number;confidence:string;entry_time:string;entry_price:string|number;margin:number;leverage:number;tp:(string|number)[];sl:string|number;trade_reason:string[];status:string}
 type V21Backtest = {symbol:string;interval:string;trades:number;wins:number;win_rate:number;net_pnl:number;ending_equity:number;max_drawdown_pct:number;profit_factor:number;no_lookahead:boolean;folds:{name:string;trades:number;net_pnl:number}[];recent_trades:{signal_time:number;entry_time:number;exit_time:number;direction:string;entry:number;exit:number;reason:string;pnl:number;cost_usdt:number;regime:string}[];note:string}
 type V21Summary = {
   version:string;mode:string;settings:V21Settings
   auto:{enabled:boolean;busy:boolean;cycles:number;last_scan:string|null;last_decision:string;last_error:string|null}
+  scanner:ScannerState
   stream:{status:string;transport:string;last_event:string|null;last_sync:string|null;reconnect_count:number;error_count:number;last_error:string|null}
   daily:{date:string;auto_entries:number;events:number;realized_pnl:number;remaining_loss_budget:number}
   account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;reconciled_active_positions?:number;normal_orders:number;algo_orders:number}
   protection:{repairs:number;duplicate_blocks:number};journal:V21Journal[];backtest:V21Backtest|null
-  certificate:{version:string;status:string;score:number;passed_gates:number;total_gates:number;gates:V21Gate[];reason:string;generated_at:string}
+  certificate:{version:string;status:string;score:number;passed_gates:number;total_gates:number;gates:V21Gate[];reason:string;generated_at:string};automation_trades:AutomationTrade[]
   last_saved:string|null;real_trading_locked:boolean
 }
 
@@ -247,8 +251,10 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [riskPreview,setRiskPreview] = useState<V21RiskPreview|null>(null)
   const [historyPayload,setHistoryPayload] = useState<{orders:Record<string,unknown>[];algo_orders:Record<string,unknown>[];trades:Record<string,unknown>[]} | null>(null)
   const [autoConfirm,setAutoConfirm] = useState('')
+  const [scannerBusy,setScannerBusy] = useState(false)
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
   const accountRefreshId = useRef(0)
+  const v21RequestId = useRef(0)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -272,8 +278,10 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     }
   }
   const refreshV21 = async (quiet=true) => {
+    const requestId = ++v21RequestId.current
     try {
       const payload = await v21Call<V21Summary>('/summary')
+      if (requestId !== v21RequestId.current) return null
       setV21(payload)
       setSettingsDraft(current => current || payload.settings)
       return payload
@@ -281,6 +289,19 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       if (!quiet) { setMessage(error instanceof Error ? error.message : 'V21 merkezi okunamadı.');setMessageKind('error') }
       return null
     }
+  }
+
+  const runScanner = async () => {
+    if (scannerBusy) return
+    setScannerBusy(true);setMessageKind('info');setMessage('100 USDT perpetual paritesi Demo market verisiyle taranıyor…')
+    const requestId = ++v21RequestId.current
+    try {
+      await v21Call<ScannerState>('/scanner/scan',{method:'POST'})
+      const payload = await v21Call<V21Summary>('/summary')
+      if (requestId === v21RequestId.current) setV21(payload)
+      setMessage('Canlı coin taraması tamamlandı; Top 3 ve tablo güncellendi.');setMessageKind('ok')
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Scanner çalıştırılamadı.');setMessageKind('error') }
+    finally { setScannerBusy(false) }
   }
 
   useEffect(() => {
@@ -473,6 +494,15 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <span><small>RİSK BÜTÇESİ</small><b>{fmt(v21?.daily.remaining_loss_budget)} USDT</b></span>
       <span><small>DEMO KANIT</small><b>%{v21?.certificate.score ?? 0}</b></span>
       <strong>GERÇEK PARA: 0 USDT · GERÇEK EMİR KANALI YOK</strong>
+    </section>
+
+    <section className="v21ScannerDashboard">
+      <header className="v21ScannerHeader"><div><span>CANLI COIN TARAMA · DEMO MARKET DATA</span><h2>Scanner Durumu ve Fırsat Sıralaması</h2><p>Dinamik USDT perpetual evreni, 15m sinyal ve 1h/4h trend doğrulamasıyla her 10 dakikada yenilenir.</p></div><button disabled={scannerBusy} onClick={runScanner}><RefreshCw className={scannerBusy ? 'spin' : ''}/> {scannerBusy ? 'TARANIYOR' : 'ŞİMDİ TARA'}</button></header>
+      <div className="v21ScannerMetrics"><span><small>DURUM</small><b>{v21?.scanner.scan_status || 'BEKLEMEDE'}</b></span><span><small>SON TARAMA</small><b>{stamp(v21?.scanner.last_scan_at)}</b></span><span><small>SONRAKİ TARAMA</small><b>{stamp(v21?.scanner.next_scan_at)}</b></span><span><small>TARANAN COIN</small><b>{v21?.scanner.coins_scanned ?? 0}</b></span><span><small>SEÇİLEN FIRSAT</small><b>{v21?.scanner.selected_count ?? 0}</b></span><span><small>SÜRE</small><b>{fmt(v21?.scanner.scan_duration_seconds)} sn</b></span></div>
+      {v21?.scanner.last_error && <div className="v21ScannerError"><TriangleAlert/> {v21.scanner.last_error}</div>}
+      <div className="v21ScannerColumns"><article className="v21ScannerTop"><header><div><span>TOP 3</span><h3>Bugünün En İyi Fırsatları</h3></div><b>{v21?.scanner.top_candidates.length ?? 0}/3</b></header>{v21?.scanner.top_candidates.length ? v21.scanner.top_candidates.map(candidate => <div className="v21Candidate" key={candidate.symbol}><div className="v21CandidateHead"><b>#{candidate.rank} {candidate.symbol.replace('USDT','/USDT')}</b><strong>{candidate.direction}</strong><em>{candidate.score} / 100 · {candidate.confidence}</em></div><small>{candidate.trend} · {candidate.mtf_trend}</small><ul>{candidate.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></div>) : <div className="v21ScannerEmpty"><Target/><b>Henüz uygun fırsat bulunamadı.</b><span>Yeni tarama bekleniyor.</span></div>}</article>
+        <article className="v21ScannerTable"><header><div><span>TÜM SONUÇLAR</span><h3>Taranan Coinler</h3></div><b>{v21?.scanner.all_candidates.length ?? 0}</b></header><div className="v21TableScroll"><table><thead><tr><th>Rank</th><th>Coin</th><th>Score</th><th>Yön</th><th>Güven</th><th>Trend</th><th>Volume</th><th>Status</th></tr></thead><tbody>{v21?.scanner.all_candidates.length ? v21.scanner.all_candidates.map(candidate => <tr key={candidate.symbol}><td>#{candidate.rank}</td><td><b>{candidate.symbol}</b></td><td>{candidate.score}</td><td>{candidate.direction}</td><td>{candidate.confidence}</td><td>{candidate.mtf_trend}</td><td>{candidate.volume.toFixed(2)}x</td><td><em className={`scannerStatus scannerStatus-${candidate.status}`}>{candidate.status}</em></td></tr>) : <tr><td colSpan={8}>Henüz scanner sonucu yok.</td></tr>}</tbody></table></div></article></div>
+      <article className="v21ScannerTrades"><header><div><span>GERÇEK BACKEND TRADE HISTORY · DEMO</span><h3>Otomasyon İşlemleri</h3></div><b>{v21?.automation_trades.length ?? 0}</b></header>{v21?.automation_trades.length ? <div className="v21TradeRows">{v21.automation_trades.map((trade,index) => <div key={`${trade.symbol}-${trade.entry_time}-${index}`}><strong>{trade.symbol} · {trade.side}</strong><span>Scanner #{trade.scanner_rank} · Score {trade.scanner_score} · {trade.confidence}</span><span>Giriş {stamp(trade.entry_time)} · {fmt(Number(trade.entry_price))} · {trade.margin} USDT · {trade.leverage}x</span><span>SL {String(trade.sl)} · TP {trade.tp.map(String).join(' · ')}</span><small>{trade.trade_reason.join(' · ')}</small><em>{trade.status}</em></div>)}</div> : <div className="v21ScannerEmpty"><History/><b>Henüz otomasyon işlemi yok.</b><span>Scanner tek başına emir açmaz; yalnızca açık onaylı Demo otomasyonunda işlem kaydı oluşur.</span></div>}</article>
     </section>
 
     {!status?.configured && <section className="demoSetupCard">

@@ -58,6 +58,7 @@ migrate_legacy_files(("v21_demo_state.json", "v21_demo_state.backup.json"))
 STATE_PATH = DATA_DIR / "v21_demo_state.json"
 BACKUP_PATH = DATA_DIR / "v21_demo_state.backup.json"
 JOURNAL_LIMIT = 1200
+SCAN_INTERVAL_SECONDS = 600
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "allowed_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"],
@@ -74,7 +75,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "max_correlation_pct": 82,
     "schedule_start_hour": 0,
     "schedule_end_hour": 24,
-    "scan_seconds": 600,
+    "scan_seconds": SCAN_INTERVAL_SECONDS,
     "breakeven_enabled": True,
     "breakeven_trigger_r": 1.0,
     "trailing_enabled": False,
@@ -101,7 +102,7 @@ class SettingsUpdate(BaseModel):
     max_correlation_pct: int | None = Field(default=None, ge=40, le=99)
     schedule_start_hour: int | None = Field(default=None, ge=0, le=23)
     schedule_end_hour: int | None = Field(default=None, ge=1, le=24)
-    scan_seconds: int | None = Field(default=None, ge=15, le=300)
+    scan_seconds: int | None = Field(default=None, ge=SCAN_INTERVAL_SECONDS, le=SCAN_INTERVAL_SECONDS)
     breakeven_enabled: bool | None = None
     breakeven_trigger_r: float | None = Field(default=None, ge=0.5, le=3)
     trailing_enabled: bool | None = None
@@ -159,6 +160,7 @@ def initial_state() -> dict[str, Any]:
             "selected_symbols": [], "last_stage": "BEKLEMEDE", "eligible_count": 0,
             "last_error": None,
         },
+        "automation_trades": [],
         "stream": {
             "status": "BEKLEMEDE", "transport": "REST EŞLEŞTİRME", "last_event": None,
             "last_sync": None, "reconnect_count": 0, "error_count": 0, "last_error": None,
@@ -186,9 +188,10 @@ def load_state() -> dict[str, Any]:
     saved = _read_state_file(STATE_PATH) or _read_state_file(BACKUP_PATH) or {}
     if isinstance(saved.get("settings"), dict):
         base["settings"].update({key: value for key, value in saved["settings"].items() if key in DEFAULT_SETTINGS})
+    base["settings"]["scan_seconds"] = DEFAULT_SETTINGS["scan_seconds"]
     for key in (
         "journal", "seen_event_ids", "backtest", "drills", "duplicate_blocks",
-        "duplicate_submissions", "protection_repairs", "scanner",
+        "duplicate_submissions", "protection_repairs", "scanner", "automation_trades",
     ):
         if key in saved:
             base[key] = saved[key]
@@ -217,6 +220,7 @@ def serializable_state(state: dict[str, Any]) -> dict[str, Any]:
         "duplicate_submissions": state.get("duplicate_submissions", 0),
         "protection_repairs": state.get("protection_repairs", 0),
         "scanner": state.get("scanner", {}),
+        "automation_trades": state.get("automation_trades", [])[:100],
         "saved_at": now_iso(),
     }
 
@@ -322,13 +326,20 @@ def _build_candidate_reasons(item: dict[str, Any]) -> list[str]:
     direction = str(item.get("direction", "NEUTRAL")).upper()
     if direction in {"LONG", "SHORT"}:
         reasons.append(f"{item.get('trend', 'Trend')} yönlü sinyal")
+    mtf = item.get("mtf_trend")
+    if mtf:
+        reasons.append(f"1h/4h trend: {mtf}")
+    if item.get("macd_confirmation"):
+        reasons.append("MACD confirmation")
     volume_ratio = float(item.get("volume_ratio", 1.0) or 1.0)
     if volume_ratio >= 1.15:
         reasons.append("Volume ortalamanın üzerinde")
     if float(item.get("confidence", 0) or 0) >= 70:
         reasons.append("Güven seviyesi yeterli")
     if item.get("momentum"):
-        reasons.append(str(item.get("momentum")))
+        reasons.append(f"Momentum {item.get('momentum')}")
+    if item.get("rsi") is not None:
+        reasons.append(f"RSI uygun aralıkta ({float(item['rsi']):.1f})")
     if item.get("risk_reward"):
         reasons.append(f"Risk/reward {float(item.get('risk_reward') or 0):.2f}")
     if not reasons:
@@ -360,7 +371,12 @@ def _enrich_scan_candidates(results: list[dict[str, Any]]) -> list[dict[str, Any
             "momentum": item.get("momentum"),
             "trend": item.get("trend"),
             "volume_ratio": float(item.get("volume_ratio", 1.0) or 1.0),
+            "volume": round(float(item.get("volume_ratio", 1.0) or 1.0), 3),
+            "rsi": round(float(item.get("rsi", 50) or 50), 2),
+            "macd_confirmation": bool(item.get("macd_confirmation")),
+            "mtf_trend": item.get("mtf_trend", "BİLİNMİYOR"),
             "risk_reward": float(item.get("risk_reward", 0) or 0),
+            "status": item.get("status", "WATCH"),
             "reasons": _build_candidate_reasons(item),
             "scan_time": now_iso(),
         })
@@ -390,35 +406,48 @@ async def scan_demo_universe(client: BinanceDemoClient, occupied: set[str], sett
 
     async def evaluate(symbol: str) -> dict[str, Any] | None:
         try:
-            candles = await demo_candles(client, symbol, "15m", 260)
-            if len(candles) < 220:
+            candles, candles_1h, candles_4h = await asyncio.gather(
+                demo_candles(client, symbol, "15m", 260),
+                demo_candles(client, symbol, "1h", 220),
+                demo_candles(client, symbol, "4h", 220),
+            )
+            if len(candles) < 220 or len(candles_1h) < 200 or len(candles_4h) < 200:
                 return None
             decision = analyze(candles[:-1])
+            higher_1h = analyze(candles_1h[:-1])
+            higher_4h = analyze(candles_4h[:-1])
             direction = decision["direction"]
             confidence = int(decision["confidence"])
             volatility = float(decision["atr"]) / max(float(decision["entry"]), 1e-9) * 100
-            if direction == "BEKLE" or confidence < int(settings["min_confidence"]):
-                return None
-            if (direction == "LONG" and not settings["allow_long"]) or (direction == "SHORT" and not settings["allow_short"]):
-                return None
-            if volatility > float(settings["max_volatility_pct"]):
-                return None
-            score = (
-                confidence * 0.45
-                + min(100.0, float(decision["adx"]) * 2.5) * 0.15
+            mtf_directions = [higher_1h["direction"], higher_4h["direction"]]
+            mtf_aligned = direction in {"LONG", "SHORT"} and mtf_directions.count(direction) == 2
+            mtf_trend = "UYUMLU " + direction if mtf_aligned else f"1h {higher_1h['direction']} · 4h {higher_4h['direction']}"
+            macd_confirmation = (direction == "LONG" and decision["macd"] > 0) or (direction == "SHORT" and decision["macd"] < 0)
+            momentum_score = 100 if decision["momentum"] != "Nötr" else 35
+            trend_score = 100 if mtf_aligned else 45 if direction in mtf_directions else 20
+            score = max(0, min(100, (
+                confidence * 0.30
+                + trend_score * 0.20
+                + (100 if macd_confirmation else 25) * 0.15
                 + min(100.0, float(decision["volume_ratio"]) * 50) * 0.15
-                + float(decision["radar"]["breakout_quality"]) * 0.15
-                + min(100.0, float(decision["risk_reward"]) * 25) * 0.10
-            )
+                + momentum_score * 0.10
+                + float(decision["radar"]["breakout_quality"]) * 0.10
+            )))
+            rejection = direction == "BEKLE" or confidence < int(settings["min_confidence"])
+            rejection |= (direction == "LONG" and not settings["allow_long"]) or (direction == "SHORT" and not settings["allow_short"])
+            rejection |= volatility > float(settings["max_volatility_pct"])
+            status = "WATCH" if rejection or score < float(settings.get("min_score_threshold", 70)) else "SELECTED"
             return {
-                "symbol": symbol, "direction": direction, "opportunity_score": round(score, 2),
+                "symbol": symbol, "direction": "NEUTRAL" if direction == "BEKLE" else direction, "opportunity_score": round(score, 2),
                 "confidence": confidence, "entry": decision["entry"], "stop_loss": decision["stop_loss"],
                 "tp1": decision["tp1"], "tp2": decision["tp2"], "tp3": decision["tp3"],
                 "volatility_pct": round(volatility, 3), "risk_reward": decision["risk_reward"],
                 "trend": decision["trend"], "momentum": decision["momentum"],
+                "mtf_trend": mtf_trend, "macd_confirmation": macd_confirmation, "rsi": decision["rsi"],
+                "status": status,
             }
         except (BinanceDemoError, TypeError, ValueError, KeyError, ZeroDivisionError):
-            return None
+            return {"symbol": symbol, "direction": "NEUTRAL", "opportunity_score": 0, "confidence": 0, "status": "REJECTED", "trend": "Veri yok", "momentum": "Nötr", "reasons": ["Yeterli market verisi alınamadı"]}
 
     results: list[dict[str, Any]] = []
     for offset in range(0, len(symbols), 10):
@@ -777,9 +806,14 @@ async def automatic_cycle(application: Any) -> None:
         "top_candidates": top_candidates, "last_stage": "SIRALANDI",
     })
     selected: list[str] = []
+    cooldowns = auto.setdefault("cooldown_until", {})
     for candidate in top_candidates[:available_slots]:
         symbol = candidate["symbol"]
         direction = candidate["direction"]
+        if candidate.get("status") != "SELECTED" or not all(float(candidate.get(key) or 0) > 0 for key in ("entry", "stop_loss", "tp1", "tp2", "tp3")):
+            continue
+        if float(cooldowns.get(symbol, 0) or 0) > time.time():
+            continue
         sizing = risk_size_values(
             float(candidate["entry"]), float(candidate["stop_loss"]), float(settings["max_loss_per_trade"]),
             MAX_LEVERAGE, min(float(settings["max_margin_per_trade"]), float(MAX_MARGIN_USDT)),
@@ -791,11 +825,22 @@ async def automatic_cycle(application: Any) -> None:
             tp2=candidate["tp2"], tp3=candidate["tp3"],
         )
         try:
-            await execute_demo_order(application, body, source="AUTO_SCANNER")
+            result = await execute_demo_order(application, body, source="AUTO_SCANNER")
         except BinanceDemoError as exc:
             auto["last_decision"] = f"{symbol}: Demo emir reddi · {exc}"
             continue
         selected.append(symbol)
+        cooldowns[symbol] = time.time() + SCAN_INTERVAL_SECONDS
+        plan = result.get("plan", {}) if isinstance(result, dict) else {}
+        state.setdefault("automation_trades", []).insert(0, {
+            "symbol": symbol, "side": direction, "scanner_rank": candidate["rank"],
+            "scanner_score": candidate["score"], "confidence": candidate["confidence"],
+            "entry_time": now_iso(), "entry_price": plan.get("entry_price", candidate["entry"]),
+            "margin": plan.get("margin_usdt", margin), "leverage": plan.get("leverage", MAX_LEVERAGE),
+            "tp": plan.get("targets", [candidate["tp1"], candidate["tp2"], candidate["tp3"]]),
+            "sl": plan.get("stop_loss", candidate["stop_loss"]), "trade_reason": candidate["reasons"],
+            "status": plan.get("status", "DOLUM BEKLİYOR"), "demo_only": True,
+        })
         record_event(
             state, "AUTO_ORDER", f"{symbol} {direction} otomatik tarayıcı Demo girişi gönderildi.", symbol=symbol,
             side=direction, price=float(candidate["entry"]), quantity=None,
@@ -811,8 +856,13 @@ async def automatic_cycle(application: Any) -> None:
 async def run_scanner_cycle(application: Any) -> None:
     state = application.state.v21_demo
     scanner = state["scanner"]
-    if scanner.get("running"):
+    scan_lock = getattr(application.state, "v21_scanner_lock", None)
+    if scan_lock is None:
+        scan_lock = asyncio.Lock()
+        application.state.v21_scanner_lock = scan_lock
+    if scan_lock.locked():
         return
+    await scan_lock.acquire()
     start = time.perf_counter()
     scanner.update({"running": True, "active": True, "scan_status": "TARAMA", "last_error": None})
     try:
@@ -827,11 +877,17 @@ async def run_scanner_cycle(application: Any) -> None:
         threshold = float(settings.get("min_score_threshold", 70))
         filtered = [candidate for candidate in ranked if candidate.get("score", 0) >= threshold and candidate.get("direction") != "NEUTRAL"]
         top_candidates = filtered[:3]
+        selected_symbols = {item["symbol"] for item in top_candidates}
+        for candidate in ranked:
+            if candidate["symbol"] in selected_symbols:
+                candidate["status"] = "SELECTED"
+            elif candidate.get("status") != "REJECTED":
+                candidate["status"] = "WATCH"
         scanner.update({
             "last_scan_at": now_iso(),
             "next_scan_at": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
             "scan_status": "TAMAMLANDI",
-            "coins_scanned": min(100, len(ranked) or 100),
+            "coins_scanned": min(100, len(ranked)),
             "eligible_count": len(filtered),
             "top_candidates": top_candidates,
             "all_candidates": ranked[:100],
@@ -852,6 +908,7 @@ async def run_scanner_cycle(application: Any) -> None:
         scanner["running"] = False
         scanner["scan_duration_ms"] = int((time.perf_counter() - start) * 1000)
         persist_state(state)
+        scan_lock.release()
 
 
 async def automation_loop(application: Any) -> None:
@@ -885,7 +942,7 @@ async def scanner_loop(application: Any) -> None:
         except Exception as exc:
             state = application.state.v21_demo
             state["scanner"].update({"scan_status": "HATA", "last_error": str(exc)[:220], "active": False})
-        await asyncio.sleep(max(60, int(application.state.v21_demo["settings"]["scan_seconds"])))
+        await asyncio.sleep(SCAN_INTERVAL_SECONDS)
 
 
 def backtest_engine(candles: list[dict[str, float]], settings: dict[str, Any]) -> dict[str, Any]:
@@ -1008,6 +1065,9 @@ def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     scanner = state.get("scanner", {})
     scanner_payload = {
         **scanner,
+        "scan_interval_seconds": SCAN_INTERVAL_SECONDS,
+        "selected_count": len(scanner.get("selected_symbols", [])),
+        "scan_duration_seconds": round(float(scanner.get("scan_duration_ms", 0)) / 1000, 3),
         "top_candidates": scanner.get("top_candidates", [])[:3],
         "all_candidates": scanner.get("all_candidates", [])[:100],
     }
@@ -1026,6 +1086,7 @@ def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
             "duplicate_submissions": state.get("duplicate_submissions", 0),
         },
         "journal": state.get("journal", [])[:60], "backtest": state.get("backtest"),
+        "automation_trades": state.get("automation_trades", [])[:100],
         "certificate": certificate_payload(state), "last_saved": state.get("last_saved"),
         "real_trading_locked": True,
     }
@@ -1040,6 +1101,7 @@ def init_v21_demo(application: Any) -> None:
         asyncio.create_task(reconciliation_loop(application)),
         asyncio.create_task(user_stream_loop(application)),
         asyncio.create_task(automation_loop(application)),
+        asyncio.create_task(scanner_loop(application)),
     ]
 
 
@@ -1058,6 +1120,29 @@ async def shutdown_v21_demo(application: Any) -> None:
 @router.get("/summary")
 async def v21_summary(request: Request) -> dict[str, Any]:
     return summary_payload(state_for(request))
+
+
+@router.get("/scanner")
+async def v21_scanner(request: Request) -> dict[str, Any]:
+    return summary_payload(state_for(request))["scanner"]
+
+
+@router.post("/scanner/scan")
+async def v21_manual_scan(request: Request) -> dict[str, Any]:
+    await run_scanner_cycle(request.app)
+    return summary_payload(state_for(request))["scanner"]
+
+
+@router.get("/scanner/candidates")
+async def v21_scanner_candidates(request: Request) -> dict[str, Any]:
+    scanner = summary_payload(state_for(request))["scanner"]
+    return {"candidates": scanner["all_candidates"], "top_candidates": scanner["top_candidates"], "coins_scanned": scanner["coins_scanned"], "demo_only": True}
+
+
+@router.get("/automation/trades")
+async def v21_automation_trades(request: Request, limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    trades = state_for(request).get("automation_trades", [])[:limit]
+    return {"trades": trades, "total": len(trades), "demo_only": True}
 
 
 @router.put("/settings")
