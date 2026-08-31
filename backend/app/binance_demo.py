@@ -772,6 +772,23 @@ async def close_symbol_position(client: BinanceDemoClient, symbol: str) -> dict[
     return await client.signed("POST", "/fapi/v1/order", params)
 
 
+def update_position_lifecycle(plan: dict[str, Any], amount: Decimal) -> None:
+    """Keep the durable demo plan aligned with the exchange position amount."""
+    remaining = abs(amount)
+    initial = Decimal(str(plan.get("initial_quantity") or plan.get("quantity") or "0"))
+    plan["remaining_quantity"] = decimal_text(remaining)
+    plan["position_status"] = "OPEN" if remaining else "CLOSED"
+    if initial <= 0 or remaining <= 0:
+        if remaining <= 0:
+            plan["tp3_status"] = "FILLED"
+        return
+    reduction = (initial - remaining) / initial
+    if reduction >= Decimal("0.60"):
+        plan["tp2_status"] = "FILLED"
+    elif reduction >= Decimal("0.30"):
+        plan["tp1_status"] = "FILLED"
+
+
 async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[str, Any]:
     """Create one conditional order without blind retry on ambiguous responses."""
     try:
@@ -800,6 +817,7 @@ async def install_protection(client: BinanceDemoClient, state: dict[str, Any], p
         plan["status"] = "DOLUM BEKLİYOR"
         return
     amount = Decimal(str(position["positionAmt"]))
+    update_position_lifecycle(plan, amount)
     actual_direction = "LONG" if amount > 0 else "SHORT"
     if actual_direction != plan["direction"]:
         plan["status"] = "YÖN UYUŞMAZLIĞI"
@@ -833,8 +851,15 @@ async def install_protection(client: BinanceDemoClient, state: dict[str, Any], p
         plan["status"] = "KORUMA BAŞARISIZ - KAPATILIYOR"
         add_event(state, "ACİL KORUMA", f"{symbol} Stop kurulamadı; Demo pozisyon güvenlik için kapatılıyor.")
         await cancel_entry_if_open(client, plan)
-        await close_symbol_position(client, symbol)
+        try:
+            await close_symbol_position(client, symbol)
+        except BinanceDemoError as close_exc:
+            plan["last_error"] = f"Stop: {exc}; Kapatma: {close_exc}"
+            plan["position_status"] = "OPEN"
+            persist_runtime(state)
+            raise
         plan["last_error"] = str(exc)
+        plan["position_status"] = "CLOSED"
         plan["status"] = "GÜVENLİK İÇİN KAPATILDI"
         return
 
@@ -881,7 +906,8 @@ async def install_protection(client: BinanceDemoClient, state: dict[str, Any], p
 
     plan["protection_ids"] = protection_ids
     plan["monitoring_targets"] = monitoring_targets
-    plan["status"] = "KORUMA AKTİF" if not monitoring_targets else "STOP AKTİF · HEDEF İZLEME"
+    plan["status"] = "OPEN"
+    plan["protection_status"] = "KORUMA AKTİF" if not monitoring_targets else "STOP AKTİF · HEDEF İZLEME"
     plan["protected_at"] = utc_now()
     add_event(state, "KORUMA KURULDU", f"{symbol} Stop aktif; hedef planı Demo hesabına işlendi.")
 
@@ -912,12 +938,26 @@ async def protection_loop(application: Any) -> None:
                     await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": plan["symbol"]})
                 )
                 active_position = next((row for row in rows if Decimal(str(row.get("positionAmt", "0"))) != 0), None)
-                if active_position is not None and plan.get("status") not in {"KORUMA AKTİF", "STOP AKTİF · HEDEF İZLEME"}:
+                if active_position is not None:
+                    lifecycle_before = (
+                        plan.get("remaining_quantity"), plan.get("position_status"),
+                        plan.get("tp1_status"), plan.get("tp2_status"), plan.get("tp3_status"),
+                    )
+                    update_position_lifecycle(plan, Decimal(str(active_position["positionAmt"])))
+                    lifecycle_after = (
+                        plan.get("remaining_quantity"), plan.get("position_status"),
+                        plan.get("tp1_status"), plan.get("tp2_status"), plan.get("tp3_status"),
+                    )
+                    changed = changed or lifecycle_before != lifecycle_after
+                if active_position is not None and not plan.get("protection_ids"):
                     await install_protection(client, state, plan)
                     changed = True
-                elif active_position is None and plan.get("status") in {"KORUMA AKTİF", "STOP AKTİF · HEDEF İZLEME"}:
+                elif active_position is None and plan.get("position_status") == "OPEN":
                     await cleanup_closed_plan(client, plan)
                     plan["status"] = "KAPANDI"
+                    plan["position_status"] = "CLOSED"
+                    plan["remaining_quantity"] = "0"
+                    plan["tp3_status"] = "FILLED"
                     plan["closed_at"] = utc_now()
                     add_event(state, "POZİSYON KAPANDI", f"{plan['symbol']} Demo pozisyonu kapandı; kalan bot emirleri temizlendi.")
                     changed = True
@@ -1058,11 +1098,14 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
             plan_id = uuid.uuid4().hex[:12]
             plan = {
                 "id": plan_id,
+                "position_id": plan_id,
                 "symbol": spec["symbol"],
                 "direction": spec["direction"],
                 "order_type": spec["order_type"],
                 "entry_price": spec["entry_price"],
                 "quantity": spec["quantity"],
+                "initial_quantity": spec["quantity"],
+                "remaining_quantity": spec["quantity"],
                 "margin_usdt": spec["margin_usdt"],
                 "leverage": spec["leverage"],
                 "requested_leverage": leverage_audit["requested_leverage"],
@@ -1079,6 +1122,7 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
                 "entry_order_id": int(result.get("orderId", 0)) or None,
                 "entry_client_order_id": result.get("clientOrderId"),
                 "status": "DOLUM BEKLİYOR",
+                "position_status": "PENDING",
                 "created_at": utc_now(),
                 "demo_only": True,
                 "source": source,
@@ -1145,10 +1189,17 @@ async def demo_close_position(request: Request, body: ClosePositionRequest) -> d
         raise HTTPException(422, "Pozisyonu kapatmak için DEMO KAPAT yazın.")
     try:
         symbol = normalize_symbol(body.symbol)
-        result = await close_symbol_position(client_for(request), symbol)
+        state = state_for(request)
+        client = client_for(request)
+        result = await close_symbol_position(client, symbol)
         if result is None:
             raise BinanceDemoError("Bu paritede açık Demo pozisyonu yok.", http_status=404)
-        add_event(state_for(request), "POZİSYON KAPATILDI", f"{symbol} Demo pozisyonu reduce-only piyasa emriyle kapatıldı.")
+        for plan in state.get("plans", {}).values():
+            if plan.get("symbol") == symbol and plan.get("position_status") == "OPEN":
+                await cleanup_closed_plan(client, plan)
+                plan.update({"status": "KAPANDI", "position_status": "CLOSED", "remaining_quantity": "0", "tp3_status": "FILLED", "closed_at": utc_now()})
+        add_event(state, "POZİSYON KAPATILDI", f"{symbol} Demo pozisyonu reduce-only piyasa emriyle kapatıldı.")
+        persist_runtime(state)
         return {"ok": True, "symbol": symbol, "order_id": result.get("orderId")}
     except BinanceDemoError as exc:
         raise safe_exchange_error(exc) from exc

@@ -24,6 +24,7 @@ def load_core():
         "BinanceDemoError", "signed_query", "decimal_text", "floor_step", "round_tick", "normalize_symbol",
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
         "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
+        "update_position_lifecycle",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
@@ -122,6 +123,21 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn("find_order_by_client_id", SOURCE_TEXT)
         self.assertNotIn("for attempt in", SOURCE_TEXT)
         self.assertIn("origClientOrderId", SOURCE_TEXT)
+
+    def test_position_lifecycle_tracks_partial_targets_and_full_close(self):
+        lifecycle = CORE["update_position_lifecycle"]
+        plan = {"position_id": "demo-123", "initial_quantity": "10", "quantity": "10"}
+        lifecycle(plan, Decimal("10"))
+        self.assertEqual(plan["position_status"], "OPEN")
+        self.assertEqual(plan["remaining_quantity"], "10")
+        lifecycle(plan, Decimal("7"))
+        self.assertEqual(plan["tp1_status"], "FILLED")
+        self.assertEqual(plan["position_id"], "demo-123")
+        lifecycle(plan, Decimal("4"))
+        self.assertEqual(plan["tp2_status"], "FILLED")
+        lifecycle(plan, Decimal("0"))
+        self.assertEqual(plan["position_status"], "CLOSED")
+        self.assertEqual(plan["tp3_status"], "FILLED")
 
     def test_credentials_stay_server_side_and_out_of_user_interface(self):
         self.assertIn("getpass.getpass", CONFIG_TEXT)
