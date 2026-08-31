@@ -22,6 +22,7 @@ from app.execution_core import (  # noqa: E402
     risk_sized_order,
     sanitize_execution_policy,
 )
+from app.v25_execution import rank_market_tickers  # noqa: E402
 
 
 EXECUTION_SOURCE = (BACKEND / "app" / "v25_execution.py").read_text(encoding="utf-8")
@@ -128,6 +129,30 @@ class V25LiveGuardCoreTests(unittest.TestCase):
         self.assertNotIn("live-api-key", first or "")
 
 class V25LiveGuardIntegrationContractTests(unittest.TestCase):
+    def test_mock_100_symbol_universe_ranks_unique_top_three_without_btc_fallback(self):
+        symbols = [f"COIN{index}USDT" for index in range(120)]
+        symbols[0] = "BTCUSDT"
+        exchange_info = {"symbols": [
+            {"symbol": symbol, "status": "TRADING", "contractType": "PERPETUAL", "quoteAsset": "USDT"}
+            for symbol in symbols
+        ]}
+        tickers = [{
+            "symbol": symbol, "quoteVolume": str(10_000_000 + index * 100_000),
+            "priceChangePercent": str(1 + index / 100), "lastPrice": "10",
+        } for index, symbol in enumerate(symbols)]
+        tickers[0]["quoteVolume"] = "100"
+        tickers.extend([
+            {"symbol": "COINUPUSDT", "quoteVolume": "5000000", "priceChangePercent": "2", "lastPrice": "10"},
+            {"symbol": "COINDOWNUSDT", "quoteVolume": "5000000", "priceChangePercent": "2", "lastPrice": "10"},
+        ])
+        ranked = rank_market_tickers(exchange_info, tickers)
+        self.assertEqual(len(ranked), 100)
+        top_three = [item["symbol"] for item in ranked[:3]]
+        self.assertEqual(len(top_three), len(set(top_three)))
+        self.assertNotIn("BTCUSDT", top_three)
+        self.assertNotIn("COINUPUSDT", [item["symbol"] for item in ranked])
+        self.assertNotIn("COINDOWNUSDT", [item["symbol"] for item in ranked])
+
     def test_live_transport_is_separate_and_official_host_allowlisted(self):
         self.assertIn('LIVE_REST_BASE = "https://fapi.binance.com"', EXECUTION_SOURCE)
         self.assertIn('LIVE_WS_BASE = "wss://fstream.binance.com/private"', EXECUTION_SOURCE)
@@ -169,6 +194,15 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("30 gün / 100 Demo işlem kanıtı", CORE_SOURCE)
         self.assertIn("LIVE_AUTO_SESSION_SECONDS = 60 * 60", EXECUTION_SOURCE)
         self.assertIn('state["policy"]["scan_seconds"]', EXECUTION_SOURCE)
+
+    def test_automatic_execution_uses_dynamic_top_three_not_btc_policy_defaults(self):
+        self.assertIn("DEEP_ANALYSIS_LIMIT = 100", EXECUTION_SOURCE)
+        self.assertIn("candidates = await scan_market_candidates(client, snapshot)", EXECUTION_SOURCE)
+        self.assertIn("selected = signals[:3]", EXECUTION_SOURCE)
+        self.assertIn('"scanned_symbol_count": len(candidates)', EXECUTION_SOURCE)
+        self.assertIn('"selected_symbols": scan_stats.get', EXECUTION_SOURCE)
+        self.assertIn('"selected_symbols_count": len(selected_symbols)', EXECUTION_SOURCE)
+        self.assertNotIn("scan_market_candidates(client, snapshot, state[\"policy\"][\"allowed_symbols\"])", EXECUTION_SOURCE)
 
     def test_stop_failure_closes_with_reduce_only_and_emergency_is_scoped(self):
         self.assertIn('"reduceOnly": "true"', EXECUTION_SOURCE)

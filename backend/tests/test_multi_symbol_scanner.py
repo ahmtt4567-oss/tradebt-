@@ -78,7 +78,7 @@ class MultiSymbolScannerTests(unittest.TestCase):
                 patch("app.v25_execution.persist_state"):
             import asyncio
             asyncio.run(automatic_cycle(application))
-        scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []}, state["policy"]["allowed_symbols"])
+        scan.assert_awaited_once_with(client, {"positions": [], "open_orders": []})
         self.assertEqual(state["auto"]["last_scan_stats"]["deep_analysis_candidates"], 0)
 
     def test_automatic_cycle_deep_analyzes_all_candidates(self):

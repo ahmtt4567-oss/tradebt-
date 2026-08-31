@@ -82,7 +82,7 @@ RECONCILE_SECONDS = 10
 MAX_EVENTS = 500
 MAX_PLANS = 250
 MARKET_SCAN_LIMIT = 100
-DEEP_ANALYSIS_LIMIT = 25
+DEEP_ANALYSIS_LIMIT = 100
 MIN_24H_QUOTE_VOLUME = 1_000_000.0
 MIN_24H_MOVE_PCT = 0.25
 BLOCKED_BASE_ASSETS = {"USDC", "FDUSD", "TUSD", "USDP", "DAI", "BUSD", "USD1", "USDE", "USDS"}
@@ -555,7 +555,7 @@ async def scan_market_candidates(
         and item.get("contractType") == "PERPETUAL"
         and item.get("quoteAsset") == "USDT"
     ) if isinstance(exchange_info, dict) else 0
-    candidates = rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied, allowed_symbols=set(allowed_symbols) if allowed_symbols is not None else None)
+    candidates = rank_market_tickers(exchange_info, tickers, excluded_symbols=occupied)
     client.last_scan_eligible_count = eligible_count
     return candidates
 
@@ -1208,10 +1208,13 @@ def public_status(application: Any) -> dict[str, Any]:
         "auto": state["auto"],
         "scanner": {
             "last_scan_at": state["auto"].get("last_scan"),
+            "scanned_symbol_count": scan_stats.get("scanned_symbol_count", len(scan_stats.get("candidate_symbols", []))),
             "candidate_symbols": scan_stats.get("candidate_symbols", scan_stats.get("selected_candidates", [])),
             "deep_analysis_symbols": scan_stats.get("deep_analysis_symbols", []),
             "candidate_count": scan_stats.get("candidate_count", scan_stats.get("deep_analysis_candidates", 0)),
             "deep_analysis_count": scan_stats.get("deep_analysis_count", len(scan_stats.get("deep_analysis_symbols", []))),
+            "selected_symbols": scan_stats.get("selected_symbols", scan_stats.get("selected_candidates", [])),
+            "selected_symbols_count": scan_stats.get("selected_symbols_count", len(scan_stats.get("selected_symbols", scan_stats.get("selected_candidates", [])))),
             "last_skip_reason": state["auto"].get("last_skip_reason"),
             "last_cycle_stage": state["auto"].get("last_cycle_stage"),
         },
@@ -1356,7 +1359,7 @@ async def automatic_cycle(application: Any) -> None:
         daily = live_daily_metrics(state)
         state["auto"]["last_skip_reason"] = None
         state["auto"]["last_cycle_stage"] = "scanning"
-        candidates = await scan_market_candidates(client, snapshot, state["policy"]["allowed_symbols"])
+        candidates = await scan_market_candidates(client, snapshot)
         logger.info(
             "MULTI_SYMBOL_SCAN started eligible symbols: %s top 100 selected deep analysis candidates: %s",
             getattr(client, "last_scan_eligible_count", 0),
@@ -1379,20 +1382,24 @@ async def automatic_cycle(application: Any) -> None:
             if str(signal.get("direction") or "").upper() not in {"LONG", "SHORT"}:
                 continue
             signals.append({"candidate": candidate, "signal": signal, "intent_id": intent_id})
-        signals.sort(key=lambda item: int(item["signal"].get("confidence") or 0), reverse=True)
-        selected_symbols = [item["candidate"]["symbol"] for item in signals]
+        signals.sort(key=lambda item: (float(item["candidate"].get("opportunity_score") or 0), int(item["signal"].get("confidence") or 0)), reverse=True)
+        selected = signals[:3]
+        selected_symbols = [item["candidate"]["symbol"] for item in selected]
         logger.info(
             "MULTI_SYMBOL_SCAN deep analysis completed: %s symbols: %s",
             len(analyzed_symbols),
             ",".join(analyzed_symbols) or "NONE",
         )
         state["auto"]["last_scan_stats"] = {
+            "scanned_symbol_count": len(candidates),
             "eligible_symbols": getattr(client, "last_scan_eligible_count", 0),
             "candidate_symbols": [item["symbol"] for item in candidates],
-            "candidate_count": len(candidates),
+            "candidate_count": len(signals),
             "deep_analysis_candidates": len(candidates),
             "deep_analysis_symbols": analyzed_symbols,
             "signals_found": len(signals),
+            "selected_symbols": selected_symbols,
+            "selected_symbols_count": len(selected_symbols),
             "selected_candidates": selected_symbols,
             "positions_open": len(snapshot.get("positions", [])),
             "position_capacity": 5,
@@ -1403,7 +1410,7 @@ async def automatic_cycle(application: Any) -> None:
             ",".join(selected_symbols) or "NONE",
             len(snapshot.get("positions", [])),
         )
-        for item in signals:
+        for item in selected:
             candidate = item["candidate"]
             signal = item["signal"]
             symbol = candidate["symbol"]
