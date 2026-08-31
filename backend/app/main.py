@@ -52,7 +52,7 @@ from .paper_autonomy import (
     dynamic_paper_allocation,
     rank_paper_candidates,
 )
-from .web_security import PUBLIC_PATHS, cors_origins, env_flag, evaluate_access
+from .web_security import PUBLIC_PATHS, bearer_token, cors_origins, env_flag, evaluate_access
 
 BINANCE_API = "https://api.binance.com"
 FUTURES_MARKET_DATA_API = DEMO_REST_BASE
@@ -719,10 +719,13 @@ async def owner_preview_gate(request, call_next):
     )
     if not decision.allowed:
         return apply_cors_headers(request, JSONResponse({"detail": decision.detail}, status_code=decision.status_code))
+    configured_owner = str(request.headers.get("x-protrebot-owner") or "").strip() or bearer_token(request.headers.get("authorization"))
     request.state.web_owner_authenticated = bool(
         WEB_REQUIRE_AUTH
         and request.method.upper() != "OPTIONS"
         and request.url.path not in PUBLIC_PATHS
+        and configured_owner
+        and configured_owner == WEB_ACCESS_TOKEN
     )
     paper_prefixes = ("/api/paper", "/api/v6", "/api/v7", "/api/v10", "/api/v11", "/api/v9/paper")
     if not PAPER_ENABLED and request.method.upper() in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path.startswith(paper_prefixes):

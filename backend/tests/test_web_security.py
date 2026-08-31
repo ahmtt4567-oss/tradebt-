@@ -56,6 +56,24 @@ class WebSecurityTests(unittest.TestCase):
         )
         self.assertTrue(decision.allowed)
 
+    def test_customer_jwt_is_not_treated_as_owner_token_on_user_routes(self):
+        token = "owner-preview-token-1234567890"
+        decision = evaluate_access(
+            required=True, configured_token=token, authorization="Bearer customer-session",
+            owner_access=None, path="/api/v22/me", method="GET",
+        )
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.status_code, 200)
+
+    def test_owner_gate_is_only_required_on_owner_paths(self):
+        token = "owner-preview-token-1234567890"
+        decision = evaluate_access(
+            required=True, configured_token=token, authorization="Bearer customer-session",
+            owner_access=None, path="/api/web/access/check", method="GET",
+        )
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.status_code, 401)
+
     def test_first_owner_bootstrap_requires_local_or_verified_web_owner(self):
         self.assertTrue(bootstrap_access_allowed("127.0.0.1", web_owner_authenticated=False))
         self.assertTrue(bootstrap_access_allowed("10.0.0.12", web_owner_authenticated=True))

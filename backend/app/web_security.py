@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 MIN_ACCESS_TOKEN_LENGTH = 24
 PUBLIC_PATHS = frozenset({"/api/health"})
+OWNER_REQUIRED_PATHS = frozenset({"/api/web/access/check"})
+CUSTOMER_SESSION_PATH_PREFIXES = ("/api/v22", "/api/v24", "/api/v25")
 LOCAL_BOOTSTRAP_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 
 
@@ -65,10 +67,13 @@ def evaluate_access(
     """Return a deterministic decision without logging either secret."""
     if not required or method.upper() == "OPTIONS" or path in PUBLIC_PATHS:
         return AccessDecision(True)
+
+    if any(path.startswith(prefix) for prefix in CUSTOMER_SESSION_PATH_PREFIXES):
+        return AccessDecision(True)
+
     if len(configured_token) < MIN_ACCESS_TOKEN_LENGTH:
         return AccessDecision(False, 503, "Web erişim kilidi sunucuda tamamlanmamış.")
-    # A dedicated owner header avoids colliding with per-customer Bearer
-    # sessions used by the commercial control plane.
+
     provided = str(owner_access or "").strip() or bearer_token(authorization)
     if not provided:
         return AccessDecision(False, 401, "Yönetici erişim kodu gerekli.")
