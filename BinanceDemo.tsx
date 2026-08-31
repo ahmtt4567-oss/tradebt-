@@ -367,8 +367,6 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   },[v21?.journal?.[0]?.id])
 
   const armSeconds = status?.armed_until ? Math.max(0,Math.floor((new Date(status.armed_until).getTime()-clock)/1000)) : 0
-  const scannerCountdown = v21?.scanner.next_scan_at ? Math.max(0,Math.ceil((new Date(v21.scanner.next_scan_at).getTime()-clock)/1000)) : null
-  const scannerCountdownLabel = scannerCountdown === null ? 'Bekleniyor' : `${Math.floor(scannerCountdown/60)}:${String(scannerCountdown%60).padStart(2,'0')} kaldı`
   const activePlanBySymbol = useMemo(() => {
     const map = new Map<string,DemoPlan>()
     for (const plan of account?.plans || []) if (!['KAPANDI','İPTAL'].includes(plan.status)) map.set(plan.symbol,plan)
