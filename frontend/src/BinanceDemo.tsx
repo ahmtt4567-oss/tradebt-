@@ -165,6 +165,8 @@ const initialForm:FormState = {
   direction:'LONG',orderType:'MARKET',margin:'50',leverage:'2',limitPrice:'',stop:'',tp1:'',tp2:'',tp3:'',
 }
 
+const SCAN_INTERVAL_SECONDS = 600
+const normalizeV21Settings = (settings:V21Settings):V21Settings => ({...settings,scan_seconds:Number.isFinite(settings.scan_seconds) && settings.scan_seconds >= SCAN_INTERVAL_SECONDS ? settings.scan_seconds : SCAN_INTERVAL_SECONDS})
 const fmt = (value?:number|null) => value === undefined || value === null || !Number.isFinite(value) ? '—' : value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
 const stamp = (value?:string|null) => value ? new Date(value).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
 const numberValue = (value:string) => Number(value.replace(',','.'))
@@ -284,7 +286,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       const payload = await v21Call<V21Summary>('/summary')
       if (requestId !== v21RequestId.current) return null
       setV21(payload)
-      setSettingsDraft(current => current || payload.settings)
+      setSettingsDraft(current => current || normalizeV21Settings(payload.settings))
       return payload
     } catch (error) {
       if (!quiet) { setMessage(error instanceof Error ? error.message : 'V21 merkezi okunamadı.');setMessageKind('error') }
@@ -431,7 +433,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     try {
       const result = await action()
       if (result && typeof result === 'object' && 'settings' in result) {
-        const summary = result as V21Summary;setV21(summary);setSettingsDraft(summary.settings)
+        const summary = result as V21Summary;setV21(summary);setSettingsDraft(normalizeV21Settings(summary.settings))
       } else await refreshV21(true)
       setMessage(success);setMessageKind('ok')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'V21 işlemi tamamlanamadı.');setMessageKind('error') }
@@ -440,7 +442,9 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
 
   const saveSettings = () => {
     if (!settingsDraft) return
-    runV21(() => v21Call<V21Summary>('/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(settingsDraft)}),'Risk, yön ve otomasyon sınırları yerel V21 kasasına kaydedildi.')
+    const safeSettings = normalizeV21Settings(settingsDraft)
+    setSettingsDraft(safeSettings)
+    runV21(() => v21Call<V21Summary>('/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...safeSettings,scan_seconds:SCAN_INTERVAL_SECONDS})}),'Risk, yön ve otomasyon sınırları yerel V21 kasasına kaydedildi.')
   }
   const calculateRisk = () => {
     if (!analysis || analysis.entry <= 0 || analysis.stop_loss <= 0) { setMessage('Önce seçili paritenin analiz planını bekleyin.');setMessageKind('error');return }
