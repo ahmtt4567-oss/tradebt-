@@ -367,7 +367,49 @@ def public_status(state: dict[str, Any]) -> dict[str, Any]:
         "last_checked": state.get("last_checked"),
         "last_error": state.get("last_error"),
         "events": state.get("events", [])[:12],
+        "reconciliation": state.get("reconciliation", {
+            "actual_exchange_open_positions": 0,
+            "internal_active_plans": 0,
+            "reconciled_active_positions": 0,
+            "stale_positions_removed": 0,
+        }),
     }
+
+
+def reconcile_demo_plans(state: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Make durable plans follow the exchange position snapshot, never vice versa."""
+    actual_positions = [
+        position for position in snapshot.get("positions", [])
+        if str(position.get("symbol") or "") and float(position.get("quantity") or 0) > 0
+    ]
+    actual_by_symbol = {str(position["symbol"]): position for position in actual_positions}
+    active_statuses = {"OPEN", "KORUMA ONARILDI", "KORUMA AKTİF", "STOP AKTİF · HEDEF İZLEME"}
+    internal_active = 0
+    stale_removed = 0
+    changed = False
+    for plan in state.get("plans", {}).values():
+        if plan.get("status") not in active_statuses and plan.get("position_status") != "OPEN":
+            continue
+        internal_active += 1
+        actual = actual_by_symbol.get(str(plan.get("symbol") or ""))
+        if actual is None:
+            plan.update({"status": "KAPANDI", "position_status": "CLOSED", "remaining_quantity": "0", "tp3_status": "FILLED", "closed_at": plan.get("closed_at") or utc_now(), "last_reconciled": utc_now()})
+            stale_removed += 1
+            changed = True
+            continue
+        amount = Decimal(str(actual.get("quantity") or 0))
+        before = (plan.get("remaining_quantity"), plan.get("position_status"))
+        update_position_lifecycle(plan, amount)
+        plan["last_reconciled"] = utc_now()
+        changed = changed or before != (plan.get("remaining_quantity"), plan.get("position_status"))
+    state["reconciliation"] = {
+        "actual_exchange_open_positions": len(actual_positions),
+        "internal_active_plans": internal_active - stale_removed,
+        "reconciled_active_positions": len(actual_positions),
+        "stale_positions_removed": stale_removed,
+        "last_sync": utc_now(),
+    }
+    return {"changed": changed, **state["reconciliation"]}
 
 
 def safe_exchange_error(exc: BinanceDemoError) -> HTTPException:
@@ -1035,7 +1077,11 @@ async def demo_connect(request: Request) -> dict[str, Any]:
     state = state_for(request)
     try:
         client = client_for(request)
-        snapshot = enrich_snapshot_with_plans(await account_snapshot(client), state)
+        snapshot = await account_snapshot(client)
+        reconciliation = reconcile_demo_plans(state, snapshot)
+        if reconciliation["changed"]:
+            persist_runtime(state)
+        snapshot = enrich_snapshot_with_plans(snapshot, state)
         state.update({"connected": True, "last_checked": utc_now(), "last_error": None})
         add_event(state, "BAĞLANTI BAŞARILI", "Binance Futures Demo hesabı doğrulandı; gerçek hesap kanalı kilitli.")
         return {**public_status(state), "account": snapshot}
@@ -1048,7 +1094,11 @@ async def demo_connect(request: Request) -> dict[str, Any]:
 async def demo_account(request: Request) -> dict[str, Any]:
     state = state_for(request)
     try:
-        snapshot = enrich_snapshot_with_plans(await account_snapshot(client_for(request)), state)
+        snapshot = await account_snapshot(client_for(request))
+        reconciliation = reconcile_demo_plans(state, snapshot)
+        if reconciliation["changed"]:
+            persist_runtime(state)
+        snapshot = enrich_snapshot_with_plans(snapshot, state)
         state.update({"connected": True, "last_checked": utc_now(), "last_error": None})
         return {**public_status(state), **snapshot, "plans": list(state.get("plans", {}).values())[-12:]}
     except BinanceDemoError as exc:
@@ -1120,7 +1170,10 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
             await ensure_one_way_position_mode(client)
             snapshot = await account_snapshot(client)
             symbol = normalize_symbol(body.symbol)
-            if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:
+            reconciliation = reconcile_demo_plans(state, snapshot)
+            if reconciliation["changed"]:
+                persist_runtime(state)
+            if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:
                 raise BinanceDemoError("En fazla 3 açık Demo pozisyonuna izin verilir.", http_status=409)
             duplicate_reason = duplicate_entry_reason(snapshot, symbol)
             if duplicate_reason:

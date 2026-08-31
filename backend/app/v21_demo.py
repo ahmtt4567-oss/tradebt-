@@ -45,6 +45,7 @@ from .binance_demo import (
     persist_runtime,
     post_algo,
     response_rows,
+    reconcile_demo_plans,
     round_tick,
     safe_exchange_error,
     symbol_rules,
@@ -619,6 +620,7 @@ async def reconciliation_loop(application: Any) -> None:
                 continue
             snapshot = await account_snapshot(client_for(application))
             state["snapshot"] = snapshot
+            plan_reconciliation = reconcile_demo_plans(application.state.binance_demo, snapshot)
             state["stream"]["last_sync"] = now_iso()
             application.state.binance_demo.update({"connected": True, "last_checked": now_iso(), "last_error": None})
             changed = reconcile_positions(state, previous, snapshot)
@@ -628,8 +630,9 @@ async def reconciliation_loop(application: Any) -> None:
                 changed |= await improve_dynamic_stops(application, snapshot)
             except BinanceDemoError as exc:
                 state["stream"]["last_error"] = str(exc)[:220]
-            if changed:
+            if changed or plan_reconciliation["changed"]:
                 persist_state(state)
+                persist_runtime(application.state.binance_demo)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
