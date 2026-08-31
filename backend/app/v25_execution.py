@@ -92,6 +92,7 @@ PUBLIC_PATHS = {
     "/fapi/v1/exchangeInfo",
     "/fapi/v1/ticker/price",
     "/fapi/v1/ticker/bookTicker",
+    "/fapi/v1/ticker/24hr",
     "/fapi/v1/klines",
 }
 PRIVATE_PATHS = {
@@ -1215,6 +1216,8 @@ def public_status(application: Any) -> dict[str, Any]:
             "deep_analysis_count": scan_stats.get("deep_analysis_count", len(scan_stats.get("deep_analysis_symbols", []))),
             "selected_symbols": scan_stats.get("selected_symbols", scan_stats.get("selected_candidates", [])),
             "selected_symbols_count": scan_stats.get("selected_symbols_count", len(scan_stats.get("selected_symbols", scan_stats.get("selected_candidates", [])))),
+            "executed_symbols": scan_stats.get("executed_symbols", []),
+            "executed_symbols_count": scan_stats.get("executed_symbols_count", len(scan_stats.get("executed_symbols", []))),
             "last_skip_reason": state["auto"].get("last_skip_reason"),
             "last_cycle_stage": state["auto"].get("last_cycle_stage"),
         },
@@ -1385,6 +1388,7 @@ async def automatic_cycle(application: Any) -> None:
         signals.sort(key=lambda item: (float(item["candidate"].get("opportunity_score") or 0), int(item["signal"].get("confidence") or 0)), reverse=True)
         selected = signals[:3]
         selected_symbols = [item["candidate"]["symbol"] for item in selected]
+        executed_symbols: list[str] = []
         logger.info(
             "MULTI_SYMBOL_SCAN deep analysis completed: %s symbols: %s",
             len(analyzed_symbols),
@@ -1430,8 +1434,13 @@ async def automatic_cycle(application: Any) -> None:
                 tp1=signal["tp1"], tp2=signal["tp2"], tp3=signal["tp3"], intent_id=intent_id,
             )
             await execute_live_order(application, body, source="V25_AUTO", allowed_symbols=[symbol])
+            executed_symbols.append(symbol)
             state["auto"]["last_decision"] = f"{symbol} {signal['direction']} canlı işlem açıldı; Stop/TP doğrulandı."
-            break
+            snapshot = await account_snapshot(client)
+            if len(snapshot.get("positions", [])) >= int(state["policy"]["max_positions"]):
+                break
+        state["auto"]["last_scan_stats"]["executed_symbols"] = executed_symbols
+        state["auto"]["last_scan_stats"]["executed_symbols_count"] = len(executed_symbols)
         state["auto"]["last_cycle_stage"] = "completed"
         state["auto"]["cycles"] += 1
     except Exception as exc:

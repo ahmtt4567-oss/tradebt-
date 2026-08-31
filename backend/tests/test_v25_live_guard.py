@@ -202,6 +202,9 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn('"scanned_symbol_count": len(candidates)', EXECUTION_SOURCE)
         self.assertIn('"selected_symbols": scan_stats.get', EXECUTION_SOURCE)
         self.assertIn('"selected_symbols_count": len(selected_symbols)', EXECUTION_SOURCE)
+        self.assertIn('"executed_symbols"', EXECUTION_SOURCE)
+        self.assertIn('"/fapi/v1/ticker/24hr"', EXECUTION_SOURCE)
+        self.assertIn('"executed_symbols_count": scan_stats.get', EXECUTION_SOURCE)
         self.assertNotIn("scan_market_candidates(client, snapshot, state[\"policy\"][\"allowed_symbols\"])", EXECUTION_SOURCE)
 
     def test_stop_failure_closes_with_reduce_only_and_emergency_is_scoped(self):
