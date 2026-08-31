@@ -69,11 +69,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "daily_trade_limit": 6,
     "max_positions": 3,
     "min_confidence": 78,
+    "min_score_threshold": 70,
     "max_volatility_pct": 3.5,
     "max_correlation_pct": 82,
     "schedule_start_hour": 0,
     "schedule_end_hour": 24,
-    "scan_seconds": 300,
+    "scan_seconds": 600,
     "breakeven_enabled": True,
     "breakeven_trigger_r": 1.0,
     "trailing_enabled": False,
@@ -95,6 +96,7 @@ class SettingsUpdate(BaseModel):
     daily_trade_limit: int | None = Field(default=None, ge=1, le=30)
     max_positions: int | None = Field(default=None, ge=1, le=3)
     min_confidence: int | None = Field(default=None, ge=60, le=95)
+    min_score_threshold: int | None = Field(default=None, ge=40, le=90)
     max_volatility_pct: float | None = Field(default=None, ge=0.2, le=10)
     max_correlation_pct: int | None = Field(default=None, ge=40, le=99)
     schedule_start_hour: int | None = Field(default=None, ge=0, le=23)
@@ -147,11 +149,15 @@ def initial_state() -> dict[str, Any]:
         "seen_event_ids": [],
         "auto": {
             "enabled": False, "busy": False, "cycles": 0, "last_scan": None,
+            "user_confirmed": False, "confirmation": None,
             "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None,
         },
         "scanner": {
-            "active": False, "scanned_count": 0, "eligible_count": 0, "last_scan": None,
-            "next_scan": None, "top_candidates": [], "selected_symbols": [], "last_stage": "BEKLEMEDE",
+            "active": False, "running": False, "scan_status": "BEKLEMEDE", "coins_scanned": 0,
+            "scan_duration_ms": 0, "last_scan_at": None, "next_scan_at": None,
+            "last_scan": None, "next_scan": None, "top_candidates": [], "all_candidates": [],
+            "selected_symbols": [], "last_stage": "BEKLEMEDE", "eligible_count": 0,
+            "last_error": None,
         },
         "stream": {
             "status": "BEKLEMEDE", "transport": "REST EŞLEŞTİRME", "last_event": None,
@@ -187,7 +193,16 @@ def load_state() -> dict[str, Any]:
         if key in saved:
             base[key] = saved[key]
     # Entry automation is intentionally never restored after a restart.
+    base["auto"]["enabled"] = False
+    base["auto"]["user_confirmed"] = False
+    base["auto"]["confirmation"] = None
     base["auto"]["last_decision"] = "Güvenli yeniden başlatma: DEMO OTOMATİK onayı bekleniyor."
+    base["scanner"].setdefault("all_candidates", [])
+    base["scanner"].setdefault("top_candidates", [])
+    base["scanner"]["active"] = False
+    base["scanner"]["running"] = False
+    base["scanner"]["scan_status"] = "BEKLEMEDE"
+    base["scanner"]["last_error"] = None
     return base
 
 
@@ -294,6 +309,64 @@ async def demo_candles(client: BinanceDemoClient, symbol: str, interval: str, li
     return normalize_candles(rows)
 
 
+def _candidate_confidence_label(confidence: int) -> str:
+    if confidence >= 80:
+        return "HIGH"
+    if confidence >= 65:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _build_candidate_reasons(item: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    direction = str(item.get("direction", "NEUTRAL")).upper()
+    if direction in {"LONG", "SHORT"}:
+        reasons.append(f"{item.get('trend', 'Trend')} yönlü sinyal")
+    volume_ratio = float(item.get("volume_ratio", 1.0) or 1.0)
+    if volume_ratio >= 1.15:
+        reasons.append("Volume ortalamanın üzerinde")
+    if float(item.get("confidence", 0) or 0) >= 70:
+        reasons.append("Güven seviyesi yeterli")
+    if item.get("momentum"):
+        reasons.append(str(item.get("momentum")))
+    if item.get("risk_reward"):
+        reasons.append(f"Risk/reward {float(item.get('risk_reward') or 0):.2f}")
+    if not reasons:
+        reasons.append("Piyasa koşulları zayıf")
+    return reasons[:5]
+
+
+def _enrich_scan_candidates(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ranked: list[dict[str, Any]] = []
+    ordered = sorted(results, key=lambda item: float(item.get("opportunity_score", 0) or 0), reverse=True)
+    for index, item in enumerate(ordered, start=1):
+        score = int(round(float(item.get("opportunity_score", 0) or 0)))
+        direction = str(item.get("direction", "NEUTRAL")).upper()
+        if direction == "BEKLE":
+            direction = "NEUTRAL"
+        confidence_value = int(item.get("confidence", 0) or 0)
+        ranked.append({
+            "rank": index,
+            "symbol": str(item.get("symbol")),
+            "score": max(0, min(100, score)),
+            "direction": direction,
+            "confidence": _candidate_confidence_label(confidence_value),
+            "confidence_value": confidence_value,
+            "entry": float(item.get("entry", 0) or 0),
+            "stop_loss": float(item.get("stop_loss", 0) or 0),
+            "tp1": float(item.get("tp1", 0) or 0),
+            "tp2": float(item.get("tp2", 0) or 0),
+            "tp3": float(item.get("tp3", 0) or 0),
+            "momentum": item.get("momentum"),
+            "trend": item.get("trend"),
+            "volume_ratio": float(item.get("volume_ratio", 1.0) or 1.0),
+            "risk_reward": float(item.get("risk_reward", 0) or 0),
+            "reasons": _build_candidate_reasons(item),
+            "scan_time": now_iso(),
+        })
+    return ranked
+
+
 async def scan_demo_universe(client: BinanceDemoClient, occupied: set[str], settings: dict[str, Any]) -> list[dict[str, Any]]:
     """Analyze the largest liquid Demo perpetual universe and rank opportunities."""
     exchange_info, tickers = await asyncio.gather(
@@ -351,7 +424,7 @@ async def scan_demo_universe(client: BinanceDemoClient, occupied: set[str], sett
     for offset in range(0, len(symbols), 10):
         batch = await asyncio.gather(*(evaluate(symbol) for symbol in symbols[offset:offset + 10]))
         results.extend(item for item in batch if item is not None)
-    return sorted(results, key=lambda item: item["opportunity_score"], reverse=True)
+    return _enrich_scan_candidates(results)
 
 
 def daily_metrics(state: dict[str, Any]) -> dict[str, Any]:
@@ -664,6 +737,10 @@ async def automatic_cycle(application: Any) -> None:
     state = application.state.v21_demo
     settings = state["settings"]
     auto = state["auto"]
+    if not bool(auto.get("enabled")) or not bool(auto.get("user_confirmed")):
+        auto["last_decision"] = "Yalnızca açık kullanıcı onayıyla otomasyon giriş yapabilir; emir açılmadı."
+        auto["last_error"] = "AUTO_GUARD_BLOCKED"
+        return
     auto["cycles"] += 1
     auto["last_scan"] = now_iso()
     if not armed(application.state.binance_demo):
@@ -731,22 +808,84 @@ async def automatic_cycle(application: Any) -> None:
     persist_state(state)
 
 
+async def run_scanner_cycle(application: Any) -> None:
+    state = application.state.v21_demo
+    scanner = state["scanner"]
+    if scanner.get("running"):
+        return
+    start = time.perf_counter()
+    scanner.update({"running": True, "active": True, "scan_status": "TARAMA", "last_error": None})
+    try:
+        settings = state["settings"]
+        if not credentials_configured():
+            scanner.update({"scan_status": "BEKLEMEDE", "last_error": "Demo kredi bilgisi yok."})
+            return
+        client = client_for(application)
+        snapshot = await account_snapshot(client)
+        occupied = {item["symbol"] for item in snapshot.get("positions", []) + snapshot.get("open_orders", [])}
+        ranked = await scan_demo_universe(client, occupied, settings)
+        threshold = float(settings.get("min_score_threshold", 70))
+        filtered = [candidate for candidate in ranked if candidate.get("score", 0) >= threshold and candidate.get("direction") != "NEUTRAL"]
+        top_candidates = filtered[:3]
+        scanner.update({
+            "last_scan_at": now_iso(),
+            "next_scan_at": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
+            "scan_status": "TAMAMLANDI",
+            "coins_scanned": min(100, len(ranked) or 100),
+            "eligible_count": len(filtered),
+            "top_candidates": top_candidates,
+            "all_candidates": ranked[:100],
+            "selected_symbols": [item["symbol"] for item in top_candidates],
+            "last_stage": "SIRALANDI",
+            "active": True,
+            "last_scan": now_iso(),
+            "next_scan": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
+        })
+        state["auto"]["last_scan"] = now_iso()
+        persist_state(state)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        scanner.update({"scan_status": "HATA", "last_error": str(exc)[:220], "active": False})
+        state["auto"]["last_error"] = str(exc)[:220]
+    finally:
+        scanner["running"] = False
+        scanner["scan_duration_ms"] = int((time.perf_counter() - start) * 1000)
+        persist_state(state)
+
+
 async def automation_loop(application: Any) -> None:
     state = application.state.v21_demo
     while True:
         try:
-            if state["auto"]["enabled"] and not state["auto"]["busy"]:
-                state["auto"]["busy"] = True
+            auto = state["auto"]
+            if auto.get("enabled") and auto.get("user_confirmed") and not auto.get("busy"):
+                auto["busy"] = True
                 try:
                     await automatic_cycle(application)
-                    state["auto"]["last_error"] = None
+                    auto["last_error"] = None
                 finally:
-                    state["auto"]["busy"] = False
+                    auto["busy"] = False
+            elif auto.get("enabled") and not auto.get("user_confirmed"):
+                auto["enabled"] = False
+                auto["last_decision"] = "Güvenli bekleme: kullanıcı onayı silinmiş, otomasyon kapandı."
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             state["auto"].update({"last_error": str(exc)[:220], "last_decision": "Otomasyon hatası; güvenli bekleme ve yeniden deneme."})
         await asyncio.sleep(max(15, int(state["settings"]["scan_seconds"])))
+
+
+async def scanner_loop(application: Any) -> None:
+    while True:
+        try:
+            await run_scanner_cycle(application)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            state = application.state.v21_demo
+            state["scanner"].update({"scan_status": "HATA", "last_error": str(exc)[:220], "active": False})
+        await asyncio.sleep(max(60, int(application.state.v21_demo["settings"]["scan_seconds"])))
 
 
 def backtest_engine(candles: list[dict[str, float]], settings: dict[str, Any]) -> dict[str, Any]:
@@ -866,9 +1005,15 @@ def certificate_payload(state: dict[str, Any]) -> dict[str, Any]:
 def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     snapshot = state.get("snapshot") or {}
     reconciliation = state.get("reconciliation") or {}
+    scanner = state.get("scanner", {})
+    scanner_payload = {
+        **scanner,
+        "top_candidates": scanner.get("top_candidates", [])[:3],
+        "all_candidates": scanner.get("all_candidates", [])[:100],
+    }
     return {
         "version": "21.0.0", "mode": "BINANCE_FUTURES_DEMO_ONLY", "settings": state["settings"],
-        "auto": state["auto"], "scanner": state.get("scanner", {}), "stream": state["stream"], "daily": daily_metrics(state),
+        "auto": state["auto"], "scanner": scanner_payload, "stream": state["stream"], "daily": daily_metrics(state),
         "account": {
             "wallet_balance": snapshot.get("wallet_balance"), "available_balance": snapshot.get("available_balance"),
             "unrealized_pnl": snapshot.get("unrealized_pnl"), "positions": len(snapshot.get("positions", [])),
@@ -949,7 +1094,8 @@ async def v21_risk_size(request: Request, body: RiskSizeRequest) -> dict[str, An
 @router.post("/auto/start")
 async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, Any]:
     state = state_for(request)
-    if body.confirmation.strip().upper() != "DEMO OTOMATİK":
+    confirmation = body.confirmation.strip().upper()
+    if confirmation != "DEMO OTOMATİK":
         raise HTTPException(422, "Otomasyonu açmak için DEMO OTOMATİK yazın.")
     if not armed(request.app.state.binance_demo):
         raise HTTPException(423, "Önce İşlem Masası'ndaki 10 dakikalık DEMO emir kilidini açın.")
@@ -958,7 +1104,13 @@ async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, 
     snapshot = await account_snapshot(client_for(request.app))
     if snapshot.get("hedge_mode"):
         raise HTTPException(409, "Demo hesabı One-way / Tek Yön modunda olmalı.")
-    state["auto"].update({"enabled": True, "last_decision": "Kontrollü Demo taraması başlatıldı.", "last_error": None})
+    state["auto"].update({
+        "enabled": True,
+        "user_confirmed": True,
+        "confirmation": confirmation,
+        "last_decision": "Kontrollü Demo taraması başlatıldı.",
+        "last_error": None,
+    })
     record_event(state, "AUTO_START", "V21 kontrollü otomasyon kullanıcı onayıyla açıldı.", source="USER")
     persist_state(state)
     return summary_payload(state)
@@ -967,7 +1119,12 @@ async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, 
 @router.post("/auto/stop")
 async def v21_auto_stop(request: Request) -> dict[str, Any]:
     state = state_for(request)
-    state["auto"].update({"enabled": False, "last_decision": "Yeni otomatik Demo girişleri durduruldu."})
+    state["auto"].update({
+        "enabled": False,
+        "user_confirmed": False,
+        "confirmation": None,
+        "last_decision": "Yeni otomatik Demo girişleri durduruldu.",
+    })
     record_event(state, "AUTO_STOP", "V21 otomatik girişleri durduruldu; mevcut Stop/TP korumaları açık.", source="USER")
     persist_state(state)
     return summary_payload(state)

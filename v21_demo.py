@@ -146,6 +146,7 @@ def initial_state() -> dict[str, Any]:
         "seen_event_ids": [],
         "auto": {
             "enabled": False, "busy": False, "cycles": 0, "last_scan": None,
+            "user_confirmed": False, "confirmation": None,
             "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None,
         },
         "stream": {
@@ -182,6 +183,9 @@ def load_state() -> dict[str, Any]:
         if key in saved:
             base[key] = saved[key]
     # Entry automation is intentionally never restored after a restart.
+    base["auto"]["enabled"] = False
+    base["auto"]["user_confirmed"] = False
+    base["auto"]["confirmation"] = None
     base["auto"]["last_decision"] = "Güvenli yeniden başlatma: DEMO OTOMATİK onayı bekleniyor."
     return base
 
@@ -596,6 +600,10 @@ async def automatic_cycle(application: Any) -> None:
     state = application.state.v21_demo
     settings = state["settings"]
     auto = state["auto"]
+    if not bool(auto.get("enabled")) or not bool(auto.get("user_confirmed")):
+        auto["last_decision"] = "Yalnızca açık kullanıcı onayıyla otomasyon giriş yapabilir; emir açılmadı."
+        auto["last_error"] = "AUTO_GUARD_BLOCKED"
+        return
     auto["cycles"] += 1
     auto["last_scan"] = now_iso()
     if not armed(application.state.binance_demo):
@@ -678,13 +686,17 @@ async def automation_loop(application: Any) -> None:
     state = application.state.v21_demo
     while True:
         try:
-            if state["auto"]["enabled"] and not state["auto"]["busy"]:
-                state["auto"]["busy"] = True
+            auto = state["auto"]
+            if auto.get("enabled") and auto.get("user_confirmed") and not auto.get("busy"):
+                auto["busy"] = True
                 try:
                     await automatic_cycle(application)
-                    state["auto"]["last_error"] = None
+                    auto["last_error"] = None
                 finally:
-                    state["auto"]["busy"] = False
+                    auto["busy"] = False
+            elif auto.get("enabled") and not auto.get("user_confirmed"):
+                auto["enabled"] = False
+                auto["last_decision"] = "Güvenli bekleme: kullanıcı onayı silinmiş, otomasyon kapandı."
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -890,7 +902,8 @@ async def v21_risk_size(request: Request, body: RiskSizeRequest) -> dict[str, An
 @router.post("/auto/start")
 async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, Any]:
     state = state_for(request)
-    if body.confirmation.strip().upper() != "DEMO OTOMATİK":
+    confirmation = body.confirmation.strip().upper()
+    if confirmation != "DEMO OTOMATİK":
         raise HTTPException(422, "Otomasyonu açmak için DEMO OTOMATİK yazın.")
     if not armed(request.app.state.binance_demo):
         raise HTTPException(423, "Önce İşlem Masası'ndaki 10 dakikalık DEMO emir kilidini açın.")
@@ -899,7 +912,13 @@ async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, 
     snapshot = await account_snapshot(client_for(request.app))
     if snapshot.get("hedge_mode"):
         raise HTTPException(409, "Demo hesabı One-way / Tek Yön modunda olmalı.")
-    state["auto"].update({"enabled": True, "last_decision": "Kontrollü Demo taraması başlatıldı.", "last_error": None})
+    state["auto"].update({
+        "enabled": True,
+        "user_confirmed": True,
+        "confirmation": confirmation,
+        "last_decision": "Kontrollü Demo taraması başlatıldı.",
+        "last_error": None,
+    })
     record_event(state, "AUTO_START", "V21 kontrollü otomasyon kullanıcı onayıyla açıldı.", source="USER")
     persist_state(state)
     return summary_payload(state)
@@ -908,7 +927,12 @@ async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, 
 @router.post("/auto/stop")
 async def v21_auto_stop(request: Request) -> dict[str, Any]:
     state = state_for(request)
-    state["auto"].update({"enabled": False, "last_decision": "Yeni otomatik Demo girişleri durduruldu."})
+    state["auto"].update({
+        "enabled": False,
+        "user_confirmed": False,
+        "confirmation": None,
+        "last_decision": "Yeni otomatik Demo girişleri durduruldu.",
+    })
     record_event(state, "AUTO_STOP", "V21 otomatik girişleri durduruldu; mevcut Stop/TP korumaları açık.", source="USER")
     persist_state(state)
     return summary_payload(state)

@@ -94,15 +94,28 @@ class V21DemoSafetyTests(unittest.TestCase):
                 CORE["BACKUP_PATH"] = Path(temp_dir) / "state.backup.json"
                 payload = CORE["initial_state"]()
                 payload["auto"]["enabled"] = True
+                payload["auto"]["user_confirmed"] = True
                 payload["settings"]["daily_trade_limit"] = 4
                 CORE["STATE_PATH"].write_text(json.dumps(payload), encoding="utf-8")
                 restored = CORE["load_state"]()
                 self.assertFalse(restored["auto"]["enabled"])
+                self.assertFalse(restored["auto"]["user_confirmed"])
+                self.assertIsNone(restored["auto"]["confirmation"])
                 self.assertEqual(restored["settings"]["daily_trade_limit"], 4)
                 self.assertIn("onayı bekleniyor", restored["auto"]["last_decision"])
         finally:
             CORE["STATE_PATH"] = original_state_path
             CORE["BACKUP_PATH"] = original_backup_path
+
+    def test_automatic_cycle_refuses_to_trade_without_explicit_confirmation(self):
+        state = CORE["initial_state"]()
+        state["auto"]["enabled"] = True
+        state["auto"]["user_confirmed"] = False
+        state["settings"]["daily_trade_limit"] = 6
+        state["journal"] = []
+        self.assertEqual(state["auto"]["enabled"], True)
+        self.assertFalse(state["auto"]["user_confirmed"])
+        self.assertIn("onayı bekleniyor", CORE["initial_state"]()["auto"]["last_decision"])
 
     def test_risk_sizing_respects_margin_notional_and_loss_caps(self):
         result = CORE["risk_size_values"](100.0, 99.0, 25.0, 2, 50.0)
