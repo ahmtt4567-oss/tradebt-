@@ -291,6 +291,10 @@ def client_for(application: Any) -> BinanceDemoClient:
     return BinanceDemoClient(application.state.http, api_key, secret_key)
 
 
+def market_client_for(application: Any) -> BinanceDemoClient:
+    return BinanceDemoClient(application.state.http, "", "", public_only=True)
+
+
 def normalize_candles(rows: Any) -> list[dict[str, float]]:
     candles: list[dict[str, float]] = []
     if not isinstance(rows, list):
@@ -867,11 +871,10 @@ async def run_scanner_cycle(application: Any) -> None:
     scanner.update({"running": True, "active": True, "scan_status": "TARAMA", "last_error": None})
     try:
         settings = state["settings"]
-        if not credentials_configured():
-            scanner.update({"scan_status": "BEKLEMEDE", "last_error": "Demo kredi bilgisi yok."})
-            return
-        client = client_for(application)
-        snapshot = await account_snapshot(client)
+        client = market_client_for(application)
+        snapshot = {"positions": [], "open_orders": []}
+        if credentials_configured():
+            snapshot = await account_snapshot(client_for(application))
         occupied = {item["symbol"] for item in snapshot.get("positions", []) + snapshot.get("open_orders", [])}
         ranked = await scan_demo_universe(client, occupied, settings)
         threshold = float(settings.get("min_score_threshold", 70))

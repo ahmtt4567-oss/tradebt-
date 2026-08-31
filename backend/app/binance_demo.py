@@ -232,8 +232,8 @@ def round_tick(value: Decimal, tick: Decimal) -> Decimal:
 
 
 class BinanceDemoClient:
-    def __init__(self, http: httpx.AsyncClient, api_key: str, secret_key: str) -> None:
-        if not api_key or not secret_key:
+    def __init__(self, http: httpx.AsyncClient, api_key: str, secret_key: str, *, public_only: bool = False) -> None:
+        if (not api_key or not secret_key) and not public_only:
             raise BinanceDemoError(
                 "Demo API bağlantısı aktif değil. Programdaki Borsa Bağlantıları bölümünden Testnet anahtarını kaydedip aktifleştirin.",
                 http_status=412,
@@ -241,6 +241,7 @@ class BinanceDemoClient:
         self.http = http
         self.api_key = api_key
         self.secret_key = secret_key
+        self.public_only = public_only
         self.time_offset_ms = 0
         self.last_time_sync = 0.0
         self._clock_lock = asyncio.Lock()

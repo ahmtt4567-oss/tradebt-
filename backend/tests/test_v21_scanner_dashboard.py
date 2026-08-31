@@ -55,8 +55,8 @@ class V21ScannerDashboardTests(unittest.TestCase):
                      "risk_reward": 3, "status": "SELECTED"}]
 
         async def exercise():
-            with patch.object(v21_demo, "credentials_configured", return_value=True), \
-                    patch.object(v21_demo, "client_for", return_value=object()), \
+            with patch.object(v21_demo, "credentials_configured", return_value=False), \
+                    patch.object(v21_demo, "market_client_for", return_value=object()), \
                     patch.object(v21_demo, "account_snapshot", new=AsyncMock(return_value={"positions": [], "open_orders": []})), \
                     patch.object(v21_demo, "scan_demo_universe", new=scan) as scanner, \
                     patch.object(v21_demo, "persist_state"):
