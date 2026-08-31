@@ -28,7 +28,9 @@ EXECUTION_SOURCE = (BACKEND / "app" / "v25_execution.py").read_text(encoding="ut
 CORE_SOURCE = (BACKEND / "app" / "execution_core.py").read_text(encoding="utf-8")
 CREDENTIAL_SOURCE = (BACKEND / "app" / "credential_store.py").read_text(encoding="utf-8")
 MAIN_SOURCE = (BACKEND / "app" / "main.py").read_text(encoding="utf-8")
-FRONTEND_SOURCE = (ROOT / "frontend" / "src" / "ExecutionCenter.tsx").read_text(encoding="utf-8")
+FRONTEND_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
+ACTIVE_COMMERCIAL_SOURCE = (ROOT / "CommercialHub.tsx").read_text(encoding="utf-8")
+ACTIVE_EXECUTION_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
 
 
 class V25LiveGuardCoreTests(unittest.TestCase):
@@ -176,10 +178,10 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
     def test_credentials_are_dpapi_only_and_never_browser_inputs(self):
         self.assertIn("LIVE_VAULT_PATH", CREDENTIAL_SOURCE)
         self.assertIn("CryptProtectData", CREDENTIAL_SOURCE)
-        lowered = FRONTEND_SOURCE.casefold()
+        lowered = (FRONTEND_SOURCE + ACTIVE_COMMERCIAL_SOURCE).casefold()
         self.assertNotIn("secret_key", lowered)
         self.assertNotIn("api_key", lowered)
-        self.assertIn("BINANCE-CANLI-AYARLA.bat", FRONTEND_SOURCE)
+        self.assertIn("protrebot-v25-session", ACTIVE_COMMERCIAL_SOURCE)
         self.assertIn("secret_inputs_in_browser", EXECUTION_SOURCE)
 
     def test_v25_router_and_frontend_center_are_integrated(self):
@@ -190,6 +192,16 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
             self.assertIn(route, EXECUTION_SOURCE)
         for label in ("Canlı Kasa & Otonom Emir Merkezi", "Canlı Risk Politikası", "Canlı Yayın Kapısı", "MARKET / LIMIT Emir Bileti", "Canlı Seviye Grafiği", "ACİL DURDUR"):
             self.assertIn(label, FRONTEND_SOURCE)
+
+    def test_active_frontend_loading_has_timeout_error_and_retry_paths(self):
+        for source in (ACTIVE_COMMERCIAL_SOURCE, ACTIVE_EXECUTION_SOURCE):
+            self.assertIn("API_TIMEOUT_MS = 15000", source)
+            self.assertIn("controller.abort()", source)
+            self.assertIn("finally { window.clearTimeout(timeout) }", source)
+            self.assertIn("TEKRAR DENE", source)
+        self.assertIn("setLoadError", ACTIVE_COMMERCIAL_SOURCE)
+        self.assertIn("setLoadError", ACTIVE_EXECUTION_SOURCE)
+        self.assertIn("V25 Live Guard geçersiz yanıt döndürdü", ACTIVE_EXECUTION_SOURCE)
 
     def test_manual_live_order_requires_second_explicit_confirmation(self):
         self.assertIn("class ManualLiveOrderRequest", EXECUTION_SOURCE)

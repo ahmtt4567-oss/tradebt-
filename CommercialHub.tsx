@@ -10,6 +10,7 @@ const V24_SESSION_KEY = 'protrebot-v24-session'
 const V23_SESSION_KEY = 'protrebot-v23-session'
 const LEGACY_SESSION_KEY = 'protrebot-v22-session'
 const REMEMBER_KEY = 'protrebot-v25-remember'
+const API_TIMEOUT_MS = 15000
 
 type Plan = {name:string;monthly_usd:number;days:number;agents:number;bots:number;features:string[]}
 type PublicInfo = {version:string;edition:string;setup_required:boolean;plans:Record<string,Plan>;billing:{provider:string;live:boolean};security:Record<string,boolean>;account_storage?:string;message:string}
@@ -58,16 +59,25 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
   const [feeResult,setFeeResult] = useState<FeeResult|null>(null)
   const [grid,setGrid] = useState({lower:'62000',upper:'68000',grid_count:'20',capital_usdt:'1000',maker_share_pct:'80',maker_fee_bps:'2',taker_fee_bps:'5',slippage_bps_per_side:'1',funding_bps:'0',minimum_cycle_net_usdt:'0.05'})
   const [gridResult,setGridResult] = useState<GridResult|null>(null)
+  const [loading,setLoading] = useState(true)
+  const [loadError,setLoadError] = useState<string|null>(null)
 
   const request = async <T,>(path:string,options:RequestInit={}):Promise<T> => {
     const headers = new Headers(options.headers)
     if (options.body) headers.set('Content-Type','application/json')
     if (token) headers.set('Authorization',`Bearer ${token}`)
-    const response = await fetch(`${API}${path}`,{...options,headers})
-    let body:unknown = null
-    try { body = await response.json() } catch { body = null }
-    if (!response.ok) throw new Error(detailMessage(body && typeof body === 'object' && 'detail' in body ? (body as {detail:unknown}).detail : body))
-    return body as T
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(),API_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${API}${path}`,{...options,headers,signal:controller.signal})
+      let body:unknown = null
+      try { body = await response.json() } catch { body = null }
+      if (!response.ok) throw new Error(detailMessage(body && typeof body === 'object' && 'detail' in body ? (body as {detail:unknown}).detail : body))
+      return body as T
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw new Error('V25 API isteği zaman aşımına uğradı; tekrar deneyin.')
+      throw error
+    } finally { window.clearTimeout(timeout) }
   }
 
   const saveToken = (value:string,persistent=remember) => {
@@ -86,6 +96,7 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
   }
 
   const refresh = async (quiet=false) => {
+    setLoading(true);setLoadError(null)
     try {
       const publicInfo = await request<PublicInfo>('/public')
       setInfo(publicInfo)
@@ -101,7 +112,8 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
     } catch (error) {
       if (token) {saveToken('');setSession(null);setOverview(null);setReadiness(null);setOperations(null)}
       setNotice(error instanceof Error ? error.message : 'V25 API bağlantısı kurulamadı.');setNoticeKind('error')
-    }
+      setLoadError(error instanceof Error ? error.message : 'V25 API bağlantısı kurulamadı.')
+    } finally { setLoading(false) }
   }
 
   useEffect(() => { if (active) void refresh(true) },[active,token])
@@ -257,7 +269,8 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
   const planRows = useMemo(() => Object.entries(info?.plans || {}),[info])
   if (!active) return null
 
-  if (!info) return <section className="commercialLoading"><RefreshCw className="spin"/><b>V25 LIVE GUARD BAĞLANIYOR</b><span>Üyelik, lisans, risk ve canlı yürütme kasası kontrol ediliyor…</span></section>
+  if (loading && !info) return <section className="commercialLoading"><RefreshCw className="spin"/><b>V25 LIVE GUARD BAĞLANIYOR</b><span>Üyelik, lisans, risk ve canlı yürütme kasası kontrol ediliyor…</span></section>
+  if (!info) return <section className="commercialLoading"><XCircle/><b>V25 LIVE GUARD BAĞLANAMADI</b><span>{loadError || 'API bağlantısı kurulamadı.'}</span><button type="button" onClick={() => void refresh()}><RefreshCw/> TEKRAR DENE</button></section>
 
   if (!session) return <section className="commercialAuth">
     <div className="commercialAuthHero"><span className="commercialEdition">V25 LIVE GUARD</span><h2>Robotunu yönetilebilir ve kontrollü bir ürüne dönüştüren merkez</h2><p>Müşterinin parası borsasında kalır. Canlı API anahtarı yalnızca kullanıcının Windows kasasında; canlı girişler varsayılan kilitlidir.</p><div><span><ShieldCheck/> Fail-closed yürütme</span><span><LockKeyhole/> Anahtar merkezde tutulmaz</span><span><BadgeDollarSign/> Kâr garantisi yok</span></div></div>

@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Bot, CheckCircle2, CircleDollarSign, KeyRound,
 import { API_BASE } from './api'
 
 const API = `${API_BASE}/v25`
+const API_TIMEOUT_MS = 15000
 
 type Gate = {key:string;label:string;passed:boolean;detail:string}
 type Policy = {
@@ -109,29 +110,40 @@ export default function ExecutionCenter({token=''}:{token?:string}) {
   const [test,setTest] = useState<OrderForm>({symbol:'BTCUSDT',direction:'LONG',order_type:'MARKET',limit_price:'',margin_usdt:'10',leverage:'1',stop_loss:'',tp1:'',tp2:'',tp3:''})
   const [chartSymbol,setChartSymbol] = useState('BTCUSDT')
   const [chartPlanId,setChartPlanId] = useState<string|null>(null)
+  const [loadError,setLoadError] = useState<string|null>(null)
 
   const call = async <T,>(path:string,options:RequestInit={}):Promise<T> => {
     const headers = new Headers(options.headers)
     if (token) headers.set('Authorization',`Bearer ${token}`)
     if (options.body) headers.set('Content-Type','application/json')
-    const response = await fetch(`${API}${path}`,{...options,headers})
-    let payload:unknown = null
-    try { payload = await response.json() } catch { payload = null }
-    if (!response.ok) {
-      const detail = payload && typeof payload === 'object' && 'detail' in payload ? (payload as {detail:unknown}).detail : payload
-      throw new Error(errorText(detail))
-    }
-    return payload as T
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(),API_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${API}${path}`,{...options,headers,signal:controller.signal})
+      let payload:unknown = null
+      try { payload = await response.json() } catch { payload = null }
+      if (!response.ok) {
+        const detail = payload && typeof payload === 'object' && 'detail' in payload ? (payload as {detail:unknown}).detail : payload
+        throw new Error(errorText(detail))
+      }
+      return payload as T
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw new Error('V25 Live Guard isteği zaman aşımına uğradı; tekrar deneyin.')
+      throw error
+    } finally { window.clearTimeout(timeout) }
   }
 
   const refresh = async (quiet=false) => {
+    setLoadError(null)
     try {
       const next = await call<Status>('/status')
+      if (!next || !next.policy || !next.readiness) throw new Error('V25 Live Guard geçersiz yanıt döndürdü; tekrar deneyin.')
       setStatus(next)
       setPolicy(current => current ?? next.policy)
       if (!quiet) {setNotice('Canlı kasa, hesap ve yayın kapıları yenilendi.');setNoticeKind('ok')}
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'V25 Live Guard API bağlantısı kurulamadı.');setNoticeKind('error')
+      setLoadError(error instanceof Error ? error.message : 'V25 Live Guard API bağlantısı kurulamadı.')
     }
   }
 
@@ -241,7 +253,7 @@ export default function ExecutionCenter({token=''}:{token?:string}) {
   const pendingGate = useMemo(() => status?.readiness.gates.find(item => !item.passed),[status])
   const activePlans = useMemo(() => status?.plans.filter(item => !['KAPANDI','İPTAL'].includes(item.status)) ?? [],[status])
   const chartPlan = useMemo(() => activePlans.find(item => item.id === chartPlanId) || activePlans.find(item => item.symbol === chartSymbol) || null,[activePlans,chartPlanId,chartSymbol])
-  if (!status || !policy) return <div className="executionLoading"><RefreshCw className="spin"/><b>V25 LIVE GUARD BAĞLANIYOR</b><span>{notice}</span></div>
+  if (!status || !policy) return <div className="executionLoading">{loadError ? <><XCircle/><b>V25 LIVE GUARD YÜKLENEMEDİ</b><span>{loadError}</span><button onClick={() => void refresh()}><RefreshCw/> TEKRAR DENE</button></> : <><RefreshCw className="spin"/><b>V25 LIVE GUARD BAĞLANIYOR</b><span>{notice}</span></>}</div>
 
   return <div className="executionV25">
     <header className="executionHero">
