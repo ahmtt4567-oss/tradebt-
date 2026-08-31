@@ -212,6 +212,10 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("X-ProTreBot-Owner", ACTIVE_API_SOURCE)
         self.assertIn("ownerAccessToken()", ACTIVE_API_SOURCE)
 
+    def test_first_admin_bootstrap_forwards_owner_access_but_other_v22_routes_do_not(self):
+        self.assertIn("path === '/api/v22/bootstrap'", ACTIVE_API_SOURCE)
+        self.assertIn("return !['/api/v22', '/api/v24']", ACTIVE_API_SOURCE)
+
     def test_vercel_build_targets_current_render_api(self):
         self.assertIn('"VITE_API_URL": "https://tradebt15.onrender.com"', VERCEL_SOURCE)
         self.assertNotIn("tradebt8.onrender.com", VERCEL_SOURCE)
