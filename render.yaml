@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: protrebot-api
+    name: tradebt15
     runtime: python
     plan: free
     region: frankfurt

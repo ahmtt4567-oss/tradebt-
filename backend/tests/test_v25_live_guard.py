@@ -33,6 +33,7 @@ ACTIVE_COMMERCIAL_SOURCE = (ROOT / "CommercialHub.tsx").read_text(encoding="utf-
 ACTIVE_EXECUTION_SOURCE = (ROOT / "ExecutionCenter.tsx").read_text(encoding="utf-8")
 ACTIVE_API_SOURCE = (ROOT / "api.ts").read_text(encoding="utf-8")
 VERCEL_SOURCE = (ROOT / "vercel.json").read_text(encoding="utf-8")
+RENDER_SOURCE = (ROOT / "render.yaml").read_text(encoding="utf-8")
 
 
 class V25LiveGuardCoreTests(unittest.TestCase):
@@ -212,8 +213,12 @@ class V25LiveGuardIntegrationContractTests(unittest.TestCase):
         self.assertIn("ownerAccessToken()", ACTIVE_API_SOURCE)
 
     def test_vercel_build_targets_current_render_api(self):
-        self.assertIn('"VITE_API_URL": "https://protrebot-api.onrender.com"', VERCEL_SOURCE)
+        self.assertIn('"VITE_API_URL": "https://tradebt15.onrender.com"', VERCEL_SOURCE)
         self.assertNotIn("tradebt8.onrender.com", VERCEL_SOURCE)
+
+    def test_render_manifest_matches_production_service(self):
+        self.assertIn("name: tradebt15", RENDER_SOURCE)
+        self.assertIn("startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT", RENDER_SOURCE)
 
     def test_manual_live_order_requires_second_explicit_confirmation(self):
         self.assertIn("class ManualLiveOrderRequest", EXECUTION_SOURCE)
