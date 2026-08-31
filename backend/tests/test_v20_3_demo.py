@@ -25,6 +25,7 @@ def load_core():
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
         "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
         "update_position_lifecycle", "mark_cancelled_protection", "duplicate_entry_reason",
+        "close_symbol_position",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
@@ -154,6 +155,12 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn("normal emir", message)
         self.assertIn("42", message)
         self.assertIsNone(helper({"positions": [], "open_orders": []}, "BTCUSDT"))
+
+    def test_close_position_selects_position_side_and_preserves_reduce_only_rules(self):
+        source = SOURCE_TEXT
+        self.assertIn('"position_side": str(item.get("positionSide") or "BOTH").upper()', source)
+        self.assertIn('if normalized_side != "BOTH":', source)
+        self.assertIn('params.pop("reduceOnly", None)', source)
 
     def test_credentials_stay_server_side_and_out_of_user_interface(self):
         self.assertIn("getpass.getpass", CONFIG_TEXT)

@@ -124,6 +124,7 @@ class CancelAlgoRequest(BaseModel):
 class ClosePositionRequest(BaseModel):
     symbol: str = Field(min_length=5, max_length=20)
     confirmation: str = Field(min_length=1, max_length=32)
+    position_side: Literal["BOTH", "LONG", "SHORT"] = "BOTH"
 
 
 class EmergencyRequest(BaseModel):
@@ -527,6 +528,7 @@ async def account_snapshot(client: BinanceDemoClient) -> dict[str, Any]:
         margin_type = str(raw_margin_type).lower() if raw_margin_type else None
         open_positions.append({
             "symbol": symbol,
+            "position_side": str(item.get("positionSide") or "BOTH").upper(),
             "direction": "LONG" if amount > 0 else "SHORT",
             "quantity": abs(float(amount)),
             "entry_price": float(item.get("entryPrice", 0)),
@@ -754,9 +756,12 @@ async def cancel_entry_if_open(client: BinanceDemoClient, plan: dict[str, Any]) 
             raise
 
 
-async def close_symbol_position(client: BinanceDemoClient, symbol: str) -> dict[str, Any] | None:
+async def close_symbol_position(client: BinanceDemoClient, symbol: str, position_side: str = "BOTH") -> dict[str, Any] | None:
     rows = await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol})
-    row = next((item for item in response_rows(rows) if Decimal(str(item.get("positionAmt", "0"))) != 0), None)
+    normalized_side = str(position_side or "BOTH").upper()
+    row = next((item for item in response_rows(rows)
+                if str(item.get("positionSide") or "BOTH").upper() == normalized_side
+                and Decimal(str(item.get("positionAmt", "0"))) != 0), None)
     if row is None:
         return None
     amount = Decimal(str(row["positionAmt"]))
@@ -769,6 +774,9 @@ async def close_symbol_position(client: BinanceDemoClient, symbol: str) -> dict[
         "newClientOrderId": new_client_id("CLOSE"),
         "newOrderRespType": "RESULT",
     }
+    if normalized_side != "BOTH":
+        params["positionSide"] = normalized_side
+        params.pop("reduceOnly", None)
     return await client.signed("POST", "/fapi/v1/order", params)
 
 
@@ -1226,7 +1234,7 @@ async def demo_close_position(request: Request, body: ClosePositionRequest) -> d
         symbol = normalize_symbol(body.symbol)
         state = state_for(request)
         client = client_for(request)
-        result = await close_symbol_position(client, symbol)
+        result = await close_symbol_position(client, symbol, body.position_side)
         if result is None:
             raise BinanceDemoError("Bu paritede açık Demo pozisyonu yok.", http_status=404)
         for plan in state.get("plans", {}).values():

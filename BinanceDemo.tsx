@@ -56,6 +56,7 @@ type DemoStatus = {
 
 type DemoPosition = {
   symbol:string
+  position_side?:'BOTH'|'LONG'|'SHORT'
   direction:'LONG'|'SHORT'
   quantity:number
   entry_price:number
@@ -418,7 +419,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const closePosition = (position:DemoPosition) => {
     const confirmation = window.prompt(`${position.symbol} Demo pozisyonunu kapatmak için DEMO KAPAT yazın:`) || ''
     if (!confirmation) return
-    runAction(() => apiCall('/position/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:position.symbol,confirmation})}),`${position.symbol} için reduce-only Demo kapatma emri gönderildi.`)
+    runAction(() => apiCall('/position/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:position.symbol,position_side:position.position_side || 'BOTH',confirmation})}),`${position.symbol} için reduce-only Demo kapatma emri gönderildi.`)
   }
   const emergency = () => {
     const confirmation = window.prompt('Bot emirlerini iptal edip tüm Demo pozisyonlarını kapatmak için DEMO ACİL DURDUR yazın:') || ''
