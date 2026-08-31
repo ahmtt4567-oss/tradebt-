@@ -6,6 +6,7 @@ import { API_BASE } from './api'
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
 const CommercialHub = lazy(() => import('./CommercialHub'))
 const CloudOpsCenter = lazy(() => import('./CloudOpsCenter'))
+const BUILD_COMMIT = import.meta.env.VITE_BUILD_COMMIT
 
 type View = 'testnet'|'ops'|'live'|'setup'
 type Market = {symbol:string;display:string;price:number;change:number;volume:number}
@@ -218,7 +219,7 @@ export default function TestnetFirstApp() {
   },[notificationsOpen])
 
   return <main className="v26App">
-    <header className="v26Header">
+    <header className="v26Header" data-build-commit={BUILD_COMMIT}>
       <div className="v26Brand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V27 · CLOUD OPERATIONS / TESTNET-FIRST</small></div></div>
       <div className="v26HeaderSignals">
         <span className="ok"><i/>SUNUCU CANLI</span>

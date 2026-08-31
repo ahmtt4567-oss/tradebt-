@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import hmac
+import json
 import re
 import unittest
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
@@ -114,6 +115,16 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn("reconciled_active_positions", PRODUCTION_FRONTEND_TEXT)
         self.assertIn("normalizeAnalysisPlan", PRODUCTION_FRONTEND_TEXT)
         self.assertIn("nested.normalized_signal", PRODUCTION_FRONTEND_TEXT)
+        self.assertIn('data-build-marker="BUILD_COMMIT"', PRODUCTION_FRONTEND_TEXT)
+
+    def test_root_vercel_build_chain_is_explicit_and_deterministic(self):
+        package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        vercel = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        self.assertEqual(package["scripts"]["build"], "node ./tools/build-frontend.mjs")
+        self.assertEqual(vercel["buildCommand"], "npm run build")
+        self.assertEqual(vercel["outputDirectory"], "dist")
+        self.assertEqual(vercel["framework"], "vite")
+        self.assertIn("VITE_BUILD_COMMIT", (ROOT / "vite.config.ts").read_text(encoding="utf-8"))
 
     def test_connector_is_hard_locked_to_official_demo_hosts(self):
         self.assertIn('DEMO_REST_BASE = "https://demo-fapi.binance.com"', SOURCE_TEXT)
