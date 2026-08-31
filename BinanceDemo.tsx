@@ -170,7 +170,7 @@ type V21Summary = {
   scanner:{active:boolean;scanned_count:number;eligible_count:number;last_scan:string|null;next_scan:string|null;top_candidates:{symbol:string;direction:'LONG'|'SHORT';opportunity_score:number;confidence:number;trend:string;momentum:string}[];selected_symbols:string[];last_stage:string}
   stream:{status:string;transport:string;last_event:string|null;last_sync:string|null;reconnect_count:number;error_count:number;last_error:string|null}
   daily:{date:string;auto_entries:number;events:number;realized_pnl:number;remaining_loss_budget:number}
-  account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;normal_orders:number;algo_orders:number}
+  account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;reconciled_active_positions?:number;normal_orders:number;algo_orders:number}
   protection:{repairs:number;duplicate_blocks:number};journal:V21Journal[];backtest:V21Backtest|null
   certificate:{version:string;status:string;score:number;passed_gates:number;total_gates:number;gates:V21Gate[];reason:string;generated_at:string}
   last_saved:string|null;real_trading_locked:boolean
@@ -271,6 +271,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [autoConfirm,setAutoConfirm] = useState('')
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
   const [lastOrder,setLastOrder] = useState<DemoOrderResult|null>(null)
+  const accountRefreshId = useRef(0)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -282,10 +283,13 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     } catch { setStatus(null); return null }
   }
   const refreshAccount = async (quiet=true) => {
+    const requestId = ++accountRefreshId.current
     try {
       const payload = await apiCall<DemoAccount>('/account')
+      if (requestId !== accountRefreshId.current) return
       setAccount(payload); setStatus(payload)
     } catch (error) {
+      if (requestId !== accountRefreshId.current) return
       setAccount(null)
       if (!quiet) { setMessage(error instanceof Error ? error.message : 'Demo hesap okunamadı.'); setMessageKind('error') }
     }
@@ -618,7 +622,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
           <label className="v21Switch"><input type="checkbox" checked={settingsDraft.allow_short} onChange={event => setSettingsDraft({...settingsDraft,allow_short:event.target.checked})}/><span><b>SHORT izinli</b></span></label>
         </div>}<button disabled={v21Busy || !settingsDraft} onClick={saveSettings}><Save/> OTOMASYON KAPILARINI KAYDET</button></article></div>
       <article className="v21Card v21AutoScanner"><header><Gauge/><div><small>100 USDT PERPETUAL TARAMA</small><h3>Bot Durumu ve En İyi Fırsatlar</h3></div><b>{v21?.scanner.last_stage || 'BEKLEMEDE'}</b></header><div className="v21MetricRow"><span><small>TARAMA</small><b>{v21?.scanner.scanned_count ?? 0} coin</b></span><span><small>UYGUN FIRSAT</small><b>{v21?.scanner.eligible_count ?? 0}</b></span><span><small>AÇIK POZİSYON</small><b>{v21?.account.positions ?? 0}/{v21?.settings.max_positions ?? 3}</b></span><span><small>SON TARAMA</small><b>{stamp(v21?.scanner.last_scan)}</b></span><span><small>SONRAKİ TARAMA</small><b>{stamp(v21?.scanner.next_scan)}</b></span></div><div className="v21ScannerCandidates">{v21?.scanner.top_candidates.length ? v21.scanner.top_candidates.map(candidate => <span key={candidate.symbol}><b>{candidate.symbol}</b><em>{candidate.direction}</em><strong>{candidate.opportunity_score.toFixed(2)}</strong><small>{candidate.trend} · {candidate.momentum} · güven %{candidate.confidence}</small></span>) : <p>İlk 100 coin taraması bekleniyor.</p>}</div></article>
-      <div className="v21GateStrip"><span className={status?.armed ? 'passed' : ''}><b>1</b><em>DEMO ARM</em><small>{status?.armed ? 'GEÇTİ' : 'KAPALI'}</small></span><span className={status?.connected ? 'passed' : ''}><b>2</b><em>DEMO API</em><small>{status?.connected ? 'BAĞLI' : 'BEKLİYOR'}</small></span><span className={(v21?.daily.auto_entries || 0) < (v21?.settings.daily_trade_limit || 0) ? 'passed' : ''}><b>3</b><em>GÜNLÜK LİMİT</em><small>{v21?.daily.auto_entries ?? 0}/{v21?.settings.daily_trade_limit ?? 0}</small></span><span className={(v21?.daily.remaining_loss_budget || 0) > 0 ? 'passed' : ''}><b>4</b><em>ZARAR KASASI</em><small>{fmt(v21?.daily.remaining_loss_budget)} USDT</small></span><span className={(v21?.account.positions || 0) < (v21?.settings.max_positions || 0) ? 'passed' : ''}><b>5</b><em>POZİSYON</em><small>{v21?.account.positions ?? 0}/{v21?.settings.max_positions ?? 0}</small></span><span><b>6</b><em>SİNYAL KAPILARI</em><small>Her taramada</small></span></div>
+      <div className="v21GateStrip"><span className={status?.armed ? 'passed' : ''}><b>1</b><em>DEMO ARM</em><small>{status?.armed ? 'GEÇTİ' : 'KAPALI'}</small></span><span className={status?.connected ? 'passed' : ''}><b>2</b><em>DEMO API</em><small>{status?.connected ? 'BAĞLI' : 'BEKLİYOR'}</small></span><span className={(v21?.daily.auto_entries || 0) < (v21?.settings.daily_trade_limit || 0) ? 'passed' : ''}><b>3</b><em>GÜNLÜK LİMİT</em><small>{v21?.daily.auto_entries ?? 0}/{v21?.settings.daily_trade_limit ?? 0}</small></span><span className={(v21?.daily.remaining_loss_budget || 0) > 0 ? 'passed' : ''}><b>4</b><em>ZARAR KASASI</em><small>{fmt(v21?.daily.remaining_loss_budget)} USDT</small></span><span className={(v21?.account.reconciled_active_positions ?? 0) < (v21?.settings.max_positions || 0) ? 'passed' : ''}><b>5</b><em>POZİSYON</em><small>{v21?.account.reconciled_active_positions ?? 0}/{v21?.settings.max_positions ?? 0}</small></span><span><b>6</b><em>SİNYAL KAPILARI</em><small>Her taramada</small></span></div>
     </section>}
 
     {tab === 'backtest' && <section className="v21Workspace">

@@ -865,12 +865,14 @@ def certificate_payload(state: dict[str, Any]) -> dict[str, Any]:
 
 def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     snapshot = state.get("snapshot") or {}
+    reconciliation = state.get("reconciliation") or {}
     return {
         "version": "21.0.0", "mode": "BINANCE_FUTURES_DEMO_ONLY", "settings": state["settings"],
         "auto": state["auto"], "scanner": state.get("scanner", {}), "stream": state["stream"], "daily": daily_metrics(state),
         "account": {
             "wallet_balance": snapshot.get("wallet_balance"), "available_balance": snapshot.get("available_balance"),
             "unrealized_pnl": snapshot.get("unrealized_pnl"), "positions": len(snapshot.get("positions", [])),
+            "reconciled_active_positions": int(reconciliation.get("reconciled_active_positions", len(snapshot.get("positions", [])))),
             "normal_orders": len(snapshot.get("open_orders", [])), "algo_orders": len(snapshot.get("open_algo_orders", [])),
         },
         "protection": {

@@ -148,7 +148,7 @@ type V21Summary = {
   auto:{enabled:boolean;busy:boolean;cycles:number;last_scan:string|null;last_decision:string;last_error:string|null}
   stream:{status:string;transport:string;last_event:string|null;last_sync:string|null;reconnect_count:number;error_count:number;last_error:string|null}
   daily:{date:string;auto_entries:number;events:number;realized_pnl:number;remaining_loss_budget:number}
-  account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;normal_orders:number;algo_orders:number}
+  account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;reconciled_active_positions?:number;normal_orders:number;algo_orders:number}
   protection:{repairs:number;duplicate_blocks:number};journal:V21Journal[];backtest:V21Backtest|null
   certificate:{version:string;status:string;score:number;passed_gates:number;total_gates:number;gates:V21Gate[];reason:string;generated_at:string}
   last_saved:string|null;real_trading_locked:boolean
@@ -248,6 +248,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [historyPayload,setHistoryPayload] = useState<{orders:Record<string,unknown>[];algo_orders:Record<string,unknown>[];trades:Record<string,unknown>[]} | null>(null)
   const [autoConfirm,setAutoConfirm] = useState('')
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
+  const accountRefreshId = useRef(0)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -259,10 +260,13 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     } catch { setStatus(null); return null }
   }
   const refreshAccount = async (quiet=true) => {
+    const requestId = ++accountRefreshId.current
     try {
       const payload = await apiCall<DemoAccount>('/account')
+      if (requestId !== accountRefreshId.current) return
       setAccount(payload); setStatus(payload)
     } catch (error) {
+      if (requestId !== accountRefreshId.current) return
       setAccount(null)
       if (!quiet) { setMessage(error instanceof Error ? error.message : 'Demo hesap okunamadı.'); setMessageKind('error') }
     }

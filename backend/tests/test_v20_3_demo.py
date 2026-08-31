@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 ROOT = Path(__file__).parents[2]
 SOURCE_PATH = ROOT / "backend" / "app" / "binance_demo.py"
 SOURCE_TEXT = SOURCE_PATH.read_text(encoding="utf-8")
+V21_SOURCE = (ROOT / "backend" / "app" / "v21_demo.py").read_text(encoding="utf-8")
 ROOT_SOURCE_TEXT = (ROOT / "binance_demo.py").read_text(encoding="utf-8")
 MAIN_TEXT = (ROOT / "backend" / "app" / "main.py").read_text(encoding="utf-8")
 FRONTEND_TEXT = (ROOT / "frontend" / "src" / "BinanceDemo.tsx").read_text(encoding="utf-8")
@@ -92,6 +93,15 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn('if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertNotIn('if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertIn('"exchange_position_diagnostics"', SOURCE_TEXT)
+
+    def test_all_demo_position_cards_use_canonical_reconciled_count(self):
+        self.assertIn("account?.reconciliation?.reconciled_active_positions", PRODUCTION_FRONTEND_TEXT)
+        self.assertIn("accountRefreshId", PRODUCTION_FRONTEND_TEXT)
+        self.assertIn("requestId !== accountRefreshId.current", PRODUCTION_FRONTEND_TEXT)
+        self.assertNotIn("account?.positions.length ?? 0} /", PRODUCTION_FRONTEND_TEXT)
+
+    def test_v21_summary_exposes_reconciled_count(self):
+        self.assertIn('"reconciled_active_positions"', V21_SOURCE)
 
     def test_analysis_direction_mapping_has_no_short_fallback(self):
         for value in ("LONG", "SHORT", "BUY", "SELL"):
