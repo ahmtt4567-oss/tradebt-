@@ -49,6 +49,7 @@ STATE_PATH = DATA_DIR / "binance_demo_runtime.json"
 PUBLIC_PATHS = {
     "/fapi/v1/time",
     "/fapi/v1/exchangeInfo",
+    "/fapi/v1/ticker/24hr",
     "/fapi/v1/ticker/price",
     "/fapi/v1/klines",
 }

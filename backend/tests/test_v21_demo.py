@@ -152,6 +152,7 @@ class V21DemoSafetyTests(unittest.TestCase):
         self.assertIn("Demo", certificate["reason"])
 
     def test_user_stream_and_algo_service_are_allowlisted(self):
+        self.assertIn('"/fapi/v1/ticker/24hr"', BINANCE_SOURCE)
         self.assertIn('("POST", "/fapi/v1/listenKey")', BINANCE_SOURCE)
         self.assertIn('("PUT", "/fapi/v1/listenKey")', BINANCE_SOURCE)
         self.assertIn('("DELETE", "/fapi/v1/listenKey")', BINANCE_SOURCE)
