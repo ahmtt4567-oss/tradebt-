@@ -24,7 +24,7 @@ def load_core():
         "BinanceDemoError", "signed_query", "decimal_text", "floor_step", "round_tick", "normalize_symbol",
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
         "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
-        "update_position_lifecycle", "mark_cancelled_protection",
+        "update_position_lifecycle", "mark_cancelled_protection", "duplicate_entry_reason",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
@@ -146,6 +146,14 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertTrue(plan["stop_protection_cancelled"])
         self.assertEqual(plan["status"], "KORUMA İPTAL")
         self.assertIsNone(CORE["mark_cancelled_protection"](plans, "BTCUSDT", 78))
+
+    def test_duplicate_entry_reason_distinguishes_position_and_normal_order(self):
+        helper = CORE["duplicate_entry_reason"]
+        self.assertIn("açık pozisyon", helper({"positions": [{"symbol": "BTCUSDT"}], "open_orders": []}, "BTCUSDT"))
+        message = helper({"positions": [], "open_orders": [{"symbol": "BTCUSDT", "orderId": 42}]}, "BTCUSDT")
+        self.assertIn("normal emir", message)
+        self.assertIn("42", message)
+        self.assertIsNone(helper({"positions": [], "open_orders": []}, "BTCUSDT"))
 
     def test_credentials_stay_server_side_and_out_of_user_interface(self):
         self.assertIn("getpass.getpass", CONFIG_TEXT)

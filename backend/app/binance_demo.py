@@ -801,6 +801,17 @@ def mark_cancelled_protection(plans: dict[str, Any], symbol: str, algo_id: int) 
     return None
 
 
+def duplicate_entry_reason(snapshot: dict[str, Any], symbol: str) -> str | None:
+    if any(item.get("symbol") == symbol for item in snapshot.get("positions", [])):
+        return f"{symbol} için zaten açık pozisyon var; önce mevcut pozisyonu kapatın veya başka parite seçin."
+    order = next((item for item in snapshot.get("open_orders", []) if item.get("symbol") == symbol), None)
+    if order:
+        order_id = order.get("orderId") or order.get("order_id")
+        suffix = f" (emir: {order_id})" if order_id else ""
+        return f"{symbol} için zaten açık normal emir var{suffix}; önce emri iptal edin veya başka parite seçin."
+    return None
+
+
 async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[str, Any]:
     """Create one conditional order without blind retry on ambiguous responses."""
     try:
@@ -1103,8 +1114,9 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
             symbol = normalize_symbol(body.symbol)
             if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:
                 raise BinanceDemoError("En fazla 3 açık Demo pozisyonuna izin verilir.", http_status=409)
-            if any(item["symbol"] == symbol for item in snapshot["positions"] + snapshot["open_orders"]):
-                raise BinanceDemoError(f"{symbol} için zaten açık pozisyon veya emir var.", http_status=409)
+            duplicate_reason = duplicate_entry_reason(snapshot, symbol)
+            if duplicate_reason:
+                raise BinanceDemoError(duplicate_reason, http_status=409)
             if snapshot["available_balance"] < body.margin_usdt:
                 raise BinanceDemoError("Demo hesabında seçilen marjin için yeterli kullanılabilir bakiye yok.", http_status=409)
             spec = await build_order_spec(client, body)
