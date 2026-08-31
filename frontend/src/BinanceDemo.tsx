@@ -255,6 +255,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
   const accountRefreshId = useRef(0)
   const v21RequestId = useRef(0)
+  const initialScanRequested = useRef(false)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -310,7 +311,13 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     const refresh = async () => {
       const payload = await refreshStatus()
       if (mounted && payload?.configured) await refreshAccount(true)
-      if (mounted) await refreshV21(true)
+      if (mounted) {
+        const summary = await refreshV21(true)
+        if (summary?.scanner && !summary.scanner.last_scan_at && !initialScanRequested.current) {
+          initialScanRequested.current = true
+          void runScanner()
+        }
+      }
     }
     refresh()
     const timer = window.setInterval(refresh,3500)
