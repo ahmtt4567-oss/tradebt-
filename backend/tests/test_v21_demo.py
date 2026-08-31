@@ -147,6 +147,10 @@ class V21DemoSafetyTests(unittest.TestCase):
         self.assertIn('event_type == "ORDER_TRADE_UPDATE"', V21_SOURCE)
         self.assertIn('event_type == "ALGO_UPDATE"', V21_SOURCE)
 
+    def test_explicit_demo_stop_cancellation_is_not_repaired(self):
+        self.assertIn("not plan.get(\"stop_protection_cancelled\")", V21_SOURCE)
+        self.assertIn('"KORUMA İPTAL"', V21_SOURCE)
+
     def test_v21_control_center_and_all_tabs_are_present(self):
         self.assertIn('version="25.0.0"', MAIN_SOURCE)
         self.assertIn("v21_demo_router", MAIN_SOURCE)

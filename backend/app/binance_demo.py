@@ -789,6 +789,18 @@ def update_position_lifecycle(plan: dict[str, Any], amount: Decimal) -> None:
         plan["tp1_status"] = "FILLED"
 
 
+def mark_cancelled_protection(plans: dict[str, Any], symbol: str, algo_id: int) -> dict[str, Any] | None:
+    for plan in plans.values():
+        if plan.get("symbol") != symbol or int(plan.get("stop_algo_id") or 0) != algo_id:
+            continue
+        plan["stop_protection_cancelled"] = True
+        plan["protection_status"] = "KORUMA İPTAL"
+        plan["status"] = "KORUMA İPTAL"
+        plan["last_error"] = "Kullanıcı STOP_MARKET koruma emrini iptal etti."
+        return plan
+    return None
+
+
 async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[str, Any]:
     """Create one conditional order without blind retry on ambiguous responses."""
     try:
@@ -811,6 +823,8 @@ async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[s
 
 async def install_protection(client: BinanceDemoClient, state: dict[str, Any], plan: dict[str, Any]) -> None:
     symbol = plan["symbol"]
+    if plan.get("stop_protection_cancelled"):
+        return
     rows = await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol})
     position = next((item for item in response_rows(rows) if Decimal(str(item.get("positionAmt", "0"))) != 0), None)
     if position is None:
@@ -938,6 +952,8 @@ async def protection_loop(application: Any) -> None:
                     await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": plan["symbol"]})
                 )
                 active_position = next((row for row in rows if Decimal(str(row.get("positionAmt", "0"))) != 0), None)
+                if active_position is not None and plan.get("stop_protection_cancelled"):
+                    continue
                 if active_position is not None:
                     lifecycle_before = (
                         plan.get("remaining_quantity"), plan.get("position_status"),
@@ -1176,8 +1192,15 @@ async def demo_cancel_order(request: Request, body: CancelOrderRequest) -> dict[
 async def demo_cancel_algo(request: Request, body: CancelAlgoRequest) -> dict[str, Any]:
     try:
         symbol = normalize_symbol(body.symbol)
+        state = state_for(request)
         result = await client_for(request).signed("DELETE", "/fapi/v1/algoOrder", {"symbol": symbol, "algoId": body.algo_id})
-        add_event(state_for(request), "KORUMA İPTAL", f"{symbol} koşullu Demo emri iptal edildi.")
+        plan = mark_cancelled_protection(state.get("plans", {}), symbol, body.algo_id)
+        if plan:
+            persist_runtime(state)
+            message = f"{symbol} STOP koruması iptal edildi; pozisyon artık otomatik korunmuyor."
+        else:
+            message = f"{symbol} koşullu Demo emri iptal edildi."
+        add_event(state, "KORUMA İPTAL", message)
         return {"ok": True, "symbol": symbol, "algo_id": result.get("algoId", body.algo_id)}
     except BinanceDemoError as exc:
         raise safe_exchange_error(exc) from exc

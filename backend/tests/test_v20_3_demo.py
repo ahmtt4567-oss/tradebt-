@@ -24,7 +24,7 @@ def load_core():
         "BinanceDemoError", "signed_query", "decimal_text", "floor_step", "round_tick", "normalize_symbol",
         "response_rows", "validate_levels", "verify_leverage_response", "verify_symbol_configuration",
         "set_isolated_margin", "apply_verified_leverage", "position_mode", "ensure_one_way_position_mode",
-        "update_position_lifecycle",
+        "update_position_lifecycle", "mark_cancelled_protection",
     }
     nodes = [node for node in TREE.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted]
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
@@ -138,6 +138,14 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         lifecycle(plan, Decimal("0"))
         self.assertEqual(plan["position_status"], "CLOSED")
         self.assertEqual(plan["tp3_status"], "FILLED")
+
+    def test_cancelled_stop_is_persistently_marked_for_reconciliation(self):
+        plans = {"demo-123": {"symbol": "BTCUSDT", "stop_algo_id": 77, "status": "OPEN"}}
+        plan = CORE["mark_cancelled_protection"](plans, "BTCUSDT", 77)
+        self.assertIs(plan, plans["demo-123"])
+        self.assertTrue(plan["stop_protection_cancelled"])
+        self.assertEqual(plan["status"], "KORUMA İPTAL")
+        self.assertIsNone(CORE["mark_cancelled_protection"](plans, "BTCUSDT", 78))
 
     def test_credentials_stay_server_side_and_out_of_user_interface(self):
         self.assertIn("getpass.getpass", CONFIG_TEXT)

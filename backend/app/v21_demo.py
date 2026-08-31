@@ -507,7 +507,7 @@ def active_plan(application: Any, symbol: str) -> dict[str, Any] | None:
     plans = application.state.binance_demo.get("plans", {})
     candidates = [
         plan for plan in plans.values()
-        if plan.get("symbol") == symbol and plan.get("status") not in {"KAPANDI", "İPTAL", "GÜVENLİK İÇİN KAPATILDI", "ACİL DURDURULDU"}
+        if plan.get("symbol") == symbol and not plan.get("stop_protection_cancelled") and plan.get("status") not in {"KAPANDI", "İPTAL", "GÜVENLİK İÇİN KAPATILDI", "ACİL DURDURULDU", "KORUMA İPTAL"}
     ]
     return candidates[-1] if candidates else None
 
