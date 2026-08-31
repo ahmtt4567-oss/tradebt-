@@ -2,7 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { Activity, BadgeDollarSign, BookOpenCheck, Bot, Building2, Calculator, CheckCircle2, Cpu, Crown, Download, ExternalLink, FileClock, Gauge, KeyRound, LockKeyhole, LogOut, Power, RefreshCw, Settings, ShieldCheck, ShoppingBag, Sparkles, UserCheck, UserPlus, Users, UserX, WalletCards, XCircle } from 'lucide-react'
 import CommerceCenter from './CommerceCenter'
 import ExecutionCenter from './ExecutionCenter'
-import { API_BASE } from './api'
+import { API_BASE, ownerAccessToken } from './api'
 
 const API = `${API_BASE}/v22`
 const SESSION_KEY = 'protrebot-v25-session'
@@ -123,7 +123,7 @@ export default function CommercialHub({active,onNavigate,initialTab='home'}:{act
     try {
       const persistSession = mode === 'bootstrap' ? true : remember
       const payload = {...(mode === 'bootstrap' ? owner : login),remember:persistSession}
-      const result = await request<{token:string;user:User;license:License}>(mode === 'bootstrap' ? '/bootstrap' : '/auth/login',{method:'POST',body:JSON.stringify(payload)})
+      const result = await request<{token:string;user:User;license:License}>(mode === 'bootstrap' ? '/bootstrap' : '/auth/login',{method:'POST',body:JSON.stringify(payload),headers:mode === 'bootstrap' ? {'X-ProTreBot-Owner':ownerAccessToken()} : undefined})
       localStorage.setItem(REMEMBER_KEY,persistSession ? '1' : '0')
       saveToken(result.token,persistSession);setSession({user:result.user,license:result.license,demo_only:true})
       setNotice(mode === 'bootstrap' ? 'V25 sahibi oluşturuldu; yönetim merkezi açıldı.' : 'Güvenli oturum açıldı.');setNoticeKind('ok')
