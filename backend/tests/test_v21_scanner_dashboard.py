@@ -68,8 +68,8 @@ class V21ScannerDashboardTests(unittest.TestCase):
                 await asyncio.gather(first, second)
                 return scan_calls
 
-            scan_call_count = asyncio.run(exercise())
-            self.assertEqual(scan_call_count, 1)
+        scan_call_count = asyncio.run(exercise())
+        self.assertEqual(scan_call_count, 1)
 
     def test_scanner_does_not_start_trade_when_auto_is_disabled(self):
         state = v21_demo.initial_state()
