@@ -14,6 +14,30 @@ type AnalysisPlan = {
   tp3:number
 }
 
+type AnalysisPlanPayload = Partial<AnalysisPlan> & {normalized_signal?:unknown;analysis?:unknown;plan?:unknown}
+
+function normalizeAnalysisPlan(payload:unknown):AnalysisPlan|null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const row = payload as AnalysisPlanPayload
+  const nested = row.analysis && typeof row.analysis === 'object' && !Array.isArray(row.analysis)
+    ? row.analysis as AnalysisPlanPayload
+    : row.plan && typeof row.plan === 'object' && !Array.isArray(row.plan)
+      ? row.plan as AnalysisPlanPayload
+      : row
+  const rawDirection = String(nested.direction || '').toUpperCase()
+  const direction = rawDirection === 'LONG' || rawDirection === 'SHORT'
+    ? rawDirection
+    : nested.normalized_signal === 'BUY' ? 'LONG' : nested.normalized_signal === 'SELL' ? 'SHORT' : 'BEKLE'
+  return {
+    direction,
+    entry:Number(nested.entry),
+    stop_loss:Number(nested.stop_loss),
+    tp1:Number(nested.tp1),
+    tp2:Number(nested.tp2),
+    tp3:Number(nested.tp3),
+  }
+}
+
 type DemoStatus = {
   version:string
   mode:string
@@ -318,12 +342,12 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const fillFromAnalysis = async () => {
     setBusy(true);setMessageKind('info');setMessage('Güncel analiz planı alınıyor…')
     try {
-      let plan = analysis
+      let plan = normalizeAnalysisPlan(analysis)
       if (!plan || plan.direction === 'BEKLE') {
         const response = await fetch(`${API_BASE}/analysis/${symbol}?interval=15m`)
-        const payload = await response.json().catch(() => null) as AnalysisPlan | {detail?:unknown} | null
-        if (!response.ok) throw new Error(apiErrorMessage(payload && 'detail' in payload ? payload.detail : payload))
-        plan = payload as AnalysisPlan
+        const payload = await response.json().catch(() => null) as unknown
+        if (!response.ok) throw new Error(apiErrorMessage(payload && typeof payload === 'object' && 'detail' in payload ? payload.detail : payload))
+        plan = normalizeAnalysisPlan(payload)
       }
       if (!plan || !['LONG','SHORT'].includes(plan.direction)) throw new Error('Seçili paritede LONG veya SHORT analiz planı hazır değil.')
       const levels = [plan.entry,plan.stop_loss,plan.tp1,plan.tp2,plan.tp3]
