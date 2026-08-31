@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
-import { Activity, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
+import { Activity, ArrowUp, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
@@ -138,6 +138,8 @@ export default function TestnetFirstApp() {
   const [credentials,setCredentials] = useState({demoApiKey:'',demoSecretKey:'',liveApiKey:'',liveSecretKey:''})
   const [demoVerification,setDemoVerification] = useState({busy:false,kind:'info',message:''})
   const [notificationsOpen,setNotificationsOpen] = useState(false)
+  const [headerHidden,setHeaderHidden] = useState(false)
+  const [showBackToTop,setShowBackToTop] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
   const notifications = healthNotifications(health)
 
@@ -218,8 +220,27 @@ export default function TestnetFirstApp() {
     return () => {document.removeEventListener('mousedown', closeOnOutsideClick);document.removeEventListener('keydown', closeOnEscape)}
   },[notificationsOpen])
 
+  useEffect(() => {
+    let previousY = window.scrollY
+    let ticking = false
+    const updateScrollState = () => {
+      const currentY = window.scrollY
+      const delta = currentY - previousY
+      if (currentY <= 12) setHeaderHidden(false)
+      else if (Math.abs(delta) >= 8) setHeaderHidden(delta > 0)
+      setShowBackToTop(currentY >= 450)
+      previousY = currentY
+      ticking = false
+    }
+    const onScroll = () => {
+      if (!ticking) {ticking=true;window.requestAnimationFrame(updateScrollState)}
+    }
+    window.addEventListener('scroll',onScroll,{passive:true})
+    return () => window.removeEventListener('scroll',onScroll)
+  },[])
+
   return <main className="v26App">
-    <header className="v26Header" data-build-commit={BUILD_COMMIT}>
+    <header className={`v26Header ${headerHidden ? 'v26HeaderHidden' : ''}`} data-build-commit={BUILD_COMMIT}>
       <div className="v26Brand"><span>X</span><div><b>PROTREBOT ELITE X</b><small>V27 · CLOUD OPERATIONS / TESTNET-FIRST</small></div></div>
       <div className="v26HeaderSignals">
         <span className="ok"><i/>SUNUCU CANLI</span>
@@ -282,6 +303,7 @@ export default function TestnetFirstApp() {
       <footer><CheckCircle2/>Altyapı tamamlandıktan sonra ilk aşamada yalnızca Demo secret’larını ekleyeceğiz. Canlı secret’lar boş kalacak.</footer>
     </section>}
 
+    {showBackToTop && <button className="v26BackToTop" type="button" aria-label="Yukarı çık" onClick={() => window.scrollTo({top:0,behavior:'smooth'})}><ArrowUp/></button>}
     <footer className="v26Footer"><span><RadioTower/>API: <b>{health?.status === 'ok' ? 'BAĞLI' : 'KONTROL EDİLİYOR'}</b></span><span>Veritabanı: <b>{health?.database || '—'}</b></span><span>Kanıt defteri: <b>{health?.cloud_evidence || '—'}</b></span><span>Çalışma modu: <b>TESTNET FIRST</b></span><span>Paper: <b>DEVRE DIŞI</b></span><em>Kâr garantisi yoktur. Testnet sonucu gerçek piyasa sonucunu garanti etmez.</em></footer>
   </main>
 }
