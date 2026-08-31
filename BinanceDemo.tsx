@@ -167,7 +167,7 @@ type V21Backtest = {symbol:string;interval:string;trades:number;wins:number;win_
 type V21Summary = {
   version:string;mode:string;settings:V21Settings
   auto:{enabled:boolean;busy:boolean;cycles:number;last_scan:string|null;last_decision:string;last_error:string|null}
-  scanner:{active:boolean;scan_status:string;coins_scanned:number;selected_count:number;eligible_count:number;last_scan_at:string|null;next_scan_at:string|null;last_error:string|null;top_candidates:{rank:number;symbol:string;direction:string;score:number;confidence:string;confidence_value?:number;trend?:string;momentum?:string;volatility_pct?:number;reasons?:string[]}[];selected_symbols:string[];last_stage:string}
+  scanner:{active:boolean;scan_status:string;scan_interval_seconds:number;coins_scanned:number;selected_count:number;eligible_count:number;last_scan_at:string|null;next_scan_at:string|null;last_error:string|null;top_candidates:{rank:number;symbol:string;direction:string;score:number;confidence:string;confidence_value?:number;trend?:string;momentum?:string;volatility_pct?:number;reasons?:string[]}[];selected_symbols:string[];last_stage:string}
   stream:{status:string;transport:string;last_event:string|null;last_sync:string|null;reconnect_count:number;error_count:number;last_error:string|null}
   daily:{date:string;auto_entries:number;events:number;realized_pnl:number;remaining_loss_budget:number}
   account:{wallet_balance:number|null;available_balance:number|null;unrealized_pnl:number|null;positions:number;reconciled_active_positions?:number;normal_orders:number;algo_orders:number}
@@ -184,7 +184,7 @@ const initialForm:FormState = {
 }
 
 const fmt = (value?:number|null) => value === undefined || value === null || !Number.isFinite(value) ? '—' : value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
-const stamp = (value?:string|null) => value ? new Date(value).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
+const stamp = (value?:string|null) => value ? new Date(value).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
 const numberValue = (value:string) => Number(value.replace(',','.'))
 
 const fieldNames:Record<string,string> = {
@@ -274,6 +274,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const accountRefreshId = useRef(0)
   const initialScanRequested = useRef(false)
   const initialScanInFlight = useRef(false)
+  const v21RequestId = useRef(0)
   const lastNotificationId = useRef<string|null>(null)
 
   const refreshStatus = async () => {
@@ -297,8 +298,10 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     }
   }
   const refreshV21 = async (quiet=true) => {
+    const requestId = ++v21RequestId.current
     try {
       const payload = await v21Call<V21Summary>('/summary')
+      if (requestId !== v21RequestId.current) return null
       setV21(payload)
       setSettingsDraft(current => current || payload.settings)
       return payload
@@ -308,7 +311,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     }
   }
 
-  const requestInitialScan = async () => {
+  const requestScannerScan = async () => {
     if (initialScanInFlight.current) return
     initialScanInFlight.current = true
     try {
@@ -328,7 +331,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       if (mounted && payload?.configured) await refreshAccount(true)
       if (mounted) {
         const summary = await refreshV21(true)
-        if (summary?.scanner && !summary.scanner.last_scan_at && !initialScanRequested.current) void requestInitialScan()
+        if (summary?.scanner && !summary.scanner.last_scan_at && !initialScanRequested.current) void requestScannerScan()
       }
     }
     refresh()
@@ -336,6 +339,13 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     const ticker = window.setInterval(() => setClock(Date.now()),1000)
     return () => { mounted=false;window.clearInterval(timer);window.clearInterval(ticker) }
   },[active])
+
+  useEffect(() => {
+    if (!active || !v21?.scanner.next_scan_at) return
+    const delay = Math.max(0, new Date(v21.scanner.next_scan_at).getTime() - Date.now()) + 1000
+    const timer = window.setTimeout(() => void requestScannerScan(), delay)
+    return () => window.clearTimeout(timer)
+  },[active,v21?.scanner.next_scan_at])
 
   useEffect(() => {
     const openCertificate = () => setTab('certificate')
@@ -357,6 +367,8 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   },[v21?.journal?.[0]?.id])
 
   const armSeconds = status?.armed_until ? Math.max(0,Math.floor((new Date(status.armed_until).getTime()-clock)/1000)) : 0
+  const scannerCountdown = v21?.scanner.next_scan_at ? Math.max(0,Math.ceil((new Date(v21.scanner.next_scan_at).getTime()-clock)/1000)) : null
+  const scannerCountdownLabel = scannerCountdown === null ? 'Bekleniyor' : `${Math.floor(scannerCountdown/60)}:${String(scannerCountdown%60).padStart(2,'0')} kaldı`
   const activePlanBySymbol = useMemo(() => {
     const map = new Map<string,DemoPlan>()
     for (const plan of account?.plans || []) if (!['KAPANDI','İPTAL'].includes(plan.status)) map.set(plan.symbol,plan)
