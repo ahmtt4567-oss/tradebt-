@@ -948,7 +948,7 @@ async def live_user_stream_loop(application: Any) -> None:
             persist_state(state)
             await asyncio.sleep(min(30, 2 + int(state["stream"]["reconnect_count"])))
         finally:
-            if listen_key and client is not None:
+            if listen_key and client is not None and not asyncio.current_task().cancelling():
                 try:
                     await client.api_key_request("DELETE", "/fapi/v1/listenKey")
                 except Exception:
@@ -1524,11 +1524,6 @@ def init_v25_execution(application: Any) -> None:
 
 async def shutdown_v25_execution(application: Any) -> None:
     state = getattr(application.state, "v25_execution", None)
-    if state:
-        state["armed_until"] = 0.0
-        state["auto"]["enabled"] = False
-        state["auto"]["session_until"] = 0.0
-        persist_state(state)
     tasks = [
         task for task in (
             getattr(application.state, "v25_execution_task", None),
@@ -1540,6 +1535,11 @@ async def shutdown_v25_execution(application: Any) -> None:
         task.cancel()
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
+    if state:
+        state["armed_until"] = 0.0
+        state["auto"]["enabled"] = False
+        state["auto"]["session_until"] = 0.0
+        persist_state(state)
 
 
 @router.get("/status")

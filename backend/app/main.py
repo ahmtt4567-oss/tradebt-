@@ -666,18 +666,41 @@ async def lifespan(app: FastAPI):
     yield
     for task in app.state.runtime_tasks:
         task.cancel()
-    await asyncio.gather(*app.state.runtime_tasks, return_exceptions=True)
-    await shutdown_v21_demo(app)
-    await shutdown_binance_demo(app)
-    await shutdown_v25_execution(app)
-    await shutdown_v27_cloud(app)
-    await shutdown_v22_commercial(app)
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*app.state.runtime_tasks, return_exceptions=True), timeout=5
+        )
+    except asyncio.TimeoutError:
+        pass
+
+    async def bounded_shutdown(operation):
+        try:
+            await asyncio.wait_for(operation, timeout=5)
+        except asyncio.TimeoutError:
+            pass
+
+    await bounded_shutdown(shutdown_v21_demo(app))
+    await bounded_shutdown(shutdown_binance_demo(app))
+    await bounded_shutdown(shutdown_v25_execution(app))
+    await bounded_shutdown(shutdown_v27_cloud(app))
+    await bounded_shutdown(shutdown_v22_commercial(app))
+
+    # Endpoint-triggered fire-and-forget work must not keep Uvicorn alive.
+    current = asyncio.current_task()
+    pending = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        try:
+            await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=3)
+        except asyncio.TimeoutError:
+            pass
     clear_vault_cache()
     # Kapanışta, son işlemden hemen sonra uygulama durdurulsa bile Paper
     # bakiyesinin ve açık pozisyonların veritabanına ulaşmasını dener.
     if PAPER_ENABLED:
         try:
-            await persist_paper_snapshot(app)
+            await asyncio.wait_for(persist_paper_snapshot(app), timeout=3)
         except Exception:
             pass
     if app.state.db_pool is not None:

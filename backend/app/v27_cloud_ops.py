@@ -166,14 +166,14 @@ async def init_v27_cloud(application: Any) -> None:
 
 
 async def shutdown_v27_cloud(application: Any) -> None:
-    try:
-        await sync_cloud_state(application)
-    except Exception:
-        pass
     task = getattr(application.state, "v27_cloud_task", None)
     if task is not None:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+    try:
+        await asyncio.wait_for(sync_cloud_state(application), timeout=3)
+    except Exception:
+        pass
 
 
 def operations_payload(application: Any) -> dict[str, Any]:

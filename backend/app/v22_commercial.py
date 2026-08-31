@@ -844,4 +844,7 @@ def init_v22_commercial(application: Any) -> None:
 async def shutdown_v22_commercial(application: Any) -> None:
     if hasattr(application.state, "v22_commercial"):
         save_state(application.state.v22_commercial["state"])
-        await persist_v22_commercial(application)
+        try:
+            await asyncio.wait_for(persist_v22_commercial(application), timeout=3)
+        except asyncio.TimeoutError:
+            pass

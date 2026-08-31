@@ -496,7 +496,7 @@ async def user_stream_loop(application: Any) -> None:
             persist_state(state)
             await asyncio.sleep(min(30, 2 + state["stream"]["reconnect_count"]))
         finally:
-            if listen_key:
+            if listen_key and not asyncio.current_task().cancelling():
                 try:
                     await client_for(application).api_key_request("DELETE", "/fapi/v1/listenKey")
                 except Exception:
@@ -895,14 +895,14 @@ def init_v21_demo(application: Any) -> None:
 
 async def shutdown_v21_demo(application: Any) -> None:
     state = getattr(application.state, "v21_demo", None)
-    if state:
-        state["auto"]["enabled"] = False
-        persist_state(state)
     tasks = getattr(application.state, "v21_tasks", [])
     for task in tasks:
         task.cancel()
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
+    if state:
+        state["auto"]["enabled"] = False
+        persist_state(state)
 
 
 @router.get("/summary")
