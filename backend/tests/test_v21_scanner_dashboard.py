@@ -12,6 +12,68 @@ from app import v21_demo  # noqa: E402
 
 
 class V21ScannerDashboardTests(unittest.TestCase):
+    def _automation_app(self, candidate):
+        state = v21_demo.initial_state()
+        state["auto"].update({"enabled": True, "user_confirmed": True})
+        state["settings"]["allowed_symbols"] = ["BTCUSDT"]
+        app = SimpleNamespace(state=SimpleNamespace(v21_demo=state, binance_demo={}, http=object()))
+        return state, app, candidate
+
+    def test_automation_rejects_candidate_outside_allowed_symbols(self):
+        candidate = {"symbol": "ETHUSDT", "direction": "LONG", "status": "SELECTED", "entry": 100.0,
+                     "stop_loss": 99.0, "tp1": 101.0, "tp2": 102.0, "tp3": 103.0, "score": 95,
+                     "opportunity_score": 95, "confidence": "HIGH", "reasons": []}
+        state, app, candidate = self._automation_app(candidate)
+        state["scanner"]["top_candidates"] = [candidate]
+        with patch.object(v21_demo, "armed", return_value=True), \
+                patch.object(v21_demo, "client_for", return_value=object()), \
+                patch.object(v21_demo, "account_snapshot", new=AsyncMock(return_value={"positions": [], "open_orders": []})), \
+                patch.object(v21_demo, "scan_demo_universe", new=AsyncMock(return_value=[candidate])), \
+                patch.object(v21_demo, "execute_demo_order", new=AsyncMock()) as order, \
+                patch.object(v21_demo, "persist_state"):
+            asyncio.run(v21_demo.automatic_cycle(app))
+        order.assert_not_awaited()
+        self.assertEqual(state["auto"]["rejection_gate"], "ALLOWED_SYMBOLS")
+        self.assertIn("ETHUSDT", state["auto"]["rejection_reason"])
+
+    def test_automation_reaches_demo_execution_when_all_gates_pass(self):
+        candidate = {"symbol": "BTCUSDT", "direction": "LONG", "status": "SELECTED", "entry": 100.0,
+                     "stop_loss": 99.0, "tp1": 101.0, "tp2": 102.0, "tp3": 103.0, "score": 95,
+                     "opportunity_score": 95, "confidence": "HIGH", "reasons": ["test"]}
+        state, app, candidate = self._automation_app(candidate)
+        result = {"plan": {"entry_price": 100.0, "targets": [101.0, 102.0, 103.0], "stop_loss": 99.0,
+                            "margin_usdt": 5.0, "leverage": 2, "status": "AÇIK"}}
+        with patch.object(v21_demo, "armed", return_value=True), \
+                patch.object(v21_demo, "client_for", return_value=object()), \
+                patch.object(v21_demo, "account_snapshot", new=AsyncMock(return_value={"positions": [], "open_orders": []})), \
+                patch.object(v21_demo, "scan_demo_universe", new=AsyncMock(return_value=[candidate])), \
+                patch.object(v21_demo, "execute_demo_order", new=AsyncMock(return_value=result)) as order, \
+                patch.object(v21_demo, "persist_state"):
+            asyncio.run(v21_demo.automatic_cycle(app))
+        order.assert_awaited_once()
+        self.assertEqual(order.await_args.kwargs["source"], "AUTO_SCANNER")
+        self.assertEqual(state["auto"]["rejection_reason"], None)
+
+    def test_demo_smoke_test_creates_local_paper_position_without_exchange_order(self):
+        state = v21_demo.initial_state()
+        state["auto"].update({"enabled": True, "user_confirmed": True})
+        state["settings"]["allowed_symbols"] = ["BTCUSDT"]
+        app = SimpleNamespace(state=SimpleNamespace(v21_demo=state, binance_demo={}, http=object()))
+        request = SimpleNamespace(app=app)
+        candidate = {"symbol": "BTCUSDT", "direction": "LONG", "status": "SELECTED", "entry": 100.0,
+                     "stop_loss": 99.0, "tp1": 101.0, "tp2": 102.0, "tp3": 103.0, "score": 95,
+                     "opportunity_score": 95, "confidence": "HIGH", "reasons": ["test"]}
+        state["scanner"]["top_candidates"] = [candidate]
+        with patch.object(v21_demo, "credentials_configured", return_value=False), \
+                patch.object(v21_demo, "execute_demo_order", new=AsyncMock()) as order, \
+                patch.object(v21_demo, "persist_state"):
+            result = asyncio.run(v21_demo.v21_demo_smoke_test(request))
+        order.assert_not_awaited()
+        self.assertEqual(result["position"]["symbol"], "BTCUSDT")
+        self.assertEqual(result["position"]["stop_loss"], 99.0)
+        self.assertEqual(result["position"]["targets"], [101.0, 102.0, 103.0])
+        self.assertEqual(len(state["paper_positions"]), 1)
+
     def test_scanner_interval_and_candidate_score_contract(self):
         self.assertEqual(v21_demo.SCAN_INTERVAL_SECONDS, 600)
         candidates = v21_demo._enrich_scan_candidates([

@@ -152,6 +152,7 @@ def initial_state() -> dict[str, Any]:
             "enabled": False, "busy": False, "cycles": 0, "last_scan": None,
             "user_confirmed": False, "confirmation": None,
             "last_decision": "Kullanıcı onayı bekleniyor.", "last_error": None,
+            "rejection_gate": None, "rejection_reason": None,
         },
         "scanner": {
             "active": False, "running": False, "scan_status": "BEKLEMEDE", "coins_scanned": 0,
@@ -161,6 +162,7 @@ def initial_state() -> dict[str, Any]:
             "last_error": None,
         },
         "automation_trades": [],
+        "paper_positions": [],
         "stream": {
             "status": "BEKLEMEDE", "transport": "REST EŞLEŞTİRME", "last_event": None,
             "last_sync": None, "reconnect_count": 0, "error_count": 0, "last_error": None,
@@ -191,7 +193,7 @@ def load_state() -> dict[str, Any]:
     base["settings"]["scan_seconds"] = DEFAULT_SETTINGS["scan_seconds"]
     for key in (
         "journal", "seen_event_ids", "backtest", "drills", "duplicate_blocks",
-        "duplicate_submissions", "protection_repairs", "scanner", "automation_trades",
+        "duplicate_submissions", "protection_repairs", "scanner", "automation_trades", "paper_positions",
     ):
         if key in saved:
             base[key] = saved[key]
@@ -221,6 +223,7 @@ def serializable_state(state: dict[str, Any]) -> dict[str, Any]:
         "protection_repairs": state.get("protection_repairs", 0),
         "scanner": state.get("scanner", {}),
         "automation_trades": state.get("automation_trades", [])[:100],
+        "paper_positions": state.get("paper_positions", []),
         "saved_at": now_iso(),
     }
 
@@ -325,6 +328,10 @@ def _candidate_confidence_label(confidence: int) -> str:
     return "LOW"
 
 
+def _set_rejection(state: dict[str, Any], gate: str, reason: str) -> None:
+    state["auto"].update({"rejection_gate": gate, "rejection_reason": reason, "last_decision": reason, "last_error": gate})
+
+
 def _apply_scan_completion_state(scanner: dict[str, Any], settings: dict[str, Any], ranked: list[dict[str, Any]], top_candidates: list[dict[str, Any]], eligible_count: int | None = None) -> None:
     completed_epoch = time.time()
     completed_at = datetime.fromtimestamp(completed_epoch, timezone.utc).isoformat()
@@ -419,11 +426,12 @@ async def scan_demo_universe(client: BinanceDemoClient, occupied: set[str], sett
         if item.get("symbol")
     }
     symbols = []
+    allowed = {normalize_symbol(value) for value in settings.get("allowed_symbols", [])}
     for item in exchange_symbols if isinstance(exchange_symbols, list) else []:
         if item.get("status") != "TRADING" or item.get("contractType") != "PERPETUAL":
             continue
         symbol = str(item.get("symbol") or "")
-        if item.get("quoteAsset") == "USDT" and symbol.endswith("USDT") and symbol not in occupied:
+        if item.get("quoteAsset") == "USDT" and symbol.endswith("USDT") and symbol in allowed and symbol not in occupied:
             symbols.append(symbol)
     symbols.sort(key=lambda value: float(ticker_by_symbol.get(value, {}).get("quoteVolume") or 0), reverse=True)
     symbols = symbols[:100]
@@ -790,32 +798,32 @@ async def automatic_cycle(application: Any) -> None:
     state = application.state.v21_demo
     settings = state["settings"]
     auto = state["auto"]
+    auto.update({"rejection_gate": None, "rejection_reason": None, "last_error": None})
     if not bool(auto.get("enabled")) or not bool(auto.get("user_confirmed")):
-        auto["last_decision"] = "Yalnızca açık kullanıcı onayıyla otomasyon giriş yapabilir; emir açılmadı."
-        auto["last_error"] = "AUTO_GUARD_BLOCKED"
+        _set_rejection(state, "CONFIRMATION", "Yalnızca açık kullanıcı onayıyla otomasyon giriş yapabilir; emir açılmadı.")
         return
     auto["cycles"] += 1
     auto["last_scan"] = now_iso()
     if not armed(application.state.binance_demo):
-        auto["last_decision"] = "10 dakikalık DEMO emir kilidi kapalı; otomasyon bekliyor."
+        _set_rejection(state, "DEMO_ARM", "10 dakikalık DEMO emir kilidi kapalı; otomasyon bekliyor.")
         return
     if not in_schedule(settings):
-        auto["last_decision"] = "İzin verilen çalışma saatleri dışında; yeni giriş yok."
+        _set_rejection(state, "MARKET_HOURS", "İzin verilen çalışma saatleri dışında; yeni giriş yok.")
         return
     daily = daily_metrics(state)
     if daily["auto_entries"] >= settings["daily_trade_limit"]:
-        auto["last_decision"] = "Günlük Demo işlem limiti doldu."
+        _set_rejection(state, "DAILY_TRADE_LIMIT", "Günlük Demo işlem limiti doldu.")
         return
     if daily["realized_pnl"] <= -float(settings["daily_loss_limit"]):
-        auto["last_decision"] = "Günlük Demo zarar limiti aktif; yeni giriş kilitli."
+        _set_rejection(state, "DAILY_LOSS_LIMIT", "Günlük Demo zarar limiti aktif; yeni giriş kilitli.")
         auto["enabled"] = False
         return
     client = client_for(application)
     snapshot = await account_snapshot(client)
     max_positions = min(settings["max_positions"], MAX_OPEN_POSITIONS)
-    available_slots = max_positions - len(snapshot["positions"])
+    available_slots = max_positions - len(snapshot["positions"]) - len(state.get("paper_positions", []))
     if available_slots <= 0:
-        auto["last_decision"] = "Açık pozisyon sınırı dolu."
+        _set_rejection(state, "MAX_POSITIONS", "Açık pozisyon sınırı dolu.")
         state["scanner"].update({"active": True, "last_stage": "DOLU", "selected_symbols": []})
         persist_state(state)
         return
@@ -823,6 +831,11 @@ async def automatic_cycle(application: Any) -> None:
     state["scanner"].update({"active": True, "last_stage": "TARAMA", "selected_symbols": []})
     ranked = await scan_demo_universe(client, occupied, settings)
     top_candidates = ranked[:3]
+    allowed_symbols = {normalize_symbol(value) for value in settings.get("allowed_symbols", [])}
+    disallowed = next((candidate for candidate in top_candidates if normalize_symbol(candidate.get("symbol", "")) not in allowed_symbols), None)
+    top_candidates = [candidate for candidate in top_candidates if normalize_symbol(candidate.get("symbol", "")) in allowed_symbols]
+    if disallowed and not top_candidates:
+        _set_rejection(state, "ALLOWED_SYMBOLS", f"{disallowed.get('symbol', 'Aday')} izinli pariteler dışında; emir açılmadı.")
     scanner = state["scanner"]
     _apply_scan_completion_state(scanner, settings, ranked, top_candidates, eligible_count=len(ranked))
     selected: list[str] = []
@@ -831,10 +844,16 @@ async def automatic_cycle(application: Any) -> None:
         symbol = str(candidate.get("symbol") or "")
         direction = str(candidate.get("direction") or "NEUTRAL").upper()
         if not symbol or direction == "NEUTRAL":
+            _set_rejection(state, "SIGNAL_DIRECTION", f"{symbol or 'Aday'} için işlem yönü bulunamadı; emir açılmadı.")
+            continue
+        if symbol not in allowed_symbols:
+            _set_rejection(state, "ALLOWED_SYMBOLS", f"{symbol} izinli pariteler dışında; emir açılmadı.")
             continue
         if candidate.get("status") != "SELECTED" or not all(float(candidate.get(key) or 0) > 0 for key in ("entry", "stop_loss", "tp1", "tp2", "tp3")):
+            _set_rejection(state, "RISK_LEVELS", f"{symbol} için seçili ve geçerli Stop/TP seviyeleri yok; emir açılmadı.")
             continue
         if float(cooldowns.get(symbol, 0) or 0) > time.time():
+            _set_rejection(state, "SYMBOL_COOLDOWN", f"{symbol} sembol soğuma süresinde; emir açılmadı.")
             continue
         sizing = risk_size_values(
             float(candidate["entry"]), float(candidate["stop_loss"]), float(settings["max_loss_per_trade"]),
@@ -849,7 +868,7 @@ async def automatic_cycle(application: Any) -> None:
         try:
             result = await execute_demo_order(application, body, source="AUTO_SCANNER")
         except BinanceDemoError as exc:
-            auto["last_decision"] = f"{symbol}: Demo emir reddi · {exc}"
+            _set_rejection(state, "DEMO_EXECUTION", f"{symbol}: Demo emir reddi · {exc}")
             continue
         selected.append(symbol)
         cooldowns[symbol] = time.time() + SCAN_INTERVAL_SECONDS
@@ -875,7 +894,10 @@ async def automatic_cycle(application: Any) -> None:
         )
     scanner["selected_symbols"] = selected
     scanner["last_stage"] = "EMİRLER YÖNETİLİYOR"
-    auto["last_decision"] = f"100 coin tarandı; {len(selected)} yeni Demo pozisyonu açıldı; en iyi 3: {', '.join(item['symbol'] for item in top_candidates) or 'yok'}."
+    if not selected and top_candidates:
+        auto["last_error"] = auto.get("rejection_gate") or "NO_EXECUTION"
+    if selected or not auto.get("rejection_reason"):
+        auto["last_decision"] = f"100 coin tarandı; {len(selected)} yeni Demo pozisyonu açıldı; en iyi 3: {', '.join(item['symbol'] for item in top_candidates) or 'yok'}."
     persist_state(state)
 
 
@@ -1075,6 +1097,7 @@ def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     snapshot = state.get("snapshot") or {}
     reconciliation = state.get("reconciliation") or {}
     scanner = state.get("scanner", {})
+    paper_positions = state.get("paper_positions", [])
     scanner_payload = {
         **scanner,
         "scan_interval_seconds": SCAN_INTERVAL_SECONDS,
@@ -1088,8 +1111,8 @@ def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
         "auto": state["auto"], "scanner": scanner_payload, "stream": state["stream"], "daily": daily_metrics(state),
         "account": {
             "wallet_balance": snapshot.get("wallet_balance"), "available_balance": snapshot.get("available_balance"),
-            "unrealized_pnl": snapshot.get("unrealized_pnl"), "positions": len(snapshot.get("positions", [])),
-            "reconciled_active_positions": int(reconciliation.get("reconciled_active_positions", len(snapshot.get("positions", [])))),
+            "unrealized_pnl": snapshot.get("unrealized_pnl"), "positions": len(snapshot.get("positions", [])) + len(paper_positions),
+            "reconciled_active_positions": int(reconciliation.get("reconciled_active_positions", len(snapshot.get("positions", [])))) + len(paper_positions),
             "normal_orders": len(snapshot.get("open_orders", [])), "algo_orders": len(snapshot.get("open_algo_orders", [])),
         },
         "protection": {
@@ -1188,18 +1211,84 @@ async def v21_risk_size(request: Request, body: RiskSizeRequest) -> dict[str, An
     return {**values, "symbol": symbol, "leverage": body.leverage, "quantity_preview": decimal_text(quantity), "step_size": decimal_text(rules["step"]), "demo_only": True}
 
 
+@router.post("/smoke-test")
+async def v21_demo_smoke_test(request: Request) -> dict[str, Any]:
+    state = state_for(request)
+    candidates = state["scanner"].get("top_candidates", [])
+    allowed_symbols = {normalize_symbol(value) for value in state["settings"].get("allowed_symbols", [])}
+    candidate = next((item for item in candidates if normalize_symbol(item.get("symbol", "")) in allowed_symbols), None)
+    if candidate is None:
+        _set_rejection(state, "ALLOWED_SYMBOLS", "Demo işlemi testi için izinli ve seçili aday bulunamadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    symbol = normalize_symbol(candidate["symbol"])
+    direction = str(candidate.get("direction") or "NEUTRAL").upper()
+    if direction not in {"LONG", "SHORT"} or (direction == "LONG" and not state["settings"]["allow_long"]) or (direction == "SHORT" and not state["settings"]["allow_short"]):
+        _set_rejection(state, "DIRECTION", f"{symbol} yön kapısından geçmedi; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    if not in_schedule(state["settings"]):
+        _set_rejection(state, "MARKET_HOURS", "İzin verilen çalışma saatleri dışında; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    if any(item.get("symbol") == symbol for item in state.get("paper_positions", [])):
+        _set_rejection(state, "DUPLICATE_POSITION", f"{symbol} için zaten paper pozisyonu açık; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    daily = daily_metrics(state)
+    if daily["auto_entries"] >= state["settings"]["daily_trade_limit"]:
+        _set_rejection(state, "DAILY_TRADE_LIMIT", "Günlük Demo işlem limiti doldu; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    if daily["realized_pnl"] <= -float(state["settings"]["daily_loss_limit"]):
+        _set_rejection(state, "DAILY_LOSS_LIMIT", "Günlük Demo zarar limiti aktif; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    max_positions = min(state["settings"]["max_positions"], MAX_OPEN_POSITIONS)
+    if len(state.get("paper_positions", [])) >= max_positions:
+        _set_rejection(state, "MAX_POSITIONS", "Açık pozisyon sınırı dolu; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    if candidate.get("status") != "SELECTED" or not all(float(candidate.get(key) or 0) > 0 for key in ("entry", "stop_loss", "tp1", "tp2", "tp3")):
+        _set_rejection(state, "RISK_LEVELS", f"{symbol} için geçerli risk seviyeleri yok; smoke işlemi açılmadı.")
+        persist_state(state)
+        raise HTTPException(409, state["auto"]["rejection_reason"])
+    sizing = risk_size_values(float(candidate["entry"]), float(candidate["stop_loss"]), float(state["settings"]["max_loss_per_trade"]), MAX_LEVERAGE, min(float(state["settings"]["max_margin_per_trade"]), float(MAX_MARGIN_USDT)))
+    position = {
+        "id": uuid.uuid4().hex[:12], "symbol": symbol, "direction": direction,
+        "entry_price": float(candidate["entry"]), "stop_loss": float(candidate["stop_loss"]),
+        "targets": [float(candidate["tp1"]), float(candidate["tp2"]), float(candidate["tp3"])],
+        "margin_usdt": sizing["margin_usdt"], "leverage": MAX_LEVERAGE,
+        "score": candidate.get("score", candidate.get("opportunity_score", 0)), "reasons": candidate.get("reasons", []),
+        "status": "PAPER_OPEN", "created_at": now_iso(), "demo_only": True, "source": "SMOKE_TEST",
+    }
+    state.setdefault("paper_positions", []).append(position)
+    state["auto"].update({"rejection_gate": None, "rejection_reason": None, "last_error": None, "last_decision": f"Demo smoke işlemi açıldı: {symbol}."})
+    record_event(state, "PAPER_SMOKE", f"{symbol} Demo smoke paper pozisyonu açıldı; Stop {position['stop_loss']} · TP {position['targets'][-1]}.", symbol=symbol, side=position["direction"], price=position["entry_price"], source="SMOKE_TEST")
+    persist_state(state)
+    return {"ok": True, "position": position, "open_position_count": len(state["paper_positions"]), "demo_only": True, "real_trading_locked": True}
+
+
 @router.post("/auto/start")
 async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, Any]:
     state = state_for(request)
     confirmation = body.confirmation.strip().upper()
     if confirmation != "DEMO OTOMATİK":
+        _set_rejection(state, "CONFIRMATION", "Otomasyonu açmak için DEMO OTOMATİK yazın.")
+        persist_state(state)
         raise HTTPException(422, "Otomasyonu açmak için DEMO OTOMATİK yazın.")
     if not armed(request.app.state.binance_demo):
+        _set_rejection(state, "DEMO_ARM", "Önce İşlem Masası'ndaki 10 dakikalık DEMO emir kilidini açın.")
+        persist_state(state)
         raise HTTPException(423, "Önce İşlem Masası'ndaki 10 dakikalık DEMO emir kilidini açın.")
     if not credentials_configured():
+        _set_rejection(state, "DEMO_CREDENTIALS", "Binance Futures Demo anahtarları ayarlı değil.")
+        persist_state(state)
         raise HTTPException(412, "Binance Futures Demo anahtarları ayarlı değil.")
     snapshot = await account_snapshot(client_for(request.app))
     if snapshot.get("hedge_mode"):
+        _set_rejection(state, "POSITION_MODE", "Demo hesabı One-way / Tek Yön modunda olmalı.")
+        persist_state(state)
         raise HTTPException(409, "Demo hesabı One-way / Tek Yön modunda olmalı.")
     state["auto"].update({
         "enabled": True,
