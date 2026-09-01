@@ -342,3 +342,60 @@ input:hover, select:hover, textarea:hover { border-color: var(--border-strong); 
 input:focus, select:focus, textarea:focus { border-color: var(--accent); background: #0b1016; }
 .webAccessIcon { border: 1px solid rgba(245,158,11,.35); color: var(--accent-strong); }
 .webAccessCard footer { background: transparent; }
+
+.demoOrdersGrid > .demoOrderPanel,
+.demoOrdersGrid > .demoEventPanel { padding: 15px 16px; }
+.demoOrderPanel > div,
+.demoEventPanel > div { gap: 0; margin-top: 9px; }
+.demoOrderPanel article,
+.demoEventPanel article,
+.executionEvents article { position: relative; min-width: 0; padding: 11px 8px 11px 12px; border: 0; border-bottom: 1px solid rgba(37,48,59,.7); border-radius: 0; background: transparent; }
+.demoOrderPanel article:last-child,
+.demoEventPanel article:last-child,
+.executionEvents article:last-child { border-bottom-color: transparent; }
+.demoOrderPanel article:hover,
+.demoEventPanel article:hover,
+.executionEvents article:hover { border-radius: 6px; background: rgba(24,33,43,.72); }
+.demoOrderPanel article { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; }
+.demoOrderPanel article > span,
+.demoEventPanel article > span,
+.executionEvents article > div { min-width: 0; }
+.demoOrderPanel article > span { display: grid; gap: 3px; }
+.demoOrderPanel article b,
+.demoEventPanel article b,
+.executionEvents article b { color: var(--text-primary); font-size: 11px; font-weight: 700; }
+.demoOrderPanel article small,
+.demoEventPanel article small,
+.executionEvents article span { color: var(--text); font-size: 11px; line-height: 1.45; }
+.demoOrderPanel article em,
+.demoEventPanel article time,
+.executionEvents article time { color: var(--text-muted); font-size: 10px; font-style: normal; white-space: nowrap; }
+.demoOrderPanel article button { min-height: 28px; padding: 4px 9px; border-color: rgba(239,68,68,.45); background: transparent; color: #fca5a5; font-size: 10px; }
+.demoOrderPanel article button:hover { border-color: var(--danger); background: rgba(239,68,68,.1); }
+.demoEventPanel article,
+.executionEvents article { display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: start; gap: 10px; }
+.demoEventPanel article i,
+.executionEvents article i { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--info); box-shadow: 0 0 0 3px rgba(34,211,238,.08); }
+.demoEventPanel article > span,
+.executionEvents article > div { display: grid; gap: 3px; }
+.demoEventPanel article small,
+.executionEvents article span { color: var(--text); }
+.demoEventPanel article:nth-child(3n+1) i,
+.executionEvents article:nth-child(3n+1) i { background: var(--success); box-shadow: 0 0 0 3px rgba(22,163,74,.08); }
+.demoEventPanel article:nth-child(3n+2) i { background: var(--warning); box-shadow: 0 0 0 3px rgba(245,158,11,.08); }
+.demoOrderPanel > div > p { margin: 0; padding: 20px 8px 16px; color: var(--text); font-size: 11px; text-align: center; }
+.demoOrderPanel > div > p::after { display: block; margin-top: 5px; color: var(--text-muted); content: 'Scanner active · Watching markets'; font-size: 10px; }
+.demoEventPanel > div:empty::after { padding: 20px 8px; color: var(--text-muted); content: 'No recent security events'; font-size: 11px; text-align: center; }
+.demoEventPanel article b:first-child { letter-spacing: .02em; }
+.demoPositionList > article { border: 0; border-top: 2px solid var(--info); border-radius: 0; background: var(--surface-1); }
+.demoPositionList > article:hover { background: var(--surface-2); }
+
+@media (max-width: 700px) {
+  .demoOrderPanel article { grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+  .demoOrderPanel article em { grid-column: 1; }
+  .demoOrderPanel article button { grid-column: 2; grid-row: 1 / span 2; }
+  .demoEventPanel article,
+  .executionEvents article { grid-template-columns: 8px minmax(0,1fr); }
+  .demoEventPanel article time,
+  .executionEvents article time { grid-column: 2; }
+}
