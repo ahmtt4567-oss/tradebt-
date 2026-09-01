@@ -325,6 +325,25 @@ def _candidate_confidence_label(confidence: int) -> str:
     return "LOW"
 
 
+def _apply_scan_completion_state(scanner: dict[str, Any], settings: dict[str, Any], ranked: list[dict[str, Any]], top_candidates: list[dict[str, Any]], eligible_count: int | None = None) -> None:
+    completed_at = now_iso()
+    next_scan_at = datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat()
+    scanner.update({
+        "last_scan_at": completed_at,
+        "next_scan_at": next_scan_at,
+        "scan_status": "TAMAMLANDI",
+        "coins_scanned": min(100, len(ranked)),
+        "eligible_count": len(ranked) if eligible_count is None else eligible_count,
+        "top_candidates": top_candidates,
+        "all_candidates": ranked[:100],
+        "selected_symbols": [item["symbol"] for item in top_candidates],
+        "last_stage": "SIRALANDI",
+        "active": True,
+        "last_scan": completed_at,
+        "next_scan": next_scan_at,
+    })
+
+
 def _build_candidate_reasons(item: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
     direction = str(item.get("direction", "NEUTRAL")).upper()
@@ -804,16 +823,14 @@ async def automatic_cycle(application: Any) -> None:
     ranked = await scan_demo_universe(client, occupied, settings)
     top_candidates = ranked[:3]
     scanner = state["scanner"]
-    scanner.update({
-        "scanned_count": 100, "eligible_count": len(ranked),
-        "last_scan": now_iso(), "next_scan": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
-        "top_candidates": top_candidates, "last_stage": "SIRALANDI",
-    })
+    _apply_scan_completion_state(scanner, settings, ranked, top_candidates, eligible_count=len(ranked))
     selected: list[str] = []
     cooldowns = auto.setdefault("cooldown_until", {})
-    for candidate in top_candidates[:available_slots]:
-        symbol = candidate["symbol"]
-        direction = candidate["direction"]
+    for index, candidate in enumerate(top_candidates[:available_slots]):
+        symbol = str(candidate.get("symbol") or "")
+        direction = str(candidate.get("direction") or "NEUTRAL").upper()
+        if not symbol or direction == "NEUTRAL":
+            continue
         if candidate.get("status") != "SELECTED" or not all(float(candidate.get(key) or 0) > 0 for key in ("entry", "stop_loss", "tp1", "tp2", "tp3")):
             continue
         if float(cooldowns.get(symbol, 0) or 0) > time.time():
@@ -836,19 +853,23 @@ async def automatic_cycle(application: Any) -> None:
         selected.append(symbol)
         cooldowns[symbol] = time.time() + SCAN_INTERVAL_SECONDS
         plan = result.get("plan", {}) if isinstance(result, dict) else {}
+        scanner_rank = int(candidate.get("rank", index + 1))
+        scanner_score = candidate.get("score", candidate.get("opportunity_score", 0))
+        confidence_label = candidate.get("confidence", "LOW")
+        entry_price = float(plan.get("entry_price", candidate.get("entry", 0)))
         state.setdefault("automation_trades", []).insert(0, {
-            "symbol": symbol, "side": direction, "scanner_rank": candidate["rank"],
-            "scanner_score": candidate["score"], "confidence": candidate["confidence"],
-            "entry_time": now_iso(), "entry_price": plan.get("entry_price", candidate["entry"]),
+            "symbol": symbol, "side": direction, "scanner_rank": scanner_rank,
+            "scanner_score": scanner_score, "confidence": confidence_label,
+            "entry_time": now_iso(), "entry_price": entry_price,
             "margin": plan.get("margin_usdt", margin), "leverage": plan.get("leverage", MAX_LEVERAGE),
-            "tp": plan.get("targets", [candidate["tp1"], candidate["tp2"], candidate["tp3"]]),
-            "sl": plan.get("stop_loss", candidate["stop_loss"]), "trade_reason": candidate["reasons"],
+            "tp": plan.get("targets", [candidate.get("tp1", 0), candidate.get("tp2", 0), candidate.get("tp3", 0)]),
+            "sl": plan.get("stop_loss", candidate.get("stop_loss", 0)), "trade_reason": candidate.get("reasons", []),
             "status": plan.get("status", "DOLUM BEKLİYOR"), "demo_only": True,
         })
         record_event(
             state, "AUTO_ORDER", f"{symbol} {direction} otomatik tarayıcı Demo girişi gönderildi.", symbol=symbol,
             side=direction, price=float(candidate["entry"]), quantity=None,
-            reason=f"Skor {candidate['opportunity_score']:.2f}; güven %{candidate['confidence']}; tahmini stop riski {sizing['estimated_stop_loss_usdt']:.2f} USDT",
+            reason=f"Skor {float(candidate.get('opportunity_score', scanner_score)):.2f}; güven %{confidence_label}; tahmini stop riski {sizing['estimated_stop_loss_usdt']:.2f} USDT",
             source="AUTO_SCANNER",
         )
     scanner["selected_symbols"] = selected
@@ -886,20 +907,7 @@ async def run_scanner_cycle(application: Any) -> None:
                 candidate["status"] = "SELECTED"
             elif candidate.get("status") != "REJECTED":
                 candidate["status"] = "WATCH"
-        scanner.update({
-            "last_scan_at": now_iso(),
-            "next_scan_at": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
-            "scan_status": "TAMAMLANDI",
-            "coins_scanned": min(100, len(ranked)),
-            "eligible_count": len(filtered),
-            "top_candidates": top_candidates,
-            "all_candidates": ranked[:100],
-            "selected_symbols": [item["symbol"] for item in top_candidates],
-            "last_stage": "SIRALANDI",
-            "active": True,
-            "last_scan": now_iso(),
-            "next_scan": datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat(),
-        })
+        _apply_scan_completion_state(scanner, settings, ranked, top_candidates, eligible_count=len(filtered))
         state["auto"]["last_scan"] = now_iso()
         persist_state(state)
     except asyncio.CancelledError:
@@ -1201,6 +1209,7 @@ async def v21_auto_start(request: Request, body: AutoStartRequest) -> dict[str, 
     })
     record_event(state, "AUTO_START", "V21 kontrollü otomasyon kullanıcı onayıyla açıldı.", source="USER")
     persist_state(state)
+    await automatic_cycle(request.app)
     return summary_payload(state)
 
 
