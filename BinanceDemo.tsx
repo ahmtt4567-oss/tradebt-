@@ -1,7 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, BarChart3, Bell, Calculator, CheckCircle2, CircleDollarSign, ClipboardList, Crosshair, Gauge, History, LockKeyhole, Play, Radio, RefreshCw, Save, Send, Settings2, ShieldCheck, Target, TestTube2, TriangleAlert, UnlockKeyhole, Wallet, Zap } from 'lucide-react'
 import { API_BASE } from './api'
-import './binance-demo.css'
 
 const API = `${API_BASE}/binance-demo`
 const V21_API = `${API_BASE}/v21`
@@ -382,7 +381,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   useEffect(() => {
     const target = tab === 'trade' ? demoDeckRef.current : workspaceRef.current
     if (!target) return
-    window.requestAnimationFrame(() => target.scrollIntoView({block:'start',inline:'nearest',behavior:'smooth'}))
+    window.requestAnimationFrame(() => target.scrollIntoView({block:'start',behavior:'smooth'}))
   },[tab])
 
   const armSeconds = status?.armed_until ? Math.max(0,Math.floor((new Date(status.armed_until).getTime()-clock)/1000)) : 0
@@ -568,48 +567,6 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const coachTrades = v21?.journal?.filter(item => item.realized_pnl !== null && item.realized_pnl !== undefined) || []
   const coachBest = coachTrades.length ? Math.max(...coachTrades.map(item => item.realized_pnl as number)) : null
   const coachWorst = coachTrades.length ? Math.min(...coachTrades.map(item => item.realized_pnl as number)) : null
-  const positionAssistant = account?.positions.map(position => {
-    const plan = activePlanBySymbol.get(position.symbol)
-    const stop = Number(plan?.stop_loss || 0)
-    const target = Number(plan?.targets?.[0] || 0)
-    const entry = position.entry_price
-    const current = position.mark_price
-    const entryDistance = entry > 0 ? Math.abs(current - entry) / entry * 100 : null
-    const stopDistance = stop > 0 ? Math.abs(current - stop) / current * 100 : null
-    const targetDistance = target > 0 ? Math.abs(target - current) / current * 100 : null
-    const favorable = position.direction === 'LONG' ? current >= entry : current <= entry
-    const stage = !entry || !current ? 'INSUFFICIENT POSITION DATA' : targetDistance !== null && targetDistance <= 1 ? 'TARGET APPROACH' : entryDistance !== null && entryDistance <= 1 ? 'ENTRY ZONE' : favorable ? 'PROFIT ZONE' : stop > 0 ? 'PROTECTION ZONE' : 'REVIEW REQUIRED'
-    const observation = !stop ? 'Protection observation: stop data unavailable.' : targetDistance !== null && targetDistance <= 1 ? 'Target observation: price is near the first target.' : !favorable ? 'Review: price is adverse to the position direction.' : entryDistance !== null && entryDistance <= 1 ? 'Monitor: position is near break-even.' : 'Position status: monitor current price and protection.'
-    const rr = stop > 0 && target > 0 && entry > 0 ? Math.abs(target - entry) / Math.abs(entry - stop) : null
-    return {position,stop,target,entryDistance,stopDistance,targetDistance,stage,observation,rr}
-  }) || []
-  const analyticsTrades = coachTrades
-  const analyticsWins = analyticsTrades.filter(trade => (trade.realized_pnl ?? 0) > 0)
-  const analyticsLosses = analyticsTrades.filter(trade => (trade.realized_pnl ?? 0) < 0)
-  const analyticsProfit = analyticsWins.reduce((total,trade) => total + (trade.realized_pnl ?? 0),0)
-  const analyticsLoss = analyticsLosses.reduce((total,trade) => total + (trade.realized_pnl ?? 0),0)
-  const analyticsTotal = analyticsTrades.length ? analyticsTrades.reduce((total,trade) => total + (trade.realized_pnl ?? 0),0) : performance?.net_profit ?? null
-  const analyticsCount = analyticsTrades.length || performance?.total_trades || null
-  const analyticsWinRate = analyticsTrades.length ? analyticsWins.length / analyticsTrades.length * 100 : performance?.win_rate ?? null
-  const analyticsAverageWin = analyticsWins.length ? analyticsProfit / analyticsWins.length : null
-  const analyticsAverageLoss = analyticsLosses.length ? analyticsLoss / analyticsLosses.length : null
-  const analyticsProfitFactor = analyticsLoss < 0 ? analyticsProfit / Math.abs(analyticsLoss) : null
-  const analyticsExpectancy = analyticsTrades.length && analyticsTotal !== null ? analyticsTotal / analyticsTrades.length : performance?.average_trade ?? null
-  const regimeVolatility = qualityCandidate?.volatility_pct
-  const marketRegime = qualityCandidate?.trend ? (regimeVolatility !== undefined && regimeVolatility >= 5 ? 'High Volatility' : 'Trending') : 'Unavailable'
-  const exposurePositions = account?.positions || []
-  const longPositions = exposurePositions.filter(position => position.direction === 'LONG').length
-  const shortPositions = exposurePositions.filter(position => position.direction === 'SHORT').length
-  const exposureTotal = account ? exposurePositions.reduce((total,position) => total + Math.abs(position.quantity * position.mark_price),0) : null
-  const dominantDirection = longPositions === shortPositions ? 'Balanced' : longPositions > shortPositions ? 'LONG' : 'SHORT'
-  const concentrationWarnings = account && v21?.settings.max_positions ? [
-    account.positions.length >= v21.settings.max_positions ? 'Position limit reached.' : account.positions.length / v21.settings.max_positions >= .66 ? 'Position limit approaching.' : null,
-    longPositions > shortPositions && longPositions / account.positions.length >= .66 ? 'Long directional concentration.' : null,
-    shortPositions > longPositions && shortPositions / account.positions.length >= .66 ? 'Short directional concentration.' : null,
-    v21?.daily.remaining_loss_budget !== undefined && v21.daily.remaining_loss_budget <= 0 ? 'Risk budget pressure detected.' : null,
-    account.unrealized_pnl < 0 ? 'Unrealized loss pressure detected.' : null,
-  ].filter(Boolean) as string[] : []
-  const sideRows = (['LONG','SHORT'] as const).map(side => { const trades = analyticsTrades.filter(trade => trade.side === side); const pnl = trades.reduce((total,trade) => total + (trade.realized_pnl ?? 0),0); return {side,count:trades.length,pnl,winRate:trades.length ? trades.filter(trade => (trade.realized_pnl ?? 0) > 0).length / trades.length * 100 : null} })
   const setupAvailable = Boolean(qualityCandidate || analysis?.direction)
   const riskAvailable = Boolean(riskPreview || (analysis && v21?.daily.remaining_loss_budget !== undefined))
   const liveTradeAvailable = Boolean(account?.positions.length)
@@ -640,7 +597,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const replayTrade = historyItems[0]
   const replayEvents = replayTrade ? [{label:'Entry',time:replayTrade.entry_time,detail:fmt(replayTrade.entry)},{label:'Close',time:replayTrade.exit_time,detail:fmt(replayTrade.exit)}] : []
 
-  return <div className="binanceDemoRoot"><section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
+  return <section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
       <div className="demoHeroStatus">
@@ -705,8 +662,6 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <div className="v21InsightPanel v21TradingJournal"><header><div><span>TRADING JOURNAL</span><h2>Karar Günlüğü</h2></div><ClipboardList/></header>{v21?.journal?.length ? <div className="v21JournalFeed">{v21.journal.slice(0,4).map(item => <article key={item.id}><i/><div><b>{item.kind}</b><span>{item.message}</span><small>{item.symbol || 'SİSTEM'} · {item.source} · {stamp(item.created_at)}</small></div></article>)}</div> : <div className="v21InsightEmpty"><ClipboardList/><span>İşlem kararı günlüğü bekleniyor.</span></div>}</div>
       <div className="v21InsightPanel v21PerformanceAnalytics"><header><div><span>DAILY PERFORMANCE ANALYTICS</span><h2>Günlük Performans</h2></div><BarChart3/></header>{performance ? <div className="v21PerformanceStats"><span><small>PnL</small><b className={performance.net_profit >= 0 ? 'demoProfit' : 'demoLoss'}>{fmt(performance.net_profit)} USDT</b></span><span><small>TRADES</small><b>{performance.total_trades}</b></span><span><small>WINS / LOSSES</small><b>{performance.wins} / {performance.losses}</b></span><span><small>WIN RATE</small><b>%{performance.win_rate}</b></span><span><small>BEST / WORST</small><b>{fmt(performance.best_trade)} / {fmt(performance.worst_trade)}</b></span></div> : <div className="v21InsightEmpty"><BarChart3/><span>Günlük performans verisi bekleniyor.</span></div>}</div>
     </section>}
-
-    {tab === 'trade' && <section className="v21MarketIntelligencePack" aria-label="V21 Market Intelligence Pack"><article className="v21MarketRegime"><header><div><span>MARKET REGIME ENGINE</span><h2>Market Regime</h2></div><Activity/></header><div className="v21RegimeValue"><b>{marketRegime}</b><small>{qualityCandidate?.confidence ? `Data confidence · ${qualityCandidate.confidence}` : 'Data quality unavailable'}</small></div><div className="v21RegimeDetails"><span><small>TREND ALIGNMENT</small><b>{qualityCandidate?.trend || 'Unavailable'}</b></span><span><small>VOLATILITY</small><b>{regimeVolatility === undefined ? 'Unavailable' : `%${fmt(regimeVolatility)}`}</b></span><span><small>SUITABILITY</small><b>{marketRegime === 'Unavailable' ? 'Review required' : 'Advisory only'}</b></span></div><p>{marketRegime === 'Unavailable' ? 'Insufficient market data for a reliable regime classification.' : `${marketRegime} context is derived from the current scanner trend and volatility fields.`}</p></article><article className="v21ExposureMap"><header><div><span>PORTFOLIO EXPOSURE MAP</span><h2>Exposure Overview</h2></div><Wallet/></header>{account ? <><div className="v21ExposureMetrics"><span><small>OPEN POSITIONS</small><b>{exposurePositions.length}</b></span><span><small>LONG / SHORT</small><b>{longPositions} / {shortPositions}</b></span><span><small>NET DIRECTION</small><b>{dominantDirection}</b></span><span><small>TOTAL EXPOSURE</small><b>{exposureTotal === null ? 'Unavailable' : `${fmt(exposureTotal)} USDT`}</b></span></div><div className="v21ExposureWarnings">{concentrationWarnings.length ? concentrationWarnings.map(warning => <span key={warning}><TriangleAlert/>{warning}</span>) : <span className="clear"><ShieldCheck/> No concentration warning from available data.</span>}</div></> : <div className="v21AnalyticsEmpty">Portfolio exposure unavailable.</div>}</article><article className="v21JournalIntelligence"><header><div><span>SMART JOURNAL INTELLIGENCE</span><h2>Journal Insights</h2></div><ClipboardList/></header>{analyticsTrades.length ? <><div className="v21JournalMetrics"><span><small>OUTCOMES</small><b>{analyticsTrades.length}</b></span><span><small>WIN RATE</small><b>{analyticsWinRate === null ? 'Unavailable' : `%${analyticsWinRate.toFixed(1)}`}</b></span><span><small>PROFIT FACTOR</small><b>{analyticsProfitFactor === null ? 'Unavailable' : analyticsProfitFactor.toFixed(2)}</b></span><span><small>EXPECTANCY</small><b>{analyticsExpectancy === null ? 'Unavailable' : `${fmt(analyticsExpectancy)} USDT`}</b></span></div><div className="v21JournalSides">{sideRows.map(row => <span key={row.side}><b>{row.side}</b><small>{row.count} trades · {fmt(row.pnl)} USDT · {row.winRate === null ? 'Direction data unavailable' : `%${row.winRate.toFixed(1)} wins`}</small></span>)}</div></> : <div className="v21AnalyticsEmpty">Insufficient journal outcomes for smart intelligence.</div>}</article></section>}
 
     {tab === 'trade' && <section className="v21TradeIntelligenceStack">
       <article className="v21SafetyGate" aria-label="Pre-trade safety check"><header><div><span>PRE-TRADE SAFETY CHECK</span><h2>Review before order submission</h2></div><ShieldCheck/></header><div className="v21SafetySummary"><b>{safetySummary}</b><small>Advisory only · does not authorize execution</small></div><div className="v21SafetyChecks">{safetyChecks.map(check => <div className={`v21SafetyCheck ${check.status.toLowerCase()}`} key={check.label}><span><i/>{check.label}</span><b>{check.status}</b><small>{check.detail}</small></div>)}</div></article>
@@ -783,8 +738,6 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       </div>
     </section>
 
-    {tab === 'trade' && <section className="v21PositionAssistant" aria-label="Position Management Assistant"><header><div><span>POSITION MANAGEMENT ASSISTANT · ADVISORY</span><h2>Position Management Assistant</h2><p>Monitor protection, distance and lifecycle context from the current account state.</p></div><Crosshair/></header>{positionAssistant.length ? <div className="v21PositionCards">{positionAssistant.map(item => <article className="v21PositionCard" key={item.position.symbol}><div className="v21PositionCardHead"><b>{item.position.symbol.replace('USDT','/USDT')}</b><span>{item.position.direction}</span><strong>{item.stage}</strong></div><div className="v21PositionMetrics"><span><small>ENTRY</small><b>{fmt(item.entry)}</b></span><span><small>CURRENT</small><b>{fmt(item.position.mark_price)}</b></span><span><small>UNREALIZED PnL</small><b className={item.position.unrealized_pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{fmt(item.position.unrealized_pnl)}</b></span><span><small>STOP DISTANCE</small><b>{item.stopDistance === null ? 'Unavailable' : `%${item.stopDistance.toFixed(2)}`}</b></span><span><small>TARGET DISTANCE</small><b>{item.targetDistance === null ? 'Unavailable' : `%${item.targetDistance.toFixed(2)}`}</b></span><span><small>R/R</small><b>{item.rr === null ? 'Unavailable' : `${item.rr.toFixed(2)}R`}</b></span></div><p className="v21PositionObservation">{item.observation}</p></article>)}</div> : <div className="v21PositionAssistantEmpty">No active positions available for position management review.</div>}</section>}
-
     <section className={`demoOrdersGrid ${tab !== 'trade' ? 'demoTabHidden' : ''}`}>
       <div className="demoOrderPanel"><header><div><span>BEKLEYEN GİRİŞLER</span><h3>Normal Demo Emirleri</h3></div><b>{account?.open_orders.length ?? 0}</b></header><div>{account?.open_orders.length ? account.open_orders.map(order => <article key={order.order_id}><span><b>{order.symbol} · {order.side}</b><small>{order.type} · {order.status}</small></span><em>{fmt(order.price || undefined)} · {fmt(order.quantity)}</em><button disabled={busy} onClick={() => cancelOrder(order)}>İPTAL</button></article>) : <p>Açık normal Demo emri yok.</p>}</div></div>
       <div className="demoOrderPanel"><header><div><span>STOP / TAKE PROFIT</span><h3>Koşullu Koruma Emirleri</h3></div><b>{account?.open_algo_orders.length ?? 0}</b></header><div>{account?.open_algo_orders.length ? account.open_algo_orders.map(order => <article key={order.algo_id}><span><b>{order.symbol} · {order.type}</b><small>{order.status} · {order.close_position ? 'Pozisyonu kapatır' : 'Kısmi azaltır'}</small></span><em>Tetik {fmt(order.trigger_price)}</em><button disabled={busy} onClick={() => cancelAlgo(order)}>İPTAL</button></article>) : <p>Açık koşullu Demo emri yok.</p>}</div></div>
@@ -816,8 +769,6 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
         <article className="v21Card v21ExchangeHistory"><header><History/><div><small>BINANCE FUTURES DEMO</small><h3>{symbol} Emir / Dolum Arşivi</h3></div></header>{historyPayload ? <div><h4>NORMAL EMİRLER · {historyPayload.orders.length}</h4>{historyPayload.orders.slice(-12).reverse().map((row,index) => <p key={`o-${index}`}><b>{String(row.side ?? '—')} · {String(row.type ?? '—')}</b><span>{String(row.status ?? '—')} · {String(row.avgPrice ?? row.price ?? '—')}</span></p>)}<h4>KOŞULLU EMİRLER · {historyPayload.algo_orders.length}</h4>{historyPayload.algo_orders.slice(-8).reverse().map((row,index) => <p key={`a-${index}`}><b>{String(row.orderType ?? row.type ?? 'ALGO')}</b><span>{String(row.algoStatus ?? row.status ?? '—')} · {String(row.triggerPrice ?? '—')}</span></p>)}<h4>DOLUMLAR · {historyPayload.trades.length}</h4>{historyPayload.trades.slice(-8).reverse().map((row,index) => <p key={`t-${index}`}><b>{String(row.side ?? '—')} · {String(row.qty ?? '—')}</b><span>PnL {String(row.realizedPnl ?? '0')} · ücret {String(row.commission ?? '—')}</span></p>)}</div> : <div className="v21EmptyMini">Üstteki düğmeyle seçili paritenin tam Demo geçmişini getir.</div>}</article>
       </div>
     </section>}
-
-    {tab === 'performance' && <section className="v21PerformanceAnalytics" aria-label="Advanced Performance Analytics"><header><div><span>ADVANCED PERFORMANCE ANALYTICS · READ ONLY</span><h2>Advanced Performance Analytics</h2><p>Derived from realized journal outcomes and the existing performance response.</p></div><BarChart3/></header><div className="v21PerformanceMetrics"><span><small>TOTAL TRADES</small><b>{analyticsCount ?? 'Unavailable'}</b></span><span><small>WIN RATE</small><b>{analyticsWinRate === null ? 'Unavailable' : `%${analyticsWinRate.toFixed(2)}`}</b></span><span><small>REALIZED PnL</small><b>{analyticsTotal === null ? 'Unavailable' : `${fmt(analyticsTotal)} USDT`}</b></span><span><small>AVERAGE WIN</small><b>{analyticsAverageWin === null ? 'Unavailable' : `${fmt(analyticsAverageWin)} USDT`}</b></span><span><small>AVERAGE LOSS</small><b>{analyticsAverageLoss === null ? 'Unavailable' : `${fmt(analyticsAverageLoss)} USDT`}</b></span><span><small>PROFIT FACTOR</small><b>{analyticsProfitFactor === null ? 'Unavailable' : analyticsProfitFactor.toFixed(2)}</b></span><span><small>EXPECTANCY</small><b>{analyticsExpectancy === null ? 'Unavailable' : `${fmt(analyticsExpectancy)} USDT`}</b></span></div><div className="v21StreakPanel"><b>STREAK ANALYSIS</b><span>{analyticsTrades.length ? 'Trade order unavailable for reliable streak analysis.' : 'Insufficient data for streak analysis.'}</span></div><div className="v21DirectionAnalytics"><b>LONG VS SHORT</b><span>{analyticsTrades.some(item => item.side) ? 'Direction breakdown available from journal sides.' : 'Direction data unavailable.'}</span></div><div className="v21PerformanceCurve">{analyticsTrades.length >= 2 ? <span>Ordered equity curve requires reliable event ordering.</span> : <span>Trade ordering unavailable for reliable drawdown analysis. No performance curve rendered.</span>}</div></section>}
 
     {tab === 'performance' && <section ref={workspaceRef} className="v21Workspace v21PerformanceCenter">
       <header className="v21WorkspaceHead"><div><span>GERÇEK KAPANIŞ EVENTLERİ · READ ONLY</span><h2>Performance Center</h2><p>Sonuçlar yalnızca kapanmış Demo işlemlerinden ve backend journal kayıtlarından hesaplanır.</p></div><div className="v21HeaderActions"><div className="v21PeriodPicker">{(['all','daily','weekly','monthly'] as const).map(period => <button key={period} className={performancePeriod === period ? 'active' : ''} onClick={() => setPerformancePeriod(period)}>{period === 'all' ? 'TÜMÜ' : period === 'daily' ? 'GÜNLÜK' : period === 'weekly' ? 'HAFTALIK' : 'AYLIK'}</button>)}</div><button className="v21ContextCta" onClick={() => setTab('trade')}>BACK TO COMMAND CENTER →</button></div></header>
@@ -851,5 +802,4 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <div className="v21SafetyLock"><LockKeyhole/><span><b>GERÇEK PARA VE GERÇEK BINANCE EMİR KANALI FİZİKSEL OLARAK YOK</b><small>Bu paket yalnızca https://demo-fapi.binance.com ve wss://demo-fstream.binance.com adreslerini kullanır.</small></span><strong>DEMO ONLY</strong></div>
     </section>}
   </section>
-  </div>
 }
