@@ -344,18 +344,26 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .webAccessCard footer { background: transparent; }
 
 .demoOrdersGrid > .demoOrderPanel,
-.demoOrdersGrid > .demoEventPanel { padding: 15px 16px; }
+.demoOrdersGrid > .demoEventPanel { min-height: 218px; padding: 16px; border-color: rgba(37,48,59,.9); box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+.demoOrdersGrid > .demoOrderPanel:nth-child(1) { border-top: 2px solid rgba(212,168,79,.62); background: linear-gradient(180deg, rgba(212,168,79,.08), rgba(18,24,32,.98) 32%); }
+.demoOrdersGrid > .demoOrderPanel:nth-child(2) { border-top: 2px solid rgba(34,211,238,.58); background: linear-gradient(180deg, rgba(34,211,238,.07), rgba(18,24,32,.98) 32%); }
+.demoOrdersGrid > .demoEventPanel { border-top: 2px solid rgba(129,112,190,.66); background: linear-gradient(180deg, rgba(129,112,190,.09), rgba(18,24,32,.98) 32%); }
+.demoOrdersGrid > .demoOrderPanel:hover,
+.demoOrdersGrid > .demoEventPanel:hover { border-color: var(--border-strong); box-shadow: 0 15px 32px rgba(0,0,0,.24); }
+.demoOrdersGrid > .demoOrderPanel > header,
+.demoOrdersGrid > .demoEventPanel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(37,48,59,.78); }
+.demoOrdersGrid > .demoOrderPanel > header > div,
+.demoOrdersGrid > .demoEventPanel > header > div { min-width: 0; }
+.demoOrdersGrid > .demoOrderPanel > header > b,
+.demoOrdersGrid > .demoEventPanel > header > b { flex: 0 0 auto; min-width: 28px; padding: 4px 8px; border: 1px solid rgba(100,116,139,.55); border-radius: 999px; background: rgba(13,17,23,.62); color: var(--text-primary); font-size: 11px; text-align: center; }
 .demoOrderPanel > div,
-.demoEventPanel > div { gap: 0; margin-top: 9px; }
+.demoEventPanel > div { gap: 8px; margin-top: 13px; }
 .demoOrderPanel article,
 .demoEventPanel article,
-.executionEvents article { position: relative; min-width: 0; padding: 11px 8px 11px 12px; border: 0; border-bottom: 1px solid rgba(37,48,59,.7); border-radius: 0; background: transparent; }
-.demoOrderPanel article:last-child,
-.demoEventPanel article:last-child,
-.executionEvents article:last-child { border-bottom-color: transparent; }
+.executionEvents article { position: relative; min-width: 0; padding: 11px 10px 11px 13px; border: 1px solid rgba(37,48,59,.8); border-radius: 9px; background: rgba(13,17,23,.68); }
 .demoOrderPanel article:hover,
 .demoEventPanel article:hover,
-.executionEvents article:hover { border-radius: 6px; background: rgba(24,33,43,.72); }
+.executionEvents article:hover { border-color: rgba(100,116,139,.65); background: rgba(24,33,43,.9); }
 .demoOrderPanel article { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; }
 .demoOrderPanel article > span,
 .demoEventPanel article > span,
@@ -385,12 +393,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .demoEventPanel article:nth-child(3n+2) i { background: var(--warning); box-shadow: 0 0 0 3px rgba(245,158,11,.08); }
 .demoOrderPanel > div > p { margin: 0; padding: 20px 8px 16px; color: var(--text); font-size: 11px; text-align: center; }
 .demoOrderPanel > div > p::after { display: block; margin-top: 5px; color: var(--text-muted); content: 'Scanner active · Watching markets'; font-size: 10px; }
-.demoEventPanel > div:empty::after { padding: 20px 8px; color: var(--text-muted); content: 'No recent security events'; font-size: 11px; text-align: center; }
+.demoOrderPanel > div > p::before { display: block; margin-bottom: 8px; color: var(--accent); content: '0'; font-size: 24px; font-weight: 750; line-height: 1; }
+.demoEventPanel > div:empty::after { display: block; padding: 20px 8px; color: var(--text-muted); content: 'Henüz güvenlik olayı yok'; font-size: 11px; text-align: center; }
 .demoEventPanel article b:first-child { letter-spacing: .02em; }
 .demoPositionList > article { border: 0; border-top: 2px solid var(--info); border-radius: 0; background: var(--surface-1); }
 .demoPositionList > article:hover { background: var(--surface-2); }
 
 @media (max-width: 700px) {
+  .demoOrdersGrid > .demoOrderPanel,
+  .demoOrdersGrid > .demoEventPanel { min-height: 0; padding: 13px; }
   .demoOrderPanel article { grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
   .demoOrderPanel article em { grid-column: 1; }
   .demoOrderPanel article button { grid-column: 2; grid-row: 1 / span 2; }
