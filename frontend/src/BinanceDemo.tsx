@@ -501,6 +501,14 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     }
   }, [v21])
 
+  const entryValue = Number(form.limitPrice) || Number(analysis?.entry) || 0
+  const stopValue = Number(form.stop) || Number(analysis?.stop_loss) || 0
+  const tp1Value = Number(form.tp1) || Number(analysis?.tp1) || 0
+  const tp3Value = Number(form.tp3) || Number(analysis?.tp3) || 0
+  const riskAmount = Math.abs(entryValue - stopValue)
+  const rewardAmount = Math.abs(tp1Value - entryValue)
+  const rewardRatio = riskAmount > 0 ? (rewardAmount / riskAmount).toFixed(2) : '—'
+
   return <section className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü">
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
@@ -588,14 +596,19 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
         <button className="demoSubmit" disabled={busy || !status?.armed} onClick={submitOrder}><Send/> BINANCE DEMO EMRİ GÖNDER</button>
         <div className="demoOrderSummary">
           <div className="demoSummaryHeader">
-            <span>EMİR ÖZETİ</span>
-            <strong>{form.direction}</strong>
+            <span>TRADE SUMMARY</span>
+            <strong className={form.direction === 'LONG' ? 'demoLongState' : 'demoShortState'}>{form.direction}</strong>
           </div>
           <div className="demoSummaryGrid">
-            <div><small>Risk</small><b>{fmt(numberValue(riskLoss || '5'))} USDT</b></div>
-            <div><small>Stop</small><b>{fmt(Number(form.stop) || analysis?.stop_loss || 0)}</b></div>
-            <div><small>TP1</small><b>{fmt(Number(form.tp1) || analysis?.tp1 || 0)}</b></div>
-            <div><small>TP3</small><b>{fmt(Number(form.tp3) || analysis?.tp3 || 0)}</b></div>
+            <div><small>Entry</small><b>{fmt(entryValue)}</b></div>
+            <div><small>Stop</small><b>{fmt(stopValue)}</b></div>
+            <div><small>TP1</small><b>{fmt(tp1Value)}</b></div>
+            <div><small>TP3</small><b>{fmt(tp3Value)}</b></div>
+          </div>
+          <div className="demoRewardRow">
+            <span><small>Risk</small><b>{fmt(Math.min(numberValue(riskLoss || '5'), riskAmount || numberValue(riskLoss || '5')))} USDT</b></span>
+            <span><small>Reward</small><b>{fmt(rewardAmount)} USDT</b></span>
+            <span><small>R:R</small><b>{rewardRatio}</b></span>
           </div>
         </div>
         <div className={`demoTicketFeedback demoTicketFeedback-${messageKind}`}>{messageKind === 'error' ? <TriangleAlert/> : messageKind === 'ok' ? <ShieldCheck/> : <Activity/>}<span><b>{messageKind === 'error' ? 'İŞLEM ENGELLENDİ' : messageKind === 'ok' ? 'DOĞRULAMA TAMAM' : 'GÜVENLİK DURUMU'}</b><small>{message}</small></span></div>
@@ -615,8 +628,8 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     </section>
 
     <section className={`demoOrdersGrid ${tab !== 'trade' ? 'demoTabHidden' : ''}`}>
-      <div className="demoOrderPanel"><header><div><span>BEKLEYEN GİRİŞLER</span><h3>Normal Demo Emirleri</h3></div><b>{account?.open_orders.length ?? 0}</b></header><div>{account?.open_orders.length ? account.open_orders.map(order => <article key={order.order_id}><span><b>{order.symbol} · {order.side}</b><small>{order.type} · {order.status}</small></span><em>{fmt(order.price || undefined)} · {fmt(order.quantity)}</em><button disabled={busy} onClick={() => cancelOrder(order)}>İPTAL</button></article>) : <p>Açık normal Demo emri yok.</p>}</div></div>
-      <div className="demoOrderPanel"><header><div><span>STOP / TAKE PROFIT</span><h3>Koşullu Koruma Emirleri</h3></div><b>{account?.open_algo_orders.length ?? 0}</b></header><div>{account?.open_algo_orders.length ? account.open_algo_orders.map(order => <article key={order.algo_id}><span><b>{order.symbol} · {order.type}</b><small>{order.status} · {order.close_position ? 'Pozisyonu kapatır' : 'Kısmi azaltır'}</small></span><em>Tetik {fmt(order.trigger_price)}</em><button disabled={busy} onClick={() => cancelAlgo(order)}>İPTAL</button></article>) : <p>Açık koşullu Demo emri yok.</p>}</div></div>
+      <div className="demoOrderPanel"><header><div><span>BEKLEYEN GİRİŞLER</span><h3>Normal Demo Emirleri</h3></div><b>{account?.open_orders.length ?? 0}</b></header><div>{account?.open_orders.length ? account.open_orders.map(order => <article key={order.order_id} className={order.side === 'BUY' ? 'demoOrderItem buy' : 'demoOrderItem sell'}><span><b>{order.symbol} · {order.side}</b><small>{order.type} · {order.status}</small></span><em>{fmt(order.price || undefined)} · {fmt(order.quantity)}</em><button disabled={busy} onClick={() => cancelOrder(order)}>İPTAL</button></article>) : <p>Açık normal Demo emri yok.</p>}</div></div>
+      <div className="demoOrderPanel"><header><div><span>STOP / TAKE PROFIT</span><h3>Koşullu Koruma Emirleri</h3></div><b>{account?.open_algo_orders.length ?? 0}</b></header><div>{account?.open_algo_orders.length ? account.open_algo_orders.map(order => <article key={order.algo_id} className={order.close_position ? 'demoAlgoOrder close' : 'demoAlgoOrder hedge'}><span><b>{order.symbol} · {order.type}</b><small>{order.status} · {order.close_position ? 'Pozisyonu kapatır' : 'Kısmi azaltır'}</small></span><em>Tetik {fmt(order.trigger_price)}</em><button disabled={busy} onClick={() => cancelAlgo(order)}>İPTAL</button></article>) : <p>Açık koşullu Demo emri yok.</p>}</div></div>
       <div className="demoEventPanel"><header><div><span>DENETİM AKIŞI</span><h3>Son Güvenlik Olayları</h3></div><b>{status?.events.length ?? 0}</b></header><div>{status?.events.slice(0,6).map((event,index) => <article key={`${event.created_at}-${index}`}><i/><span><b>{event.kind}</b><small>{event.message}</small></span><time>{stamp(event.created_at)}</time></article>)}</div></div>
     </section>
 
