@@ -159,7 +159,7 @@ type V21Summary = {
 }
 
 type V21RiskPreview = {symbol:string;leverage:number;risk_pct:number;notional_usdt:number;margin_usdt:number;estimated_stop_loss_usdt:number;capped:boolean;quantity_preview:string;step_size:string}
-type V21Tab = 'trade'|'risk'|'journal'|'auto'|'backtest'|'certificate'
+type V21Tab = 'trade'|'risk'|'journal'|'auto'|'backtest'|'performance'|'certificate'
 
 const initialForm:FormState = {
   direction:'LONG',orderType:'MARKET',margin:'50',leverage:'2',limitPrice:'',stop:'',tp1:'',tp2:'',tp3:'',
@@ -482,6 +482,25 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     setMessage(permission === 'granted' ? 'Masaüstü Demo bildirimleri açıldı.' : 'Bildirim izni verilmedi.');setMessageKind(permission === 'granted' ? 'ok' : 'error')
   }
 
+  const performanceSummary = useMemo(() => {
+    const realized = v21?.daily.realized_pnl ?? 0
+    const backtest = v21?.backtest
+    const equity = backtest?.ending_equity ?? 1000
+    const returnPct = backtest ? ((backtest.net_pnl / Math.max(1, equity)) * 100) : 0
+    const winRate = backtest?.win_rate ?? 0
+    const maxDd = backtest?.max_drawdown_pct ?? 0
+    const pf = backtest?.profit_factor ?? 0
+    return {
+      realized,
+      returnPct,
+      winRate,
+      maxDd,
+      pf,
+      tradeCount: backtest?.trades ?? 0,
+      status: realized >= 0 ? 'Profit' : 'Risk',
+    }
+  }, [v21])
+
   return <section className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü">
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
@@ -498,6 +517,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <button className={tab === 'journal' ? 'active' : ''} onClick={() => setTab('journal')}><ClipboardList/><span><b>CANLI GÜNLÜK</b><small>Dolum · Kapanış · Neden</small></span></button>
       <button className={tab === 'auto' ? 'active' : ''} onClick={() => setTab('auto')}><Zap/><span><b>OTOMASYON</b><small>İzin listesi · Kapılar</small></span></button>
       <button className={tab === 'backtest' ? 'active' : ''} onClick={() => setTab('backtest')}><BarChart3/><span><b>BACKTEST LAB</b><small>Ücret · Kayma · 3 dönem</small></span></button>
+      <button className={tab === 'performance' ? 'active' : ''} onClick={() => setTab('performance')}><BarChart3/><span><b>PERFORMANS</b><small>PnL · Win rate · Drawdown</small></span></button>
       <button className={tab === 'certificate' ? 'active' : ''} onClick={() => setTab('certificate')}><ShieldCheck/><span><b>SERTİFİKA</b><small>Sağlık · Tatbikat · Kanıt</small></span></button>
     </nav>
 
@@ -566,6 +586,18 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
         <div className="demoExposure"><span><small>MAKS. POZİSYON</small><b>{fmt(numberValue(form.margin)*Number(form.leverage))} USDT</b></span><span><small>GERÇEK PARA</small><b>0 USDT</b></span></div>
         <button className="demoTest" disabled={busy || !status?.connected} onClick={testOrder}><TestTube2/> EMİR TESTİ · OLUŞTURMAZ</button>
         <button className="demoSubmit" disabled={busy || !status?.armed} onClick={submitOrder}><Send/> BINANCE DEMO EMRİ GÖNDER</button>
+        <div className="demoOrderSummary">
+          <div className="demoSummaryHeader">
+            <span>EMİR ÖZETİ</span>
+            <strong>{form.direction}</strong>
+          </div>
+          <div className="demoSummaryGrid">
+            <div><small>Risk</small><b>{fmt(numberValue(riskLoss || '5'))} USDT</b></div>
+            <div><small>Stop</small><b>{fmt(Number(form.stop) || analysis?.stop_loss || 0)}</b></div>
+            <div><small>TP1</small><b>{fmt(Number(form.tp1) || analysis?.tp1 || 0)}</b></div>
+            <div><small>TP3</small><b>{fmt(Number(form.tp3) || analysis?.tp3 || 0)}</b></div>
+          </div>
+        </div>
         <div className={`demoTicketFeedback demoTicketFeedback-${messageKind}`}>{messageKind === 'error' ? <TriangleAlert/> : messageKind === 'ok' ? <ShieldCheck/> : <Activity/>}<span><b>{messageKind === 'error' ? 'İŞLEM ENGELLENDİ' : messageKind === 'ok' ? 'DOĞRULAMA TAMAM' : 'GÜVENLİK DURUMU'}</b><small>{message}</small></span></div>
         <small className="demoTicketNote">Bu tutar yalnızca sanal Binance Demo bakiyesidir. Gerçek Binance emir kanalı kilitlidir.</small>
       </div>
@@ -627,11 +659,51 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
           <label className="v21Switch"><input type="checkbox" checked={settingsDraft.allow_short} onChange={event => setSettingsDraft({...settingsDraft,allow_short:event.target.checked})}/><span><b>SHORT izinli</b></span></label>
         </div>}<button disabled={v21Busy || !settingsDraft} onClick={saveSettings}><Save/> OTOMASYON KAPILARINI KAYDET</button></article></div>
       <div className="v21GateStrip"><span className={status?.armed ? 'passed' : ''}><b>1</b><em>DEMO ARM</em><small>{status?.armed ? 'GEÇTİ' : 'KAPALI'}</small></span><span className={status?.connected ? 'passed' : ''}><b>2</b><em>DEMO API</em><small>{status?.connected ? 'BAĞLI' : 'BEKLİYOR'}</small></span><span className={(v21?.daily.auto_entries || 0) < (v21?.settings.daily_trade_limit || 0) ? 'passed' : ''}><b>3</b><em>GÜNLÜK LİMİT</em><small>{v21?.daily.auto_entries ?? 0}/{v21?.settings.daily_trade_limit ?? 0}</small></span><span className={(v21?.daily.remaining_loss_budget || 0) > 0 ? 'passed' : ''}><b>4</b><em>ZARAR KASASI</em><small>{fmt(v21?.daily.remaining_loss_budget)} USDT</small></span><span className={(v21?.account.positions || 0) < (v21?.settings.max_positions || 0) ? 'passed' : ''}><b>5</b><em>POZİSYON</em><small>{v21?.account.positions ?? 0}/{v21?.settings.max_positions ?? 0}</small></span><span><b>6</b><em>SİNYAL KAPILARI</em><small>Her taramada</small></span></div>
+      <div className="v21AutoFlow">
+        <div className="v21AutoFlowHeader"><span>OTOMASYON DURUMU</span><h3>İşlem Açma Akışı</h3></div>
+        <div className="v21AutoFlowSteps">
+          <article className={status?.armed ? 'passed' : ''}><b>01</b><div><strong>Demo arm</strong><small>{status?.armed ? 'Güvenlik kilidi açık.' : 'Emir kilidi kapalı; işlem bekliyor.'}</small></div></article>
+          <article className={status?.connected ? 'passed' : ''}><b>02</b><div><strong>Market sync</strong><small>{status?.connected ? 'User stream canlı.' : 'Bağlantı bekleniyor.'}</small></div></article>
+          <article className={(v21?.daily.auto_entries ?? 0) < (v21?.settings.daily_trade_limit ?? 0) ? 'passed' : ''}><b>03</b><div><strong>Risk gate</strong><small>{(v21?.daily.remaining_loss_budget ?? 0) > 0 ? 'Günlük zarar bütçesi açık.' : 'Günlük zarar limiti aktif.'}</small></div></article>
+          <article className={v21?.auto.last_decision ? 'passed' : ''}><b>04</b><div><strong>Signal decision</strong><small>{v21?.auto.last_decision || 'Henüz karar alınmadı.'}</small></div></article>
+        </div>
+      </div>
     </section>}
 
     {tab === 'backtest' && <section className="v21Workspace">
       <header className="v21WorkspaceHead"><div><span>NO LOOK-AHEAD · NEXT OPEN · STOP FIRST</span><h2>Kanıtlı Backtest Laboratuvarı</h2><p>Sinyal kapanan mumdan, giriş sonraki mum açılışından alınır; ücret ve kayma iki yönlü düşülür.</p></div><div className="v21BacktestRun"><select value={backtestSymbol} onChange={event => setBacktestSymbol(event.target.value)}>{(v21?.settings.allowed_symbols || [symbol]).map(item => <option key={item}>{item}</option>)}</select><button disabled={v21Busy || !status?.configured} onClick={runBacktest}><BarChart3/> 1.000 MUMU TEST ET</button></div></header>
       {v21?.backtest ? <><div className="v21BacktestMetrics"><span><small>NET SONUÇ</small><b className={v21.backtest.net_pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{v21.backtest.net_pnl >= 0 ? '+' : ''}{fmt(v21.backtest.net_pnl)} USDT</b></span><span><small>İŞLEM</small><b>{v21.backtest.trades}</b></span><span><small>BAŞARI</small><b>%{fmt(v21.backtest.win_rate)}</b></span><span><small>MAKS. DÜŞÜŞ</small><b>%{fmt(v21.backtest.max_drawdown_pct)}</b></span><span><small>PROFIT FACTOR</small><b>{fmt(v21.backtest.profit_factor)}</b></span><span><small>GELECEK SIZINTISI</small><b>{v21.backtest.no_lookahead ? 'YOK' : 'KONTROL'}</b></span></div><div className="v21BacktestLayout"><article className="v21Card v21Folds"><header><BarChart3/><div><small>3 DÖNEMLİ ZAMAN TÜNELİ</small><h3>Geliştirme · Doğrulama · Görünmeyen</h3></div></header>{v21.backtest.folds.map((fold,index) => <section key={fold.name}><b>{index+1}</b><span><strong>{fold.name}</strong><small>{fold.trades} işlem</small></span><em className={fold.net_pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{fold.net_pnl >= 0 ? '+' : ''}{fmt(fold.net_pnl)} USDT</em></section>)}</article><article className="v21Card v21TradeResults"><header><History/><div><small>SON İŞLEMLER</small><h3>Maliyet Sonrası Sonuçlar</h3></div></header><div>{v21.backtest.recent_trades.slice(0,16).map((trade,index) => <p key={index}><span><b>{trade.direction} · {trade.reason}</b><small>{trade.regime} · maliyet {fmt(trade.cost_usdt)}</small></span><em className={trade.pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{trade.pnl >= 0 ? '+' : ''}{fmt(trade.pnl)}</em></p>)}</div></article></div><p className="v21Disclaimer">{v21.backtest.note}</p></> : <div className="v21LargeEmpty"><BarChart3/><b>Henüz V21 backtest çalıştırılmadı</b><span>Seçili paritede 1.000 Demo Futures mumunu kronolojik olarak sınamak için üstteki düğmeye bas.</span></div>}
+    </section>}
+
+    {tab === 'performance' && <section className="v21Workspace">
+      <header className="v21WorkspaceHead"><div><span>PROFESSIONAL PERFORMANCE SUMMARY</span><h2>Performans Merkezi</h2><p>Net PnL, kazanç oranı, risk/ödül ve son kapanış verileri tek panoda summarize edilir.</p></div><b className={performanceSummary.realized >= 0 ? 'v21Running' : 'v21Pending'}><BarChart3/> {performanceSummary.realized >= 0 ? 'POSİTİF TREND' : 'RİSK TEDBİRİ'}</b></header>
+      <div className="v21PerformanceHero">
+        <article className="v21Card v21PerformancePrimary">
+          <div className="v21PerformanceLabel"><small>TOPLAM PnL</small><strong className={performanceSummary.realized >= 0 ? 'demoProfit' : 'demoLoss'}>{performanceSummary.realized >= 0 ? '+' : ''}{fmt(performanceSummary.realized)} USDT</strong></div>
+          <div className="v21PerformanceMeta"><span><small>Win rate</small><b>%{fmt(performanceSummary.winRate)}</b></span><span><small>Return</small><b>{performanceSummary.returnPct >= 0 ? '+' : ''}{fmt(performanceSummary.returnPct)}%</b></span></div>
+        </article>
+        <article className="v21Card v21PerformanceMini"><span><small>Trade count</small><b>{performanceSummary.tradeCount}</b></span><span><small>Profit factor</small><b>{fmt(performanceSummary.pf)}</b></span><span><small>Max drawdown</small><b>%{fmt(performanceSummary.maxDd)}</b></span></article>
+      </div>
+      <div className="v21PerformanceGrid">
+        <article className="v21Card">
+          <header><BarChart3/><div><small>ANALİTİK GÖRÜNÜM</small><h3>Öne Çıkan Metrikler</h3></div></header>
+          <div className="v21MetricRow v21PerformanceMetrics">
+            <span><small>NET PnL</small><b className={performanceSummary.realized >= 0 ? 'demoProfit' : 'demoLoss'}>{performanceSummary.realized >= 0 ? '+' : ''}{fmt(performanceSummary.realized)} USDT</b></span>
+            <span><small>WIN RATE</small><b>%{fmt(performanceSummary.winRate)}</b></span>
+            <span><small>RETURN</small><b>{performanceSummary.returnPct >= 0 ? '+' : ''}{fmt(performanceSummary.returnPct)}%</b></span>
+            <span><small>DRAWDOWN</small><b>%{fmt(performanceSummary.maxDd)}</b></span>
+          </div>
+        </article>
+        <article className="v21Card">
+          <header><History/><div><small>ÇALIŞMA DURUMU</small><h3>Son Durum</h3></div></header>
+          <div className="v21StatusList">
+            <div><strong>Otomasyon</strong><span>{v21?.auto.enabled ? 'Aktif' : 'Bekliyor'}</span></div>
+            <div><strong>Risk bütçesi</strong><span>{fmt(v21?.daily.remaining_loss_budget)} USDT</span></div>
+            <div><strong>Canlı PnL</strong><span className={Number(v21?.account.unrealized_pnl ?? 0) >= 0 ? 'demoProfit' : 'demoLoss'}>{fmt(v21?.account.unrealized_pnl)} USDT</span></div>
+            <div><strong>Backtest</strong><span>{v21?.backtest ? `${fmt(v21.backtest.trades)} trade` : 'Bekleniyor'}</span></div>
+          </div>
+        </article>
+      </div>
     </section>}
 
     {tab === 'certificate' && <section className="v21Workspace">

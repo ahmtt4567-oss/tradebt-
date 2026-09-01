@@ -384,7 +384,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<'TÜMÜ'|'LONG'|'SHORT'|'KIRILIM'>('TÜMÜ')
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('dashboard')
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('dashboard')
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('v20-demo')
   const [scanning, setScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState('İlk tarama bekleniyor')
   const [limitDirection, setLimitDirection] = useState<'LONG'|'SHORT'>('LONG')
@@ -1135,6 +1135,10 @@ export default function App() {
   const panelVisibility = (target:WorkspaceTab) => workspaceTab === target ? '' : ' moduleHidden'
   const openWorkspace = (target:WorkspaceTab) => {
     setWorkspaceTab(target)
+    if (target === 'dashboard') {
+      setWorkspaceView('v20-demo')
+      return
+    }
     setWorkspaceView(workspaceViews.find(item => item.parent === target)?.key ?? 'dashboard')
   }
   const navigateWorkspace = (target:WorkspaceView) => {
