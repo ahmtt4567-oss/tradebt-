@@ -677,6 +677,119 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-color: rgba(163, 155, 99, 0.45) !important;
 }
 
+.webAccessShell,
+.appRecoveryShell {
+  min-height: 100vh !important;
+  padding: 24px !important;
+  background: var(--app-bg-deep) !important;
+  color: var(--text) !important;
+}
+
+.webAccessCard,
+.appRecoveryCard {
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.38) !important;
+  backdrop-filter: none !important;
+}
+
+.webAccessBrand > span,
+.appRecoveryLogo {
+  background: var(--surface-4) !important;
+  color: var(--accent-strong) !important;
+  box-shadow: none !important;
+}
+
+.webAccessBrand b,
+.webAccessCard h1,
+.appRecoveryCard h1,
+.appRecoveryCard > small {
+  color: var(--text) !important;
+}
+
+.webAccessBrand small,
+.webAccessCard > p,
+.appRecoveryCard > p,
+.appRecoveryCard > div span {
+  color: var(--text-muted) !important;
+}
+
+.webAccessIcon {
+  background: var(--surface-3) !important;
+  color: var(--accent-strong) !important;
+  box-shadow: none !important;
+}
+
+.webAccessCard label {
+  color: var(--text-muted) !important;
+}
+
+.webAccessCard input,
+.appRecoveryCard > div {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface-0) !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.24) !important;
+}
+
+.webAccessCard input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+.webAccessCard input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(139, 138, 82, 0.2) !important;
+}
+
+.webAccessCard form button,
+.appRecoveryCard button {
+  border: 1px solid rgba(79, 138, 98, 0.5) !important;
+  border-radius: 10px !important;
+  background: var(--success) !important;
+  color: var(--text-strong) !important;
+  box-shadow: none !important;
+}
+
+.webAccessCard form button:hover:not(:disabled),
+.appRecoveryCard button:hover:not(:disabled) {
+  background: var(--surface-4) !important;
+  border-color: var(--border-strong) !important;
+}
+
+.webAccessCard > em {
+  color: var(--warning) !important;
+}
+
+.webAccessCard footer {
+  border-top: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+}
+
+.webSessionBadge {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (max-width: 600px) {
+  .webAccessShell,
+  .appRecoveryShell {
+    padding: 16px !important;
+  }
+
+  .webAccessCard,
+  .appRecoveryCard {
+    border-radius: 14px !important;
+  }
+}
+
 .v26App,
 .v26App *:not(svg):not(path),
 .binanceDemoDeck,
