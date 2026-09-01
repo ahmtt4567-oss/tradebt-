@@ -326,8 +326,9 @@ def _candidate_confidence_label(confidence: int) -> str:
 
 
 def _apply_scan_completion_state(scanner: dict[str, Any], settings: dict[str, Any], ranked: list[dict[str, Any]], top_candidates: list[dict[str, Any]], eligible_count: int | None = None) -> None:
-    completed_at = now_iso()
-    next_scan_at = datetime.fromtimestamp(time.time() + int(settings["scan_seconds"]), timezone.utc).isoformat()
+    completed_epoch = time.time()
+    completed_at = datetime.fromtimestamp(completed_epoch, timezone.utc).isoformat()
+    next_scan_at = datetime.fromtimestamp(completed_epoch + SCAN_INTERVAL_SECONDS, timezone.utc).isoformat()
     scanner.update({
         "last_scan_at": completed_at,
         "next_scan_at": next_scan_at,
