@@ -45,3 +45,100 @@ html, body, #root, .v26App { background-color: var(--terminal-bg) !important; co
 @media (max-width: 700px) { body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); } .terminalMobileNav { position: fixed; z-index: 40; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--terminal-border); background: rgba(11, 16, 14, .96); box-shadow: 0 -12px 30px rgba(0, 0, 0, .3); backdrop-filter: blur(14px); } .terminalMobileNav button { display: grid; justify-items: center; gap: 4px; min-height: 48px; padding: 7px 4px; border: 0; border-radius: 8px; background: transparent; color: var(--terminal-muted); font-size: 10px; } .terminalMobileNav button svg { width: 18px; height: 18px; } .terminalMobileNav button.active { color: var(--terminal-gold); background: rgba(197, 164, 93, .1); } }
 @media (min-width: 701px) { .terminalMobileNav { display: none; } }
 @media (prefers-reduced-motion: reduce) { .binanceDemoDeck button { transition: none; } .binanceDemoDeck button:hover:not(:disabled) { transform: none; } }
+
+/* Final root override: older feature styles remain loaded, but every active surface
+   inherits one restrained terminal palette. */
+:root {
+  --terminal-bg: #0b0f14;
+  --terminal-surface: #121820;
+  --terminal-surface-raised: #171f29;
+  --terminal-surface-hover: #1c2631;
+  --terminal-border: #293440;
+  --terminal-border-strong: #3a4855;
+  --terminal-text: #edf2f5;
+  --terminal-muted: #9aa8b3;
+  --terminal-disabled: #64717b;
+  --terminal-gold: #c4a15a;
+  --terminal-positive: #55c58b;
+  --terminal-negative: #e66f73;
+  --terminal-warning: #d9ad58;
+  --terminal-info: #6ca9d8;
+  color-scheme: dark;
+}
+
+html, body, #root { min-width: 0 !important; background: var(--terminal-bg) !important; color: var(--terminal-text) !important; }
+body { font-family: "IBM Plex Sans", "Segoe UI", sans-serif !important; overflow-x: hidden !important; background-image: radial-gradient(circle at 15% 0%, rgba(196,161,90,.055), transparent 32%), linear-gradient(180deg, #0b0f14 0%, #0d1218 100%) !important; }
+body *, body *::before, body *::after { border-color: var(--terminal-border); }
+
+.v26App, .binanceDemoDeck, .v21Workspace, .v21Card, .demoTicket, .demoPositions, .demoOrderPanel, .demoEventPanel,
+.demoLiveChart, .demoSetupCard, .v21AutoScanner, .v21AutoControl, .v21AutoRules, .v21Calculator, .v21Settings,
+.v21Timeline, .v21ExchangeHistory, .v21Score, .v21CertificateGates, .v21Health, .v21PerformanceCenter,
+.v21ExecutiveSummary, .v21PerformanceHero, .v21PerformanceGrid { color: var(--terminal-text) !important; background: var(--terminal-surface) !important; border-color: var(--terminal-border) !important; }
+
+.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v26Footer, .v26Setup, .v21Tabs, .v21Pulse,
+.demoHero, .demoCommandBar, .demoAccountStrip, .v21GateStrip { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border-color: var(--terminal-border) !important; }
+.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v26Setup, .demoHero, .demoCommandBar, .demoAccountStrip { box-shadow: 0 12px 30px rgba(0,0,0,.18) !important; }
+
+.v26App h1, .v26App h2, .v26App h3, .v26App h4, .binanceDemoDeck h1, .binanceDemoDeck h2, .binanceDemoDeck h3, .binanceDemoDeck h4,
+.v26App b, .v26App strong, .binanceDemoDeck b, .binanceDemoDeck strong { color: var(--terminal-text); }
+.v26App p, .v26App small, .v26App span, .v26App em, .binanceDemoDeck p, .binanceDemoDeck small, .binanceDemoDeck span, .binanceDemoDeck em { color: var(--terminal-muted); }
+.v26App svg, .binanceDemoDeck svg { color: currentColor; }
+
+.v26App button, .binanceDemoDeck button { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border: 1px solid var(--terminal-border) !important; border-radius: 8px; }
+.v26App button:hover:not(:disabled), .binanceDemoDeck button:hover:not(:disabled) { color: var(--terminal-text) !important; background: var(--terminal-surface-hover) !important; border-color: var(--terminal-gold) !important; }
+.v26App button:focus-visible, .binanceDemoDeck button:focus-visible, .v26App input:focus-visible, .binanceDemoDeck input:focus-visible,
+.v26App select:focus-visible, .binanceDemoDeck select:focus-visible { outline: 2px solid var(--terminal-gold) !important; outline-offset: 2px; }
+.v26App button:disabled, .binanceDemoDeck button:disabled { color: var(--terminal-disabled) !important; background: #10161c !important; border-color: #202a33 !important; }
+.demoSubmit, .demoUnlock, .demoConnect, .v21AutoControl > button:not(.stop), .v21PeriodPicker .active { background: #214d42 !important; border-color: #397b66 !important; color: #e8fff4 !important; }
+.demoEmergency, .demoLock, .v21AutoControl > button.stop { background: #552c34 !important; border-color: #85444e !important; color: #ffe9eb !important; }
+.demoTest, .demoAnalysisFill, .v21PeriodPicker button { background: #1b2733 !important; color: #dce8ef !important; }
+
+.v26App input, .v26App select, .v26App textarea, .binanceDemoDeck input, .binanceDemoDeck select, .binanceDemoDeck textarea {
+  color: var(--terminal-text) !important; background: #0e141b !important; border: 1px solid var(--terminal-border) !important; box-shadow: inset 0 1px 2px rgba(0,0,0,.25) !important;
+}
+.v26App input::placeholder, .binanceDemoDeck input::placeholder, .v26App textarea::placeholder, .binanceDemoDeck textarea::placeholder { color: var(--terminal-disabled) !important; opacity: 1; }
+.v26App option, .binanceDemoDeck option { color: var(--terminal-text) !important; background: var(--terminal-surface) !important; }
+
+.v26App table, .binanceDemoDeck table, .v26App thead, .binanceDemoDeck thead { background: var(--terminal-surface-raised) !important; color: var(--terminal-text) !important; }
+.v26App th, .binanceDemoDeck th { color: var(--terminal-gold) !important; background: #10171f !important; border-color: var(--terminal-border) !important; }
+.v26App td, .binanceDemoDeck td { color: var(--terminal-muted) !important; background: transparent !important; border-color: var(--terminal-border) !important; }
+.v26App tr:hover td, .binanceDemoDeck tr:hover td { background: var(--terminal-surface-hover) !important; color: var(--terminal-text) !important; }
+
+.v26NotificationPanel, .v26NotificationList, .v26NotificationEmpty, [role="dialog"], dialog, .modal, .popover, .tooltip,
+.v26App [data-radix-popper-content-wrapper] { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border-color: var(--terminal-border-strong) !important; box-shadow: 0 18px 50px rgba(0,0,0,.42) !important; }
+.v26NotificationPanel *, [role="dialog"] *, dialog *, .modal *, .popover *, .tooltip * { color: inherit; }
+
+.demoProfit, .summaryPositive, .demoLong, .v21Running, .ok, .up { color: var(--terminal-positive) !important; }
+.demoLoss, .summaryNegative, .demoShort, .error, .down { color: var(--terminal-negative) !important; }
+.v21Pending, .v21Stopped, .warning, .locked { color: var(--terminal-warning) !important; }
+.v26Loading, .demoEmpty, .v21EmptyMini, .v21LargeEmpty, .v21ScannerEmpty { color: var(--terminal-muted) !important; background: var(--terminal-surface) !important; border-color: var(--terminal-border) !important; }
+.demoProfit, .summaryPositive { text-shadow: 0 0 18px rgba(85,197,139,.16); }
+.demoLoss, .summaryNegative { text-shadow: 0 0 18px rgba(230,111,115,.14); }
+
+.v21PerformanceHero, .v21PerformanceGrid { background: var(--terminal-surface-raised) !important; }
+.v21PerformanceHero > span, .v21PerformanceGrid article, .v21MetricRow > span, .v21BacktestMetrics > span { background: #10171f !important; border: 1px solid var(--terminal-border) !important; }
+.v21SummaryBlock, .v21SafetyLock { background: rgba(230,111,115,.08) !important; border-color: rgba(230,111,115,.34) !important; }
+.v21GateStrip span.passed { background: rgba(85,197,139,.09) !important; border-color: rgba(85,197,139,.3) !important; }
+
+.v26ChartShell, .v26Chart, .demoChartCanvas { background: #0c1218 !important; border-color: var(--terminal-border) !important; }
+.v26ChartStatus { color: var(--terminal-muted) !important; background: #10171f !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck .demoHero, .binanceDemoDeck .demoSetupCard, .binanceDemoDeck .demoAccountStrip, .binanceDemoDeck .demoLiveChart,
+.binanceDemoDeck .demoTicket, .binanceDemoDeck .demoPositions, .binanceDemoDeck .demoOrderPanel, .binanceDemoDeck .demoEventPanel,
+.binanceDemoDeck .demoHero > *, .binanceDemoDeck .demoLiveChart > *, .binanceDemoDeck .demoTicket > header,
+.binanceDemoDeck .demoPositions > header, .binanceDemoDeck .demoOrderPanel > header, .binanceDemoDeck .demoEventPanel > header,
+.binanceDemoDeck .demoPositionList > article { background: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck .demoCommandBar, .binanceDemoDeck .demoExposure, .binanceDemoDeck .demoPositionMetrics,
+.binanceDemoDeck .demoTicketFeedback, .binanceDemoDeck .demoOrderConfirmation { background: var(--terminal-surface-raised) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck .demoOrderPanel article, .binanceDemoDeck .demoEventPanel article { background: #10171f !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck .demoSidePicker button.activeLong, .binanceDemoDeck .demoSidePicker button.activeShort,
+.binanceDemoDeck .demoTypePicker button.activeType { background: #214d42 !important; color: #e8fff4 !important; border-color: #397b66 !important; }
+
+@media (max-width: 700px) {
+  .v26App { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+  .terminalMobileNav { background: rgba(11,15,20,.97) !important; border-color: var(--terminal-border-strong) !important; }
+  .terminalMobileNav button { background: transparent !important; color: var(--terminal-muted) !important; border: 0 !important; }
+  .terminalMobileNav button.active { background: rgba(196,161,90,.12) !important; color: var(--terminal-gold) !important; }
+  .v21Tabs { overflow-x: auto; scrollbar-color: var(--terminal-border-strong) transparent; }
+  .v21Tabs button { flex: 0 0 auto; min-height: 48px; }
+  .v21SummaryMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
