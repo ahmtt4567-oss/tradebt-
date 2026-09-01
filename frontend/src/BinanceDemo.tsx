@@ -637,14 +637,20 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     <section className="v21CockpitSummary" aria-label="Paper Trading Cockpit Summary">
       <header className="v21WorkspaceHead compactHead">
         <div>
-          <span>REAL DATA SUMMARY</span>
+          <span>TRADING COMMAND CENTER</span>
           <h2>Paper Trading Cockpit</h2>
+          <p>Live account intelligence, execution readiness and risk context from the current Demo state.</p>
         </div>
-        <b><Gauge/> LIVE ACCOUNT STATE</b>
+        <div className="v21CommandMeta">
+          <b><Radio/> {status?.connected ? 'API CONNECTED' : status ? 'API DEGRADED' : 'API UNKNOWN'}</b>
+          <b><ShieldCheck/> DEMO ENVIRONMENT</b>
+          <small>{status?.last_checked ? `Updated ${formatRelativeTime(status.last_checked)}` : 'Update unavailable'}</small>
+        </div>
       </header>
-      <div className="v21CockpitGrid">
+      <div className="v21SectionKicker"><span>ACCOUNT INTELLIGENCE</span><small>Current account snapshot</small></div>
+      <div className="v21CockpitGrid v21AccountGrid">
         {cockpitSummary.map(item => (
-          <article key={item.label} className="v21CockpitCard">
+          <article key={item.label} className={`v21CockpitCard ${item.label.includes('PnL') ? 'pnlCard' : item.label === 'Bot Status' ? 'statusCard' : ''}`}>
             <small>{item.label}</small>
             <strong>{item.value}</strong>
           </article>
@@ -682,6 +688,23 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       </div>
     </section>
 
+    <section className="v21RiskRadar" aria-label="Risk Radar">
+      <header className="v21WorkspaceHead compactHead">
+        <div>
+          <span>RISK POSTURE</span>
+          <h2>Risk Radar</h2>
+          <p>Only current position, budget and account values are shown. Missing values remain unavailable.</p>
+        </div>
+        <b><Gauge/> {v21?.daily.remaining_loss_budget !== undefined ? 'RISK DATA AVAILABLE' : 'RISK DATA UNKNOWN'}</b>
+      </header>
+      <div className="v21RiskRadarGrid">
+        <article><small>OPEN POSITIONS</small><strong>{account ? `${account.positions.length}` : 'Unavailable'}</strong><span>{v21?.settings.max_positions ? `Limit ${v21.settings.max_positions}` : 'Limit unavailable'}</span></article>
+        <article><small>EXPOSURE</small><strong>{account ? `${fmt(account.positions.reduce((total, position) => total + Math.abs(position.quantity * position.mark_price), 0))} USDT` : 'Unavailable'}</strong><span>Mark-price notional</span></article>
+        <article><small>DAILY LOSS BUDGET</small><strong>{v21?.daily.remaining_loss_budget !== undefined ? `${fmt(v21.daily.remaining_loss_budget)} USDT` : 'Unavailable'}</strong><span>{v21?.daily.date || 'Date unavailable'}</span></article>
+        <article><small>POSITION CONCENTRATION</small><strong>{account && account.positions.length && v21?.settings.max_positions ? `${Math.round((account.positions.length / v21.settings.max_positions) * 100)}%` : 'Unavailable'}</strong><span>Open positions vs limit</span></article>
+      </div>
+    </section>
+
     <section className="v21SmartAlerts" aria-label="Smart Alerts">
       <header className="v21WorkspaceHead compactHead">
         <div>
@@ -703,6 +726,25 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
         )) : (
           <div className="v21EmptyMini">No active real alerts from the current live state.</div>
         )}
+      </div>
+    </section>
+
+    <section className="v21ActivityTimeline" aria-label="Live Activity Timeline">
+      <header className="v21WorkspaceHead compactHead">
+        <div>
+          <span>LIVE ACTIVITY</span>
+          <h2>Activity Timeline</h2>
+        </div>
+        <b><Activity/> BACKEND EVENTS ONLY</b>
+      </header>
+      <div className="v21ActivityList">
+        {status?.events?.length ? status.events.slice(0, 4).map((event, index) => (
+          <article key={`system-${event.created_at}-${index}`}><i className="system"/><div><strong>System event</strong><span>{event.message || event.kind}</span></div><time>{formatRelativeTime(event.created_at)}</time></article>
+        )) : null}
+        {v21?.scanner.last_scan_at ? <article><i className="scanner"/><div><strong>Scanner</strong><span>{v21.scanner.scan_status || 'Scan completed'}</span></div><time>{formatRelativeTime(v21.scanner.last_scan_at)}</time></article> : null}
+        {v21?.auto.last_scan ? <article><i className="automation"/><div><strong>Automation</strong><span>{v21.auto.last_decision || (v21.auto.enabled ? 'Automation active' : 'Automation stopped')}</span></div><time>{formatRelativeTime(v21.auto.last_scan)}</time></article> : null}
+        {v21?.journal?.slice(0, 3).map((entry, index) => <article key={`journal-${entry.created_at}-${index}`}><i className="journal"/><div><strong>Journal · {entry.kind}</strong><span>{entry.reason || 'Journal event recorded'}</span></div><time>{formatRelativeTime(entry.created_at)}</time></article>)}
+        {!status?.events?.length && !v21?.scanner.last_scan_at && !v21?.auto.last_scan && !v21?.journal?.length && <div className="v21EmptyMini">No live activity available.</div>}
       </div>
     </section>
 
