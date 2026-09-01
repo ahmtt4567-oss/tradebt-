@@ -186,6 +186,7 @@ const initialForm:FormState = {
 const fmt = (value?:number|null) => value === undefined || value === null || !Number.isFinite(value) ? '—' : value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
 const stamp = (value?:string|null) => value ? new Date(value).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
 const numberValue = (value:string) => Number(value.replace(',','.'))
+const gateLabel = (gate?:string|null) => ({DEMO_ARM:'Demo kilidi kapalı',MAX_POSITIONS:'Pozisyon limiti dolu',DAILY_TRADE_LIMIT:'Günlük işlem limiti dolu',DAILY_LOSS_LIMIT:'Günlük zarar limiti aktif',MARKET_HOURS:'Çalışma saatleri dışında',ALLOWED_SYMBOLS:'İzinli parite dışında',RISK_LEVELS:'Risk seviyeleri geçersiz',DEMO_EXECUTION:'Demo emir reddedildi'}[gate || ''] || 'Fırsat bekleniyor')
 
 const fieldNames:Record<string,string> = {
   margin_usdt:'Marjin',leverage:'Kaldıraç',limit_price:'Limit fiyatı',stop_loss:'Stop Loss',
@@ -335,7 +336,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       }
     }
     refresh()
-    const timer = window.setInterval(refresh,3500)
+    const timer = window.setInterval(refresh,10000)
     const ticker = window.setInterval(() => setClock(Date.now()),1000)
     return () => { mounted=false;window.clearInterval(timer);window.clearInterval(ticker) }
   },[active])
@@ -541,6 +542,18 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <span><small>RİSK BÜTÇESİ</small><b>{fmt(v21?.daily.remaining_loss_budget)} USDT</b></span>
       <span><small>DEMO KANIT</small><b>%{v21?.certificate.score ?? 0}</b></span>
       <strong>GERÇEK PARA: 0 USDT · GERÇEK EMİR KANALI YOK</strong>
+    </section>
+
+    <section className="v21ExecutiveSummary" aria-label="Bot özeti">
+      <div className="v21SummaryIntro"><span className="v21Eyebrow">BUGÜNÜN KONTROL MERKEZİ</span><h2>Bot şu anda ne yapıyor?</h2><p>{v21?.auto.rejection_reason || (v21?.auto.enabled ? 'Piyasayı izliyor ve yalnızca tüm güvenlik kapıları geçtiğinde Demo işlemi açıyor.' : 'Otomasyon kapalı. Başlamak için Demo kilidini ve ikinci onayı tamamlayın.')}</p></div>
+      <div className="v21SummaryMetrics">
+        <span><small>BOT DURUMU</small><b className={v21?.auto.enabled ? 'summaryPositive' : 'summaryMuted'}>{v21?.auto.enabled ? 'AKTİF' : 'KAPALI'}</b><em>{v21?.auto.rejection_gate ? gateLabel(v21.auto.rejection_gate) : 'Güvenlik izleniyor'}</em></span>
+        <span><small>DEMO BAKİYESİ</small><b>{fmt(account?.wallet_balance)} USDT</b><em>Sanal hesap</em></span>
+        <span><small>BUGÜN PnL</small><b className={(v21?.daily.realized_pnl || 0) >= 0 ? 'summaryPositive' : 'summaryNegative'}>{(v21?.daily.realized_pnl || 0) >= 0 ? '+' : ''}{fmt(v21?.daily.realized_pnl)} USDT</b><em>Gerçekleşen</em></span>
+        <span><small>AÇIK POZİSYON</small><b>{v21?.account.positions ?? 0} / {v21?.settings.max_positions ?? 3}</b><em>Aktif / maksimum</em></span>
+        <span><small>SONRAKİ TARAMA</small><b>{nextScanSeconds === null ? '—' : `${Math.floor(nextScanSeconds / 60)}:${String(nextScanSeconds % 60).padStart(2,'0')}`}</b><em>600 saniyelik döngü</em></span>
+      </div>
+      {v21?.auto.rejection_reason && <div className="v21SummaryBlock"><TriangleAlert/><span><b>İŞLEM AÇILMADI</b><strong>{gateLabel(v21.auto.rejection_gate)}</strong><small>{v21.auto.rejection_reason}</small></span></div>}
     </section>
 
     {!status?.configured && <section className="demoSetupCard">

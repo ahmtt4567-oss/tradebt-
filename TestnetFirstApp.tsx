@@ -69,10 +69,10 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
     let priceLines:IPriceLine[] = []
     const chart = createChart(host.current,{
       autoSize:true,
-      layout:{background:{type:ColorType.Solid,color:'#fffef9'},textColor:'#49614f'},
-      grid:{vertLines:{color:'#edf1e8'},horzLines:{color:'#edf1e8'}},
-      rightPriceScale:{borderColor:'#d8e3d7'},timeScale:{borderColor:'#d8e3d7',timeVisible:true,secondsVisible:false},
-      crosshair:{vertLine:{color:'#70a882'},horzLine:{color:'#70a882'}},
+      layout:{background:{type:ColorType.Solid,color:'#101614'},textColor:'#aab8b0'},
+      grid:{vertLines:{color:'#1c2924'},horzLines:{color:'#1c2924'}},
+      rightPriceScale:{borderColor:'#2b3a34'},timeScale:{borderColor:'#2b3a34',timeVisible:true,secondsVisible:false},
+      crosshair:{vertLine:{color:'#b89652'},horzLine:{color:'#b89652'}},
     })
     const candles = chart.addSeries(CandlestickSeries,{upColor:'#0caf62',downColor:'#ef594a',wickUpColor:'#0caf62',wickDownColor:'#ef594a',borderVisible:false})
     const volume = chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:''})
@@ -203,7 +203,7 @@ export default function TestnetFirstApp() {
 
   useEffect(() => {
     void refresh()
-    const timer = window.setInterval(() => void refresh(),30000)
+    const timer = window.setInterval(() => void refresh(),60000)
     const openExchangeSettings = () => setView('setup')
     window.addEventListener('protrebot-open-exchange-settings', openExchangeSettings)
     return () => {window.clearInterval(timer);window.removeEventListener('protrebot-open-exchange-settings', openExchangeSettings)}

@@ -1,0 +1,45 @@
+:root {
+  --terminal-bg: #0b100e;
+  --terminal-surface: #101614;
+  --terminal-surface-raised: #16201b;
+  --terminal-border: rgba(173, 193, 181, .14);
+  --terminal-text: #edf3ee;
+  --terminal-muted: #91a198;
+  --terminal-gold: #c5a45d;
+  --terminal-positive: #63d39a;
+  --terminal-negative: #f0807d;
+  --terminal-warning: #e3b866;
+  color-scheme: dark;
+}
+
+html, body { overflow-x: hidden; }
+html, body, #root, .v26App { background-color: var(--terminal-bg) !important; color: var(--terminal-text) !important; }
+.v26App { background-image: linear-gradient(135deg, rgba(197, 164, 93, .035), transparent 34%), linear-gradient(315deg, rgba(99, 211, 154, .025), transparent 40%) !important; }
+.v26App .v26Header, .v26App .v26Nav, .v26App .v26ModeBar, .v26App .v26MarketBar, .v26App .v26Setup { background-color: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck { color: var(--terminal-text); }
+.binanceDemoDeck input, .binanceDemoDeck select, .binanceDemoDeck textarea { background: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
+.binanceDemoDeck button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(197, 164, 93, .55); box-shadow: 0 8px 22px rgba(0, 0, 0, .22); }
+.binanceDemoDeck button:disabled { opacity: .48; cursor: not-allowed; }
+.demoProfit, .summaryPositive { color: var(--terminal-positive) !important; }
+.demoLoss, .summaryNegative { color: var(--terminal-negative) !important; }
+.summaryMuted, .v21SummaryMetrics em { color: var(--terminal-muted); }
+
+.v21ExecutiveSummary { display: grid; grid-template-columns: minmax(240px, .9fr) 2fr minmax(230px, .8fr); gap: 18px; align-items: stretch; margin: 18px 0; padding: 22px; border: 1px solid var(--terminal-border); border-radius: 14px; background: linear-gradient(145deg, rgba(22, 32, 27, .96), rgba(13, 19, 16, .96)); box-shadow: 0 18px 45px rgba(0, 0, 0, .22); }
+.v21SummaryIntro { display: flex; flex-direction: column; justify-content: center; }
+.v21Eyebrow, .v21SummaryMetrics small { color: var(--terminal-gold); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.v21SummaryIntro h2 { margin: 7px 0 5px; font-size: clamp(20px, 2.2vw, 30px); }
+.v21SummaryIntro p { margin: 0; color: var(--terminal-muted); line-height: 1.55; }
+.v21SummaryMetrics { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; align-items: center; }
+.v21SummaryMetrics span { min-width: 0; padding: 13px 12px; border-left: 1px solid var(--terminal-border); }
+.v21SummaryMetrics b { display: block; margin: 7px 0 4px; color: var(--terminal-text); font-size: 17px; white-space: nowrap; }
+.v21SummaryMetrics em { display: block; font-size: 11px; font-style: normal; }
+.v21SummaryBlock { display: flex; gap: 11px; align-items: center; padding: 14px; border: 1px solid rgba(240, 128, 125, .3); border-radius: 10px; background: rgba(240, 128, 125, .08); color: var(--terminal-negative); }
+.v21SummaryBlock svg { flex: 0 0 auto; }
+.v21SummaryBlock span { display: grid; gap: 3px; }
+.v21SummaryBlock b { font-size: 10px; letter-spacing: .08em; }
+.v21SummaryBlock strong { color: var(--terminal-text); font-size: 14px; }
+.v21SummaryBlock small { color: #c6a8a7; line-height: 1.4; }
+
+@media (max-width: 1100px) { .v21ExecutiveSummary { grid-template-columns: 1fr; } .v21SummaryMetrics { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 620px) { .v21ExecutiveSummary { padding: 16px; border-radius: 10px; } .v21SummaryMetrics { grid-template-columns: repeat(2, 1fr); } .v21SummaryMetrics span { border-left: 0; border-top: 1px solid var(--terminal-border); padding: 12px 4px; } .v21SummaryMetrics b { font-size: 15px; } }
+@media (prefers-reduced-motion: reduce) { .binanceDemoDeck button { transition: none; } .binanceDemoDeck button:hover:not(:disabled) { transform: none; } }
