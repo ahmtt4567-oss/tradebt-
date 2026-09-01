@@ -69,10 +69,10 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
     let priceLines:IPriceLine[] = []
     const chart = createChart(host.current,{
       autoSize:true,
-      layout:{background:{type:ColorType.Solid,color:'#101614'},textColor:'#aab8b0'},
-      grid:{vertLines:{color:'#1c2924'},horzLines:{color:'#1c2924'}},
-      rightPriceScale:{borderColor:'#2b3a34'},timeScale:{borderColor:'#2b3a34',timeVisible:true,secondsVisible:false},
-      crosshair:{vertLine:{color:'#b89652'},horzLine:{color:'#b89652'}},
+      layout:{background:{type:ColorType.Solid,color:'#111310'},textColor:'#a49f91'},
+      grid:{vertLines:{color:'#272a22'},horzLines:{color:'#272a22'}},
+      rightPriceScale:{borderColor:'#3c4034'},timeScale:{borderColor:'#3c4034',timeVisible:true,secondsVisible:false},
+      crosshair:{vertLine:{color:'#8b8a52'},horzLine:{color:'#8b8a52'}},
     })
     const candles = chart.addSeries(CandlestickSeries,{upColor:'#0caf62',downColor:'#ef594a',wickUpColor:'#0caf62',wickDownColor:'#ef594a',borderVisible:false})
     const volume = chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:''})
