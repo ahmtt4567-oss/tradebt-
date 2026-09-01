@@ -177,7 +177,8 @@ type V21Summary = {
 }
 
 type V21RiskPreview = {symbol:string;leverage:number;risk_pct:number;notional_usdt:number;margin_usdt:number;estimated_stop_loss_usdt:number;capped:boolean;quantity_preview:string;step_size:string}
-type V21Tab = 'trade'|'risk'|'journal'|'auto'|'backtest'|'certificate'
+type V21Performance = {period:string;total_trades:number;wins:number;losses:number;win_rate:number;total_profit:number;total_loss:number;net_profit:number;average_trade:number;best_trade:number;worst_trade:number;profit_factor:number;max_drawdown:number;demo_only:boolean;read_only:boolean}
+type V21Tab = 'trade'|'risk'|'journal'|'auto'|'backtest'|'performance'|'certificate'
 
 const initialForm:FormState = {
   direction:'LONG',orderType:'MARKET',margin:'50',leverage:'2',limitPrice:'',stop:'',tp1:'',tp2:'',tp3:'',
@@ -268,6 +269,8 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [v21Busy,setV21Busy] = useState(false)
   const [riskLoss,setRiskLoss] = useState('5')
   const [riskPreview,setRiskPreview] = useState<V21RiskPreview|null>(null)
+  const [performance,setPerformance] = useState<V21Performance|null>(null)
+  const [performancePeriod,setPerformancePeriod] = useState<'all'|'daily'|'weekly'|'monthly'>('all')
   const [historyPayload,setHistoryPayload] = useState<{orders:Record<string,unknown>[];algo_orders:Record<string,unknown>[];trades:Record<string,unknown>[]} | null>(null)
   const [autoConfirm,setAutoConfirm] = useState('')
   const [backtestSymbol,setBacktestSymbol] = useState(symbol)
@@ -310,6 +313,10 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       if (!quiet) { setMessage(error instanceof Error ? error.message : 'V21 merkezi okunamadı.');setMessageKind('error') }
       return null
     }
+  }
+  const refreshPerformance = async (period=performancePeriod) => {
+    try { setPerformance(await v21Call<V21Performance>(`/performance?period=${period}`)) }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Performans verisi alınamadı.');setMessageKind('error') }
   }
 
   const requestScannerScan = async () => {
@@ -366,6 +373,8 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       new Notification(`ProTreBot · ${newest.kind}`, {body:newest.message,tag:newest.id})
     }
   },[v21?.journal?.[0]?.id])
+
+  useEffect(() => { if (active && tab === 'performance') void refreshPerformance() },[active,tab,performancePeriod])
 
   const armSeconds = status?.armed_until ? Math.max(0,Math.floor((new Date(status.armed_until).getTime()-clock)/1000)) : 0
   const nextScanMs = v21?.scanner.next_scan_at ? new Date(v21.scanner.next_scan_at).getTime() : null
@@ -532,7 +541,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <button className={tab === 'journal' ? 'active' : ''} onClick={() => setTab('journal')}><ClipboardList/><span><b>CANLI GÜNLÜK</b><small>Dolum · Kapanış · Neden</small></span></button>
       <button className={tab === 'auto' ? 'active' : ''} onClick={() => setTab('auto')}><Zap/><span><b>OTOMASYON</b><small>İzin listesi · Kapılar</small></span></button>
       <button className={tab === 'backtest' ? 'active' : ''} onClick={() => setTab('backtest')}><BarChart3/><span><b>BACKTEST LAB</b><small>Ücret · Kayma · 3 dönem</small></span></button>
-      <button className={tab === 'certificate' ? 'active' : ''} onClick={() => setTab('certificate')}><ShieldCheck/><span><b>SERTİFİKA</b><small>Sağlık · Tatbikat · Kanıt</small></span></button>
+      <button className={tab === 'performance' ? 'active' : ''} onClick={() => setTab('performance')}><BarChart3/><span><b>PERFORMANS</b><small>PnL · Win rate · Drawdown</small></span></button><button className={tab === 'certificate' ? 'active' : ''} onClick={() => setTab('certificate')}><ShieldCheck/><span><b>SERTİFİKA</b><small>Sağlık · Tatbikat · Kanıt</small></span></button>
     </nav>
 
     <section className="v21Pulse">
@@ -654,6 +663,11 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <div className="v21JournalGrid"><article className="v21Card v21Timeline"><header><ClipboardList/><div><small>KALICI YEREL KAYIT</small><h3>V21 Olay Zaman Çizgisi</h3></div><b>{v21?.journal.length ?? 0}</b></header><div>{v21?.journal.length ? v21.journal.map(item => <section key={item.id}><i className={item.realized_pnl && item.realized_pnl < 0 ? 'bad' : ''}/><div><span><b>{item.kind}</b><em>{item.symbol || 'SİSTEM'} · {item.source}</em></span><p>{item.message}</p>{item.reason && <small>{item.reason}</small>}</div><aside><time>{stamp(item.created_at)}</time>{item.realized_pnl !== null && item.realized_pnl !== undefined && <strong className={item.realized_pnl >= 0 ? 'demoProfit' : 'demoLoss'}>{item.realized_pnl >= 0 ? '+' : ''}{fmt(item.realized_pnl)}</strong>}</aside></section>) : <div className="v21EmptyMini">İlk Demo olayı bekleniyor.</div>}</div></article>
         <article className="v21Card v21ExchangeHistory"><header><History/><div><small>BINANCE FUTURES DEMO</small><h3>{symbol} Emir / Dolum Arşivi</h3></div></header>{historyPayload ? <div><h4>NORMAL EMİRLER · {historyPayload.orders.length}</h4>{historyPayload.orders.slice(-12).reverse().map((row,index) => <p key={`o-${index}`}><b>{String(row.side ?? '—')} · {String(row.type ?? '—')}</b><span>{String(row.status ?? '—')} · {String(row.avgPrice ?? row.price ?? '—')}</span></p>)}<h4>KOŞULLU EMİRLER · {historyPayload.algo_orders.length}</h4>{historyPayload.algo_orders.slice(-8).reverse().map((row,index) => <p key={`a-${index}`}><b>{String(row.orderType ?? row.type ?? 'ALGO')}</b><span>{String(row.algoStatus ?? row.status ?? '—')} · {String(row.triggerPrice ?? '—')}</span></p>)}<h4>DOLUMLAR · {historyPayload.trades.length}</h4>{historyPayload.trades.slice(-8).reverse().map((row,index) => <p key={`t-${index}`}><b>{String(row.side ?? '—')} · {String(row.qty ?? '—')}</b><span>PnL {String(row.realizedPnl ?? '0')} · ücret {String(row.commission ?? '—')}</span></p>)}</div> : <div className="v21EmptyMini">Üstteki düğmeyle seçili paritenin tam Demo geçmişini getir.</div>}</article>
       </div>
+    </section>}
+
+    {tab === 'performance' && <section className="v21Workspace v21PerformanceCenter">
+      <header className="v21WorkspaceHead"><div><span>GERÇEK KAPANIŞ EVENTLERİ · READ ONLY</span><h2>Performance Center</h2><p>Sonuçlar yalnızca kapanmış Demo işlemlerinden ve backend journal kayıtlarından hesaplanır.</p></div><div className="v21PeriodPicker">{(['all','daily','weekly','monthly'] as const).map(period => <button key={period} className={performancePeriod === period ? 'active' : ''} onClick={() => setPerformancePeriod(period)}>{period === 'all' ? 'TÜMÜ' : period === 'daily' ? 'GÜNLÜK' : period === 'weekly' ? 'HAFTALIK' : 'AYLIK'}</button>)}</div></header>
+      {performance ? <><div className="v21PerformanceHero"><span><small>NET PROFIT</small><b className={performance.net_profit >= 0 ? 'demoProfit' : 'demoLoss'}>{performance.net_profit >= 0 ? '+' : ''}{fmt(performance.net_profit)} USDT</b><em>{performance.total_trades} kapanmış işlem</em></span><span><small>WIN RATE</small><b>{fmt(performance.win_rate)}%</b><em>{performance.wins} kazanç · {performance.losses} kayıp</em></span><span><small>PROFIT FACTOR</small><b>{fmt(performance.profit_factor)}</b><em>Gerçekleşen PnL</em></span><span><small>MAX DRAWDOWN</small><b className="demoLoss">{fmt(performance.max_drawdown)} USDT</b><em>Dönem içi</em></span></div><div className="v21PerformanceGrid">{[['TOPLAM KÂR',performance.total_profit,'demoProfit'],['TOPLAM ZARAR',performance.total_loss,'demoLoss'],['ORTALAMA İŞLEM',performance.average_trade,performance.average_trade >= 0 ? 'demoProfit' : 'demoLoss'],['EN İYİ İŞLEM',performance.best_trade,'demoProfit'],['EN KÖTÜ İŞLEM',performance.worst_trade,'demoLoss']].map(([label,value,kind]) => <article key={String(label)}><small>{label}</small><b className={String(kind)}>{Number(value) >= 0 ? '+' : ''}{fmt(Number(value))} USDT</b></article>)}</div></> : <div className="v21LargeEmpty"><BarChart3/><b>Performance verisi bekleniyor</b><span>Read-only kapanış kayıtları yükleniyor.</span></div>}
     </section>}
 
     {tab === 'auto' && <section className="v21Workspace">

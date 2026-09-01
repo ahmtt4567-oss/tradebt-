@@ -1093,6 +1093,44 @@ def certificate_payload(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def performance_payload(state: dict[str, Any], period: str = "all") -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    cutoff = {"daily": 1, "weekly": 7, "monthly": 31}.get(period)
+    events = []
+    for item in state.get("journal", []):
+        if item.get("kind") != "POSITION_CLOSED" and not (item.get("kind") == "FILL" and item.get("reduce_only")):
+            continue
+        if item.get("realized_pnl") is None:
+            continue
+        try:
+            created = datetime.fromisoformat(str(item.get("created_at", "")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if cutoff is None or (now - created).total_seconds() <= cutoff * 86400:
+            events.append(item)
+    pnls = [round(float(item.get("realized_pnl") or 0), 4) for item in events]
+    wins = [pnl for pnl in pnls if pnl > 0]
+    losses = [pnl for pnl in pnls if pnl < 0]
+    equity = 0.0
+    peak = 0.0
+    max_drawdown = 0.0
+    for pnl in reversed(pnls):
+        equity += pnl
+        peak = max(peak, equity)
+        max_drawdown = max(max_drawdown, peak - equity)
+    return {
+        "period": period, "total_trades": len(pnls), "wins": len(wins), "losses": len(losses),
+        "win_rate": round(len(wins) / len(pnls) * 100, 2) if pnls else 0,
+        "total_profit": round(sum(wins), 4), "total_loss": round(sum(losses), 4),
+        "net_profit": round(sum(pnls), 4), "average_trade": round(sum(pnls) / len(pnls), 4) if pnls else 0,
+        "best_trade": max(pnls) if pnls else 0, "worst_trade": min(pnls) if pnls else 0,
+        "profit_factor": round(sum(wins) / abs(sum(losses)), 2) if losses else (99.0 if wins else 0),
+        "max_drawdown": round(max_drawdown, 4), "demo_only": True, "read_only": True,
+    }
+
+
 def summary_payload(state: dict[str, Any]) -> dict[str, Any]:
     snapshot = state.get("snapshot") or {}
     reconciliation = state.get("reconciliation") or {}
@@ -1321,6 +1359,11 @@ async def v21_auto_stop(request: Request) -> dict[str, Any]:
 async def v21_journal(request: Request, limit: int = Query(default=200, ge=1, le=1000)) -> dict[str, Any]:
     state = state_for(request)
     return {"items": state.get("journal", [])[:limit], "total": len(state.get("journal", [])), "demo_only": True}
+
+
+@router.get("/performance")
+async def v21_performance(request: Request, period: Literal["all", "daily", "weekly", "monthly"] = "all") -> dict[str, Any]:
+    return performance_payload(state_for(request), period)
 
 
 @router.get("/history/{symbol}")

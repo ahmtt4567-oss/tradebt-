@@ -20,6 +20,22 @@ class V21ScannerDashboardTests(unittest.TestCase):
         self.assertIn("confirmation:armText", source)
         self.assertNotIn("confirmation:'DEMO'", source)
 
+    def test_performance_aggregation_uses_real_closed_journal_events(self):
+        state = v21_demo.initial_state()
+        state["journal"] = [
+            {"kind": "POSITION_CLOSED", "created_at": "2026-09-01T10:00:00+00:00", "realized_pnl": 12.0},
+            {"kind": "FILL", "reduce_only": True, "created_at": "2026-08-30T10:00:00+00:00", "realized_pnl": -4.0},
+            {"kind": "AUTO_ORDER", "created_at": "2026-09-01T10:01:00+00:00", "realized_pnl": 999.0},
+        ]
+        result = v21_demo.performance_payload(state, "all")
+        self.assertEqual(result["total_trades"], 2)
+        self.assertEqual(result["total_profit"], 12.0)
+        self.assertEqual(result["total_loss"], -4.0)
+        self.assertEqual(result["net_profit"], 8.0)
+        self.assertEqual(result["wins"], 1)
+        self.assertEqual(result["losses"], 1)
+        self.assertEqual(result["profit_factor"], 3.0)
+
     def _automation_app(self, candidate):
         state = v21_demo.initial_state()
         state["auto"].update({"enabled": True, "user_confirmed": True})
