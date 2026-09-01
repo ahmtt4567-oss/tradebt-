@@ -11,7 +11,15 @@ sys.path.insert(0, str(BACKEND))
 from app import v21_demo  # noqa: E402
 
 
+ROOT_FRONTEND = Path(__file__).parents[2] / "BinanceDemo.tsx"
+
+
 class V21ScannerDashboardTests(unittest.TestCase):
+    def test_root_frontend_arm_uses_user_confirmation(self):
+        source = ROOT_FRONTEND.read_text(encoding="utf-8")
+        self.assertIn("confirmation:armText", source)
+        self.assertNotIn("confirmation:'DEMO'", source)
+
     def _automation_app(self, candidate):
         state = v21_demo.initial_state()
         state["auto"].update({"enabled": True, "user_confirmed": True})
