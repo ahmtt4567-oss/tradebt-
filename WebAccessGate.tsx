@@ -3,7 +3,9 @@ import { LockKeyhole, ShieldCheck } from 'lucide-react'
 import { clearOwnerAccessToken, ownerAccessToken, saveOwnerAccessToken, verifyOwnerAccess } from './api'
 
 
-const ACCESS_REQUIRED = import.meta.env.VITE_WEB_ACCESS_REQUIRED !== 'false' && import.meta.env.PROD
+const LOCAL_DEVELOPMENT_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+const LOCAL_DEVELOPMENT_BYPASS = import.meta.env.DEV && LOCAL_DEVELOPMENT_HOSTS.has(window.location.hostname)
+const ACCESS_REQUIRED = !LOCAL_DEVELOPMENT_BYPASS && import.meta.env.VITE_WEB_ACCESS_REQUIRED !== 'false' && import.meta.env.PROD
 
 export default function WebAccessGate({children}:{children:ReactNode}) {
   const [token,setToken] = useState(ownerAccessToken())
