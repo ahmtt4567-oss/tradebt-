@@ -502,6 +502,102 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   }, [v21])
 
   const entryValue = Number(form.limitPrice) || Number(analysis?.entry) || 0
+
+  const cockpitSummary = useMemo(() => {
+    const latestJournal = v21?.journal?.[0]
+    const balance = Number(account?.wallet_balance ?? v21?.account.wallet_balance ?? 0)
+    const available = Number(account?.available_balance ?? v21?.account.available_balance ?? 0)
+    const unrealized = Number(account?.unrealized_pnl ?? v21?.account.unrealized_pnl ?? 0)
+    const dailyPnL = Number(v21?.daily.realized_pnl ?? 0)
+    const positions = Number(account?.positions.length ?? v21?.account.positions ?? 0)
+    const riskBudget = Number(v21?.daily.remaining_loss_budget)
+    const dailyRiskUsage = Number(v21?.settings.daily_loss_limit ?? 0) > 0 && Number.isFinite(riskBudget)
+      ? Math.max(0, Number(v21?.settings.daily_loss_limit ?? 0) - riskBudget)
+      : NaN
+
+    return [
+      { label: 'Total Balance', value: Number.isFinite(balance) && balance > 0 ? `${fmt(balance)} USDT` : 'Unavailable' },
+      { label: 'Available Balance', value: Number.isFinite(available) && available >= 0 ? `${fmt(available)} USDT` : 'Unavailable' },
+      { label: 'Daily PnL', value: Number.isFinite(dailyPnL) ? `${dailyPnL >= 0 ? '+' : ''}${fmt(dailyPnL)} USDT` : 'Unavailable' },
+      { label: 'Total / Unrealized PnL', value: Number.isFinite(unrealized) ? `${unrealized >= 0 ? '+' : ''}${fmt(unrealized)} USDT` : 'Unavailable' },
+      { label: 'Open Positions', value: Number.isFinite(positions) ? `${positions}` : 'No data' },
+      { label: 'Daily Risk Usage', value: Number.isFinite(dailyRiskUsage) ? `${fmt(dailyRiskUsage)} USDT` : 'Unavailable' },
+      { label: 'Bot Status', value: v21?.auto.enabled ? 'ACTIVE' : (v21 ? 'OFFLINE' : 'Unavailable') },
+      { label: 'Last Trade', value: latestJournal ? `${latestJournal.kind} · ${stamp(latestJournal.created_at)}` : 'No data' },
+      { label: 'Active Strategy / Scanner State', value: analysis?.direction ? `${analysis.direction} · ${v21?.scanner.scan_status || 'UNAVAILABLE'}` : (v21?.scanner.scan_status || 'Unavailable') },
+    ]
+  }, [account, analysis, v21])
+
+  const systemHealthNodes = useMemo(() => {
+    const apiState = status?.connected ? 'HEALTHY' : (status ? 'DEGRADED' : 'UNKNOWN')
+    const marketDataState = v21?.scanner.last_scan_at ? 'HEALTHY' : (v21?.scanner.last_error ? 'OFFLINE' : 'UNKNOWN')
+    const scannerState = v21?.scanner.scan_status ? (v21.scanner.last_error ? 'DEGRADED' : 'HEALTHY') : 'UNKNOWN'
+    const strategyState = analysis?.direction ? 'HEALTHY' : (v21?.auto.last_decision ? 'DEGRADED' : 'UNKNOWN')
+    const riskState = v21?.settings.daily_loss_limit && Number(v21.daily.remaining_loss_budget) >= 0 ? 'HEALTHY' : 'UNKNOWN'
+    const executionState = status?.armed !== undefined ? (status.armed ? 'HEALTHY' : 'DEGRADED') : 'UNKNOWN'
+    const botState = v21?.auto.enabled ? 'HEALTHY' : (v21 ? 'OFFLINE' : 'UNKNOWN')
+
+    return [
+      { name: 'API', state: apiState, lastUpdate: status?.last_checked || v21?.stream.last_sync || null, detail: status?.last_error || v21?.stream.last_error || 'No API error reported.' },
+      { name: 'MARKET DATA', state: marketDataState, lastUpdate: v21?.scanner.last_scan_at || null, detail: v21?.scanner.last_error || 'Live market data availability is current.' },
+      { name: 'SCANNER', state: scannerState, lastUpdate: v21?.scanner.next_scan_at || v21?.scanner.last_scan_at || null, detail: v21?.scanner.last_error || v21?.scanner.scan_status || 'Scanner has not yet produced a result.' },
+      { name: 'STRATEGY / ANALYSIS', state: strategyState, lastUpdate: analysis ? new Date().toISOString() : null, detail: analysis ? `${analysis.direction || 'UNSPECIFIED'} signal is available.` : 'No live strategy signal present.' },
+      { name: 'RISK ENGINE', state: riskState, lastUpdate: v21?.last_saved || v21?.daily.date || null, detail: v21?.daily.remaining_loss_budget !== undefined ? `Remaining risk budget ${fmt(v21.daily.remaining_loss_budget)} USDT.` : 'Risk usage is not available.' },
+      { name: 'EXECUTION', state: executionState, lastUpdate: account?.positions?.[0]?.opened_at || status?.last_checked || null, detail: status?.armed ? 'Execution system is armed for demo orders.' : 'Execution arm is not active.' },
+      { name: 'BOT / AUTOMATION', state: botState, lastUpdate: v21?.auto.last_scan || null, detail: v21?.auto.last_error || v21?.auto.last_decision || 'No automation flow has produced a decision yet.' },
+    ]
+  }, [account, analysis, status, v21])
+
+  const smartAlerts = useMemo(() => {
+    const alerts: Array<{ severity:'INFO'|'WARNING'|'CRITICAL'; timestamp:string; source:string; message:string }> = []
+
+    if (status?.last_error) {
+      alerts.push({ severity: 'CRITICAL', timestamp: status.last_checked || new Date().toISOString(), source: 'API', message: status.last_error })
+    }
+    if (v21?.stream.last_error) {
+      alerts.push({ severity: 'WARNING', timestamp: v21.stream.last_sync || new Date().toISOString(), source: 'STREAM', message: v21.stream.last_error })
+    }
+    if (v21?.scanner.last_error) {
+      alerts.push({ severity: 'WARNING', timestamp: v21.scanner.last_scan_at || new Date().toISOString(), source: 'SCANNER', message: v21.scanner.last_error })
+    }
+    if (v21 && !v21.auto.enabled) {
+      alerts.push({ severity: 'INFO', timestamp: v21.auto.last_scan || new Date().toISOString(), source: 'AUTOMATION', message: 'Automation is currently stopped.' })
+    }
+    if (v21 && Number(v21.daily.remaining_loss_budget) <= 0) {
+      alerts.push({ severity: 'CRITICAL', timestamp: v21.last_saved || new Date().toISOString(), source: 'RISK', message: 'Daily loss budget has been exhausted.' })
+    } else if (v21 && Number(v21.daily.remaining_loss_budget) > 0 && Number(v21.daily.remaining_loss_budget) <= Number(v21.settings.daily_loss_limit) * 0.2) {
+      alerts.push({ severity: 'WARNING', timestamp: v21.last_saved || new Date().toISOString(), source: 'RISK', message: 'Risk budget is approaching its daily limit.' })
+    }
+    if (account && account.positions.length >= (v21?.settings.max_positions ?? 0) && (v21?.settings.max_positions ?? 0) > 0) {
+      alerts.push({ severity: 'WARNING', timestamp: new Date().toISOString(), source: 'POSITION', message: `Open position count is near the configured limit (${account.positions.length}/${v21?.settings.max_positions ?? 0}).` })
+    }
+    if (v21?.journal?.length && v21.journal[0]?.realized_pnl !== null && v21.journal[0].realized_pnl !== undefined && v21.journal[0].realized_pnl < 0) {
+      alerts.push({ severity: 'INFO', timestamp: v21.journal[0].created_at, source: 'JOURNAL', message: `Last trade closed with ${fmt(v21.journal[0].realized_pnl)} USDT.` })
+    }
+
+    return alerts.slice(0, 6)
+  }, [account, status, v21])
+
+  const formatHealthState = (state: string) => {
+    if (state === 'HEALTHY') return 'healthy'
+    if (state === 'DEGRADED') return 'degraded'
+    if (state === 'OFFLINE') return 'offline'
+    return 'unknown'
+  }
+
+  const formatRelativeTime = (value?: string | null) => {
+    if (!value) return 'No data'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'No data'
+    const deltaMs = Date.now() - date.getTime()
+    const minutes = Math.max(0, Math.floor(deltaMs / 60000))
+    if (minutes < 1) return 'just now'
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }
   const stopValue = Number(form.stop) || Number(analysis?.stop_loss) || 0
   const tp1Value = Number(form.tp1) || Number(analysis?.tp1) || 0
   const tp3Value = Number(form.tp3) || Number(analysis?.tp3) || 0
@@ -536,6 +632,78 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <span><small>RİSK BÜTÇESİ</small><b>{fmt(v21?.daily.remaining_loss_budget)} USDT</b></span>
       <span><small>DEMO KANIT</small><b>%{v21?.certificate.score ?? 0}</b></span>
       <strong>GERÇEK PARA: 0 USDT · GERÇEK EMİR KANALI YOK</strong>
+    </section>
+
+    <section className="v21CockpitSummary" aria-label="Paper Trading Cockpit Summary">
+      <header className="v21WorkspaceHead compactHead">
+        <div>
+          <span>REAL DATA SUMMARY</span>
+          <h2>Paper Trading Cockpit</h2>
+        </div>
+        <b><Gauge/> LIVE ACCOUNT STATE</b>
+      </header>
+      <div className="v21CockpitGrid">
+        {cockpitSummary.map(item => (
+          <article key={item.label} className="v21CockpitCard">
+            <small>{item.label}</small>
+            <strong>{item.value}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section className="v21SystemHealthCenter" aria-label="System Health Center">
+      <header className="v21WorkspaceHead compactHead">
+        <div>
+          <span>CONTROL CENTER</span>
+          <h2>System Health</h2>
+        </div>
+        <b><Activity/> API → MARKET → SCANNER → STRATEGY → RISK → EXECUTION → BOT</b>
+      </header>
+      <div className="v21HealthFlow">
+        {systemHealthNodes.map(node => (
+          <article key={node.name} className={`v21HealthNode ${formatHealthState(node.state)}`}>
+            <div className="v21HealthNodeHeader">
+              <span className="v21HealthDot" />
+              <strong>{node.name}</strong>
+              <em>{node.state}</em>
+            </div>
+            <div className="v21HealthMeta">
+              <small>STATUS</small>
+              <b>{node.state}</b>
+            </div>
+            <div className="v21HealthMeta">
+              <small>LAST UPDATE</small>
+              <b>{node.lastUpdate ? formatRelativeTime(node.lastUpdate) : 'UNKNOWN'}</b>
+            </div>
+            <p>{node.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section className="v21SmartAlerts" aria-label="Smart Alerts">
+      <header className="v21WorkspaceHead compactHead">
+        <div>
+          <span>REAL EVENTS</span>
+          <h2>Smart Alerts</h2>
+        </div>
+        <b><Bell/> EVENT-DRIVEN ALERTS</b>
+      </header>
+      <div className="v21AlertList">
+        {smartAlerts.length ? smartAlerts.map((alert, index) => (
+          <article key={`${alert.source}-${index}`} className={`v21Alert ${alert.severity.toLowerCase()}`}>
+            <div className="v21AlertBadge">{alert.severity}</div>
+            <div className="v21AlertBody">
+              <strong>{alert.source}</strong>
+              <span>{alert.message}</span>
+            </div>
+            <time>{formatRelativeTime(alert.timestamp)}</time>
+          </article>
+        )) : (
+          <div className="v21EmptyMini">No active real alerts from the current live state.</div>
+        )}
+      </div>
     </section>
 
     <section className="v21ScannerDashboard">
