@@ -1,144 +1,1339 @@
 :root {
-  --terminal-bg: #0b100e;
-  --terminal-surface: #101614;
-  --terminal-surface-raised: #16201b;
-  --terminal-border: rgba(173, 193, 181, .14);
-  --terminal-text: #edf3ee;
-  --terminal-muted: #91a198;
-  --terminal-gold: #c5a45d;
-  --terminal-positive: #63d39a;
-  --terminal-negative: #f0807d;
-  --terminal-warning: #e3b866;
+  --app-bg: #111310;
+  --app-bg-deep: #0c0e0c;
+  --surface-0: #111310;
+  --surface-1: #181b17;
+  --surface-2: #1d201b;
+  --surface-3: #272a22;
+  --surface-4: #2d3027;
+  --border: #3c4034;
+  --border-strong: #4a4d40;
+  --text: #d6d0bd;
+  --text-strong: #e2dcc6;
+  --text-muted: #a49f91;
+  --accent: #8b8a52;
+  --accent-strong: #a39b63;
+  --success: #4f8a62;
+  --danger: #a85c55;
+  --warning: #9a7a45;
+  --shadow: rgba(0, 0, 0, 0.42);
   color-scheme: dark;
 }
 
-html, body { overflow-x: hidden; }
-html, body, #root, .v26App { background-color: var(--terminal-bg) !important; color: var(--terminal-text) !important; }
-.v26App { background-image: linear-gradient(135deg, rgba(197, 164, 93, .035), transparent 34%), linear-gradient(315deg, rgba(99, 211, 154, .025), transparent 40%) !important; }
-.v26App .v26Header, .v26App .v26Nav, .v26App .v26ModeBar, .v26App .v26MarketBar, .v26App .v26Setup { background-color: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck { color: var(--terminal-text); }
-.binanceDemoDeck input, .binanceDemoDeck select, .binanceDemoDeck textarea { background: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(197, 164, 93, .55); box-shadow: 0 8px 22px rgba(0, 0, 0, .22); }
-.binanceDemoDeck button:disabled { opacity: .48; cursor: not-allowed; }
-.demoProfit, .summaryPositive { color: var(--terminal-positive) !important; }
-.demoLoss, .summaryNegative { color: var(--terminal-negative) !important; }
-.summaryMuted, .v21SummaryMetrics em { color: var(--terminal-muted); }
-
-.v21ExecutiveSummary { display: grid; grid-template-columns: minmax(240px, .9fr) 2fr minmax(230px, .8fr); gap: 18px; align-items: stretch; margin: 18px 0; padding: 22px; border: 1px solid var(--terminal-border); border-radius: 14px; background: linear-gradient(145deg, rgba(22, 32, 27, .96), rgba(13, 19, 16, .96)); box-shadow: 0 18px 45px rgba(0, 0, 0, .22); }
-.v21SummaryIntro { display: flex; flex-direction: column; justify-content: center; }
-.v21Eyebrow, .v21SummaryMetrics small { color: var(--terminal-gold); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
-.v21SummaryIntro h2 { margin: 7px 0 5px; font-size: clamp(20px, 2.2vw, 30px); }
-.v21SummaryIntro p { margin: 0; color: var(--terminal-muted); line-height: 1.55; }
-.v21SummaryMetrics { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; align-items: center; }
-.v21SummaryMetrics span { min-width: 0; padding: 13px 12px; border-left: 1px solid var(--terminal-border); }
-.v21SummaryMetrics b { display: block; margin: 7px 0 4px; color: var(--terminal-text); font-size: 17px; white-space: nowrap; }
-.v21SummaryMetrics em { display: block; font-size: 11px; font-style: normal; }
-.v21SummaryBlock { display: flex; gap: 11px; align-items: center; padding: 14px; border: 1px solid rgba(240, 128, 125, .3); border-radius: 10px; background: rgba(240, 128, 125, .08); color: var(--terminal-negative); }
-.v21SummaryBlock svg { flex: 0 0 auto; }
-.v21SummaryBlock span { display: grid; gap: 3px; }
-.v21SummaryBlock b { font-size: 10px; letter-spacing: .08em; }
-.v21SummaryBlock strong { color: var(--terminal-text); font-size: 14px; }
-.v21SummaryBlock small { color: #c6a8a7; line-height: 1.4; }
-
-@media (max-width: 1100px) { .v21ExecutiveSummary { grid-template-columns: 1fr; } .v21SummaryMetrics { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 620px) { .v21ExecutiveSummary { padding: 16px; border-radius: 10px; } .v21SummaryMetrics { grid-template-columns: repeat(2, 1fr); } .v21SummaryMetrics span { border-left: 0; border-top: 1px solid var(--terminal-border); padding: 12px 4px; } .v21SummaryMetrics b { font-size: 15px; } }
-@media (max-width: 700px) { body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); } .terminalMobileNav { position: fixed; z-index: 40; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--terminal-border); background: rgba(11, 16, 14, .96); box-shadow: 0 -12px 30px rgba(0, 0, 0, .3); backdrop-filter: blur(14px); } .terminalMobileNav button { display: grid; justify-items: center; gap: 4px; min-height: 48px; padding: 7px 4px; border: 0; border-radius: 8px; background: transparent; color: var(--terminal-muted); font-size: 10px; } .terminalMobileNav button svg { width: 18px; height: 18px; } .terminalMobileNav button.active { color: var(--terminal-gold); background: rgba(197, 164, 93, .1); } }
-@media (min-width: 701px) { .terminalMobileNav { display: none; } }
-@media (prefers-reduced-motion: reduce) { .binanceDemoDeck button { transition: none; } .binanceDemoDeck button:hover:not(:disabled) { transform: none; } }
-
-/* Final root override: older feature styles remain loaded, but every active surface
-   inherits one restrained terminal palette. */
-:root {
-  --terminal-bg: #0b0f14;
-  --terminal-surface: #121820;
-  --terminal-surface-raised: #171f29;
-  --terminal-surface-hover: #1c2631;
-  --terminal-border: #293440;
-  --terminal-border-strong: #3a4855;
-  --terminal-text: #edf2f5;
-  --terminal-muted: #9aa8b3;
-  --terminal-disabled: #64717b;
-  --terminal-gold: #c4a15a;
-  --terminal-positive: #55c58b;
-  --terminal-negative: #e66f73;
-  --terminal-warning: #d9ad58;
-  --terminal-info: #6ca9d8;
-  color-scheme: dark;
+html, body, #root {
+  min-width: 0 !important;
+  background: var(--app-bg-deep) !important;
+  color: var(--text) !important;
 }
 
-html, body, #root { min-width: 0 !important; background: var(--terminal-bg) !important; color: var(--terminal-text) !important; }
-body { font-family: "IBM Plex Sans", "Segoe UI", sans-serif !important; overflow-x: hidden !important; background-image: radial-gradient(circle at 15% 0%, rgba(196,161,90,.055), transparent 32%), linear-gradient(180deg, #0b0f14 0%, #0d1218 100%) !important; }
-body *, body *::before, body *::after { border-color: var(--terminal-border); }
-
-.v26App, .binanceDemoDeck, .v21Workspace, .v21Card, .demoTicket, .demoPositions, .demoOrderPanel, .demoEventPanel,
-.demoLiveChart, .demoSetupCard, .v21AutoScanner, .v21AutoControl, .v21AutoRules, .v21Calculator, .v21Settings,
-.v21Timeline, .v21ExchangeHistory, .v21Score, .v21CertificateGates, .v21Health, .v21PerformanceCenter,
-.v21ExecutiveSummary, .v21PerformanceHero, .v21PerformanceGrid { color: var(--terminal-text) !important; background: var(--terminal-surface) !important; border-color: var(--terminal-border) !important; }
-
-.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v26Footer, .v26Setup, .v21Tabs, .v21Pulse,
-.demoHero, .demoCommandBar, .demoAccountStrip, .v21GateStrip { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border-color: var(--terminal-border) !important; }
-.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v26Setup, .demoHero, .demoCommandBar, .demoAccountStrip { box-shadow: 0 12px 30px rgba(0,0,0,.18) !important; }
-
-.v26App h1, .v26App h2, .v26App h3, .v26App h4, .binanceDemoDeck h1, .binanceDemoDeck h2, .binanceDemoDeck h3, .binanceDemoDeck h4,
-.v26App b, .v26App strong, .binanceDemoDeck b, .binanceDemoDeck strong { color: var(--terminal-text); }
-.v26App p, .v26App small, .v26App span, .v26App em, .binanceDemoDeck p, .binanceDemoDeck small, .binanceDemoDeck span, .binanceDemoDeck em { color: var(--terminal-muted); }
-.v26App svg, .binanceDemoDeck svg { color: currentColor; }
-
-.v26App button, .binanceDemoDeck button { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border: 1px solid var(--terminal-border) !important; border-radius: 8px; }
-.v26App button:hover:not(:disabled), .binanceDemoDeck button:hover:not(:disabled) { color: var(--terminal-text) !important; background: var(--terminal-surface-hover) !important; border-color: var(--terminal-gold) !important; }
-.v26App button:focus-visible, .binanceDemoDeck button:focus-visible, .v26App input:focus-visible, .binanceDemoDeck input:focus-visible,
-.v26App select:focus-visible, .binanceDemoDeck select:focus-visible { outline: 2px solid var(--terminal-gold) !important; outline-offset: 2px; }
-.v26App button:disabled, .binanceDemoDeck button:disabled { color: var(--terminal-disabled) !important; background: #10161c !important; border-color: #202a33 !important; }
-.demoSubmit, .demoUnlock, .demoConnect, .v21AutoControl > button:not(.stop), .v21PeriodPicker .active { background: #214d42 !important; border-color: #397b66 !important; color: #e8fff4 !important; }
-.demoEmergency, .demoLock, .v21AutoControl > button.stop { background: #552c34 !important; border-color: #85444e !important; color: #ffe9eb !important; }
-.demoTest, .demoAnalysisFill, .v21PeriodPicker button { background: #1b2733 !important; color: #dce8ef !important; }
-
-.v26App input, .v26App select, .v26App textarea, .binanceDemoDeck input, .binanceDemoDeck select, .binanceDemoDeck textarea {
-  color: var(--terminal-text) !important; background: #0e141b !important; border: 1px solid var(--terminal-border) !important; box-shadow: inset 0 1px 2px rgba(0,0,0,.25) !important;
+html, body {
+  overflow-x: hidden !important;
+  margin: 0 !important;
 }
-.v26App input::placeholder, .binanceDemoDeck input::placeholder, .v26App textarea::placeholder, .binanceDemoDeck textarea::placeholder { color: var(--terminal-disabled) !important; opacity: 1; }
-.v26App option, .binanceDemoDeck option { color: var(--terminal-text) !important; background: var(--terminal-surface) !important; }
 
-.v26App table, .binanceDemoDeck table, .v26App thead, .binanceDemoDeck thead { background: var(--terminal-surface-raised) !important; color: var(--terminal-text) !important; }
-.v26App th, .binanceDemoDeck th { color: var(--terminal-gold) !important; background: #10171f !important; border-color: var(--terminal-border) !important; }
-.v26App td, .binanceDemoDeck td { color: var(--terminal-muted) !important; background: transparent !important; border-color: var(--terminal-border) !important; }
-.v26App tr:hover td, .binanceDemoDeck tr:hover td { background: var(--terminal-surface-hover) !important; color: var(--terminal-text) !important; }
+body {
+  font-family: "Inter", "Segoe UI", sans-serif !important;
+  background: linear-gradient(180deg, var(--app-bg-deep) 0%, var(--app-bg) 100%) !important;
+  color: var(--text) !important;
+}
 
-.v26NotificationPanel, .v26NotificationList, .v26NotificationEmpty, [role="dialog"], dialog, .modal, .popover, .tooltip,
-.v26App [data-radix-popper-content-wrapper] { color: var(--terminal-text) !important; background: var(--terminal-surface-raised) !important; border-color: var(--terminal-border-strong) !important; box-shadow: 0 18px 50px rgba(0,0,0,.42) !important; }
-.v26NotificationPanel *, [role="dialog"] *, dialog *, .modal *, .popover *, .tooltip * { color: inherit; }
+body *, body *::before, body *::after {
+  box-sizing: border-box;
+  border-color: var(--border) !important;
+}
 
-.demoProfit, .summaryPositive, .demoLong, .v21Running, .ok, .up { color: var(--terminal-positive) !important; }
-.demoLoss, .summaryNegative, .demoShort, .error, .down { color: var(--terminal-negative) !important; }
-.v21Pending, .v21Stopped, .warning, .locked { color: var(--terminal-warning) !important; }
-.v26Loading, .demoEmpty, .v21EmptyMini, .v21LargeEmpty, .v21ScannerEmpty { color: var(--terminal-muted) !important; background: var(--terminal-surface) !important; border-color: var(--terminal-border) !important; }
-.demoProfit, .summaryPositive { text-shadow: 0 0 18px rgba(85,197,139,.16); }
-.demoLoss, .summaryNegative { text-shadow: 0 0 18px rgba(230,111,115,.14); }
+img, svg, canvas {
+  max-width: 100%;
+}
 
-.v21PerformanceHero, .v21PerformanceGrid { background: var(--terminal-surface-raised) !important; }
-.v21PerformanceHero > span, .v21PerformanceGrid article, .v21MetricRow > span, .v21BacktestMetrics > span { background: #10171f !important; border: 1px solid var(--terminal-border) !important; }
-.v21SummaryBlock, .v21SafetyLock { background: rgba(230,111,115,.08) !important; border-color: rgba(230,111,115,.34) !important; }
-.v21GateStrip span.passed { background: rgba(85,197,139,.09) !important; border-color: rgba(85,197,139,.3) !important; }
+button, input, select, textarea, option {
+  font: inherit;
+}
 
-.v26ChartShell, .v26Chart, .demoChartCanvas { background: #0c1218 !important; border-color: var(--terminal-border) !important; }
-.v26ChartStatus { color: var(--terminal-muted) !important; background: #10171f !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck .demoHero, .binanceDemoDeck .demoSetupCard, .binanceDemoDeck .demoAccountStrip, .binanceDemoDeck .demoLiveChart,
-.binanceDemoDeck .demoTicket, .binanceDemoDeck .demoPositions, .binanceDemoDeck .demoOrderPanel, .binanceDemoDeck .demoEventPanel,
-.binanceDemoDeck .demoHero > *, .binanceDemoDeck .demoLiveChart > *, .binanceDemoDeck .demoTicket > header,
-.binanceDemoDeck .demoPositions > header, .binanceDemoDeck .demoOrderPanel > header, .binanceDemoDeck .demoEventPanel > header,
-.binanceDemoDeck .demoPositionList > article { background: var(--terminal-surface) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck .demoCommandBar, .binanceDemoDeck .demoExposure, .binanceDemoDeck .demoPositionMetrics,
-.binanceDemoDeck .demoTicketFeedback, .binanceDemoDeck .demoOrderConfirmation { background: var(--terminal-surface-raised) !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck .demoOrderPanel article, .binanceDemoDeck .demoEventPanel article { background: #10171f !important; color: var(--terminal-text) !important; border-color: var(--terminal-border) !important; }
-.binanceDemoDeck .demoSidePicker button.activeLong, .binanceDemoDeck .demoSidePicker button.activeShort,
-.binanceDemoDeck .demoTypePicker button.activeType { background: #214d42 !important; color: #e8fff4 !important; border-color: #397b66 !important; }
+button, input, select, textarea {
+  outline: none;
+}
 
-@media (max-width: 700px) {
-  .v26App { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
-  .terminalMobileNav { background: rgba(11,15,20,.97) !important; border-color: var(--terminal-border-strong) !important; }
-  .terminalMobileNav button { background: transparent !important; color: var(--terminal-muted) !important; border: 0 !important; }
-  .terminalMobileNav button.active { background: rgba(196,161,90,.12) !important; color: var(--terminal-gold) !important; }
-  .v21Tabs { overflow-x: auto; scrollbar-color: var(--terminal-border-strong) transparent; }
-  .v21Tabs button { flex: 0 0 auto; min-height: 48px; }
-  .v21SummaryMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* Legacy selector override layer: remove bright cream/white surfaces from actual app components */
+.v26App,
+.v26App *,
+.binanceDemoDeck,
+.binanceDemoDeck *,
+.demoHero,
+.demoHero *,
+.demoSetupCard,
+.demoCommandBar,
+.demoMessage,
+.demoAccountStrip,
+.demoLiveChart,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.executionHero,
+.executionCard,
+.executionPulse,
+.executionActionBar,
+.commercialHero,
+.commercialPanel,
+.commercialMetrics article,
+.commercialPlans article,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.v21Workspace,
+.v21Card,
+.v21Tabs,
+.v21Pulse,
+.v21SummaryMetrics span,
+.v21JournalStats span,
+.v21BacktestMetrics span,
+.terminalMobileNav {
+  background-color: var(--surface-2) !important;
+  background-image: none !important;
+  color: var(--text) !important;
+}
+
+.v26Header,
+.v26Nav,
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoHero,
+.demoSetupCard,
+.demoCommandBar,
+.demoMessage,
+.demoAccountStrip,
+.demoLiveChart,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.executionHero,
+.executionCard,
+.executionPulse,
+.commercialHero,
+.commercialPanel,
+.commercialMetrics article,
+.commercialPlans article,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.terminalMobileNav {
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+}
+
+.v26Header,
+.v26Nav,
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoHero,
+.demoSetupCard,
+.demoCommandBar,
+.demoMessage,
+.demoAccountStrip,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.executionHero,
+.executionCard,
+.executionPulse,
+.commercialHero,
+.commercialPanel,
+.commercialMetrics article,
+.commercialPlans article,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.v21Workspace,
+.v21Card,
+.v21Tabs,
+.v21Pulse,
+.v21JournalStats span,
+.v21BacktestMetrics span,
+.v21ScannerStats span,
+.v21Opportunity,
+.terminalMobileNav {
+  color: var(--text) !important;
+}
+
+.v26Header::before,
+.v26Nav button.active::after,
+.demoHero::after,
+.demoHeroStatus .demoArmed,
+.demoHeroStatus .demoWait,
+.demoHeroStatus .demoOk,
+.demoHeroStatus .demoSafe,
+.demoSetupCard,
+.demoCommandBar > div,
+.demoCommandBar > label,
+.demoFieldGrid input,
+.demoFieldGrid select,
+.demoFieldGrid label > div,
+.demoPositionList > article,
+.demoPositionMap,
+.demoOrderPanel article,
+.demoEventPanel article,
+.demoEventPanel,
+.demoOrderPanel,
+.demoTicket,
+.demoPositions,
+.v26MarketPicker button,
+.v26Intervals button,
+.v26ChartStatus,
+.v26Setup > footer,
+.v26SetupGrid > article::after,
+.v26GateList em,
+.v21Tabs,
+.v21Workspace,
+.v21Card,
+.v21Pulse,
+.v21RiskResult span,
+.v21SettingsGrid > label,
+.v21AutoRules label,
+.v21GateStrip,
+.v21ScannerStats span,
+.v21Opportunity,
+.v21AutoDecision,
+.v27Panel,
+.v27OpsHero,
+.v27SleepNotice,
+.v27Error,
+.v27Metrics article,
+.v27Pulse article,
+.terminalMobileNav button {
+  background: var(--surface-3) !important;
+  border-color: var(--border) !important;
+}
+
+.v26Header,
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoHero,
+.demoSetupCard,
+.demoCommandBar,
+.demoLiveChart,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.executionHero,
+.executionCard,
+.executionPulse,
+.commercialHero,
+.commercialPanel,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.terminalMobileNav {
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.v26HeaderSignals > span,
+.v26HeaderSignals .ok,
+.v26HeaderSignals .locked,
+.v26Nav button,
+.v26Nav button > svg,
+.v26Nav button.active > svg,
+.v26MarketTitle strong,
+.v26MarketPicker button,
+.v26MarketPicker button.active,
+.v26Intervals button,
+.v26Intervals button.active,
+.v26Setup > header > b,
+.v26SetupGrid strong,
+.v26GateList article > span,
+.v26GateList em,
+.v26Footer b,
+.demoHeroCopy > span,
+.demoHeroStatus > span,
+.demoSetupCard > div > svg,
+.demoCommandBar > button,
+.demoCommandBar > div,
+.demoCommandBar > label,
+.demoAccountStrip article,
+.demoAccountStrip article svg,
+.demoPositionList > article > header span,
+.demoPositionMetrics span,
+.demoPositionMap,
+.demoOrderPanel article button,
+.demoEventPanel article > i,
+.demoAnalysisFill,
+.demoTicketFeedback,
+.demoLeverageAudit,
+.executionActionBar button,
+.commercialTabs button,
+.commercialPrimary,
+.demoConnect,
+.demoUnlock,
+.demoEmergency,
+.demoSubmit,
+.terminalMobileNav button {
+  background: var(--surface-4) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+.demoHero,
+.demoHeroCopy h2,
+.demoHeroCopy p,
+.demoHeroStatus small,
+.demoHeroStatus b,
+.demoSetupCard b,
+.demoSetupCard p,
+.demoAccountStrip small,
+.demoAccountStrip b,
+.demoLiveChart > header h3,
+.demoLiveChart > header span,
+.demoLiveChart > header b,
+.demoLiveChart > header small,
+.demoOrderPanel article b,
+.demoOrderPanel article small,
+.demoEventPanel article b,
+.demoEventPanel article small,
+.demoEventPanel time,
+.demoPositionList > article > header b,
+.demoPositionList > article > header strong,
+.demoPositionMetrics small,
+.demoPositionMetrics b,
+.demoFieldGrid label > span,
+.demoFieldGrid input,
+.demoFieldGrid select,
+.demoFieldGrid label > div,
+.v26Brand b,
+.v26Brand small,
+.v26Nav b,
+.v26Nav small,
+.v26ModeBar h1,
+.v26ModeBar p,
+.v26ModeBar small,
+.v26MarketTitle b,
+.v26MarketTitle small,
+.v26Setup > header h2,
+.v26SetupGrid h3,
+.v26SetupGrid p,
+.v26SetupGrid small,
+.v26SetupGrid code,
+.v26GateList b,
+.v26GateList small,
+.v26Footer,
+.v26Footer em,
+.v26ChartStatus em {
+  color: var(--text) !important;
+}
+
+.v26HeaderSignals > span,
+.v26ModeBar p,
+.v26MarketTitle small,
+.v26Setup > header small,
+.v26SetupGrid p,
+.v26GateList small,
+.v26Footer,
+.demoHero p,
+.demoSetupCard p,
+.demoAccountStrip small,
+.demoOrderPanel article small,
+.demoEventPanel article small,
+.demoEventPanel time,
+.demoFieldGrid label > span,
+.demoPositionMetrics small,
+.v27Panel p,
+.v27Panel small,
+.v21Tabs small,
+.v21SummaryMetrics em,
+.v21SummaryBlock small,
+.v21ScannerStats em,
+.v21Opportunity small,
+.v21Opportunity em,
+.v21Health > span small,
+.demoMessage,
+.demoTicketFeedback small {
+  color: var(--text-muted) !important;
+}
+
+.demoHeroCopy > span,
+.demoHeroStatus .demoOk,
+.demoHeroStatus .demoSafe,
+.demoHeroStatus .demoArmed,
+.demoSetupCard > div > svg,
+.demoAnalysisFill,
+.demoConnect,
+.demoUnlock,
+.demoSubmit,
+.v26HeaderSignals .ok,
+.v26SetUp > header > b,
+.v26Setup > header > b,
+.v26GateList article > span,
+.demoAccountStrip .demoModeGood svg,
+.demoAccountStrip .demoProfit,
+.demoPositionList > article > header span.demoLong,
+.demoPositionList > article > header span.demoShort,
+.v26Footer b,
+.v21Tabs button.active,
+.v21ScannerStatus-tamamlandı,
+.v21ScannerStatus,
+.v21TitleBadge,
+.demoTicketFeedback-ok,
+.v26HeaderSignals .locked {
+  color: var(--text-strong) !important;
+}
+
+.demoHero::after,
+.demoSetupCard::after,
+.demoHeroStatus .demoArmed::after,
+.v26ChartStatus,
+.v26ChartShell,
+.v26Loading,
+.v21ScoreRing::after,
+.v21SummaryMetrics span,
+.v21ScannerStats span,
+.v21Opportunity,
+.v21Card,
+.v21Pulse,
+.v21BacktestMetrics span,
+.v21JournalStats span {
+  background: var(--surface-0) !important;
+}
+
+.demoMessage-info,
+.demoMessage-ok,
+.demoMessage-error,
+.demoTicketFeedback-ok,
+.demoTicketFeedback-error,
+.v21AutoDecision,
+.v21ScannerStatus,
+.v21ScannerStatus-tamamlandı,
+.v21ScannerStatus-hata,
+.v21Opportunity,
+.v21GateStrip span.passed > b,
+.v21Health > div button,
+.v21SettingsGrid > label,
+.v21AutoRules label,
+.terminalMobileNav button.active {
+  background: rgba(139, 138, 82, 0.12) !important;
+  border-color: rgba(163, 155, 99, 0.45) !important;
+}
+
+.v26HeaderSignals i,
+.demoHeroStatus svg,
+.demoAccountStrip svg,
+.v26Nav button > svg,
+.v26Setup > header svg,
+.v26GateList article > span,
+.v21Tabs svg,
+.v21ScannerIcon svg,
+.v21Health > div button svg,
+.v26SetupGrid > article > svg {
+  filter: none !important;
+  background: rgba(139, 138, 82, 0.18) !important;
+  color: var(--text-strong) !important;
+}
+
+.v26HeaderSignals .ok,
+.v26HeaderSignals .locked,
+.demoHeroStatus .demoArmed,
+.demoHeroStatus .demoOk,
+.demoHeroStatus .demoSafe,
+.demoHeroStatus .demoWait,
+.demoPositionList > article > header span,
+.v26GateList em,
+.v21ScannerStatus,
+.v21ScannerStatus-tamamlandı,
+.v21ScannerStatus-hata,
+.v21GaugeMark,
+.demoLeverageAudit.verified,
+.demoLeverageAudit.pending {
+  border-color: rgba(163, 155, 99, 0.4) !important;
+}
+
+.v26Header {
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%) !important;
+}
+
+.v26Nav {
+  background: var(--surface-2) !important;
+}
+
+.v26Nav button {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--text-muted) !important;
+}
+
+.v26Nav button.active {
+  background: rgba(139, 138, 82, 0.16) !important;
+  border-color: rgba(163, 155, 99, 0.45) !important;
+  color: var(--text-strong) !important;
+}
+
+.v26Nav button:hover {
+  background: rgba(139, 138, 82, 0.08) !important;
+}
+
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoHero,
+.demoSetupCard,
+.demoCommandBar,
+.demoLiveChart,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.executionHero,
+.executionCard,
+.executionPulse,
+.commercialHero,
+.commercialPanel,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.terminalMobileNav {
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%) !important;
+}
+
+.v26ChartShell,
+.v26ChartStatus,
+.v26Loading,
+.demoChartCanvas,
+.demoLiveChart,
+.v21Workspace,
+.v21Card,
+.v21SummaryMetrics span,
+.v21JournalStats span,
+.v21BacktestMetrics span,
+.v21ScannerStats span,
+.v21Opportunity,
+.terminalMobileNav {
+  background-color: var(--surface-0) !important;
+}
+
+.v26ChartShell,
+.v26ChartStatus,
+.v26Loading,
+.demoChartCanvas,
+.demoLiveChart,
+.v26Setup > footer,
+.v26Footer,
+.v21Workspace {
+  border: 1px solid var(--border) !important;
+}
+
+.demoCommandBar > label,
+.demoFieldGrid input,
+.demoFieldGrid select,
+.demoFieldGrid label > div,
+.demoPositionList > article,
+.demoOrderPanel article,
+.demoEventPanel article,
+.v21SettingsGrid > label,
+.v21AutoRules label,
+.v21GateStrip span,
+.v21Opportunity,
+.terminalMobileNav button {
+  background: var(--surface-1) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.demoHeroStatus > span,
+.demoAccountStrip article,
+.v21Pulse > span,
+.v21JournalStats span,
+.v21BacktestMetrics span,
+.v21ScannerStats span,
+.v21AutoDecision,
+.v21Opportunity,
+.demoMessage,
+.demoTicketFeedback {
+  box-shadow: none !important;
+}
+
+.demoHeroCopy > div b,
+.demoHeroCopy > div span,
+.demoHeroStatus .demoArmed b,
+.demoHeroStatus .demoOk b,
+.demoHeroStatus .demoSafe b,
+.demoHeroStatus .demoWait b,
+.demoPositionList > article > header span,
+.v26HeaderSignals > span,
+.v26MarketTitle strong,
+.demoCommandBar > div b,
+.demoCommandBar > div small,
+.v21SummaryMetrics b,
+.v21ScannerStats b {
+  color: var(--text-strong) !important;
+}
+
+.v26HeaderSignals > span,
+.v26MarketPicker button,
+.v26Intervals button,
+.demoCommandBar > label,
+.demoFieldGrid input,
+.demoFieldGrid select,
+.demoPositionList > article,
+.demoPositionMetrics span,
+.demoEventPanel article,
+.demoOrderPanel article,
+.demoTicketFeedback,
+.demoLeverageAudit,
+.v21AutoRules label,
+.v21ScannerStats span,
+.v21Opportunity,
+.v21GateStrip span,
+.terminalMobileNav button {
+  border-radius: 12px !important;
+}
+
+.demoHeroCopy > span,
+.demoHeroStatus > span,
+.demoSetupCard > div > svg,
+.demoAccountStrip svg,
+.demoPositionList > article > header span,
+.v26MarketTitle > svg,
+.v26Setup > header svg,
+.v26GateList article > span,
+.v21Tabs svg,
+.v21ScannerIcon {
+  border-radius: 12px !important;
+}
+
+.v26App .demoHero,
+.v26App .demoSetupCard,
+.v26App .demoCommandBar,
+.v26App .demoTicket,
+.v26App .demoPositions,
+.v26App .demoOrderPanel,
+.v26App .demoEventPanel,
+.v26App .executionHero,
+.v26App .commercialHero,
+.v26App .v27Panel,
+.v26App .v21Workspace,
+.v26App .v21Card,
+.terminalMobileNav {
+  border: 1px solid var(--border) !important;
+}
+
+.terminalMobileNav {
+  background: var(--surface-2) !important;
+}
+
+.terminalMobileNav button {
+  background: var(--surface-3) !important;
+}
+
+.terminalMobileNav button.active {
+  background: rgba(139, 138, 82, 0.18) !important;
+  border-color: rgba(163, 155, 99, 0.45) !important;
+}
+
+.v26App,
+.v26App *:not(svg):not(path),
+.binanceDemoDeck,
+.binanceDemoDeck *:not(svg):not(path),
+.v21Workspace,
+.v21Card,
+.v21ExecutiveSummary,
+.v21PerformanceHero,
+.v21PerformanceGrid,
+.demoHero,
+.demoCommandBar,
+.demoAccountStrip,
+.demoSetupCard,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.demoLiveChart,
+.executionHero,
+.executionCard,
+.executionPulse,
+.executionActionBar,
+.commercialHero,
+.commercialPanel,
+.commercialMetrics article,
+.commercialPlans article,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.v26Header,
+.v26Nav,
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.v26ChartShell,
+.v26ChartStatus,
+.v26Loading,
+.terminalMobileNav {
+  color: var(--text) !important;
+  background: var(--surface-1) !important;
+  border-color: var(--border) !important;
+}
+
+.v26App {
+  min-height: 100vh;
+  padding: 18px;
+  background: linear-gradient(180deg, var(--app-bg) 0%, var(--app-bg-deep) 100%) !important;
+}
+
+.v26Header,
+.v26Nav,
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoHero,
+.demoSetupCard,
+.demoCommandBar,
+.demoAccountStrip,
+.demoTicket,
+.demoPositions,
+.demoOrderPanel,
+.demoEventPanel,
+.demoLiveChart,
+.executionHero,
+.executionCard,
+.executionPulse,
+.commercialHero,
+.commercialPanel,
+.commercialMetrics article,
+.commercialPlans article,
+.commercialTabs,
+.exchangeHero,
+.exchangeCard,
+.exchangeNotice,
+.exchangeModeSwitch,
+.v27Panel,
+.v27Pulse,
+.v27Metrics,
+.v21ExecutiveSummary,
+.v21PerformanceHero,
+.v21PerformanceGrid,
+.v21MetricRow > span,
+.v21BacktestMetrics > span {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18) !important;
+}
+
+.v26Header {
+  height: 72px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  padding: 0 22px;
+  background: var(--surface-2) !important;
+}
+
+.v26Brand b,
+.v26Brand small,
+.v26Nav b,
+.v26Nav small,
+.v26ModeBar h1,
+.v26ModeBar p,
+.v26ModeBar small,
+.v26MarketTitle b,
+.v26MarketTitle small,
+.v26Setup > header h2,
+.v26SetupGrid h3,
+.v26SetupGrid p,
+.v26SetupGrid code,
+.v26GateList b,
+.v26GateList small,
+.v26Footer,
+.v26Footer b,
+.v26Footer em,
+.demoHero h2,
+.demoHero p,
+.demoTicket h3,
+.demoPositions h3,
+.demoOrderPanel h3,
+.demoEventPanel h3,
+.executionHero h2,
+.executionHero p,
+.commercialHero h2,
+.commercialHero p,
+.exchangeHero h2,
+.exchangeHero p,
+.v27Panel h3,
+.v21SummaryIntro h2,
+.v21SummaryIntro p,
+.v21SummaryMetrics small,
+.v21SummaryMetrics em,
+.v21SummaryMetrics b,
+.v21SummaryBlock strong,
+.v21SummaryBlock small,
+.v21MetricRow span,
+.v21BacktestMetrics span,
+.v26ChartStatus em {
+  color: var(--text) !important;
+}
+
+.v26Brand small,
+.v26Nav small,
+.v26ModeBar small,
+.v26ModeBar p,
+.v26MarketTitle small,
+.v26Setup > header small,
+.v26SetupGrid small,
+.v26GateList small,
+.v26Footer,
+.v26ChartStatus em,
+.demoHero p,
+.demoSetupCard p,
+.demoMessage,
+.executionHero p,
+.executionCard p,
+.commercialHero p,
+.commercialPanel p,
+.exchangeHero p,
+.v27Panel p,
+.v21SummaryIntro p,
+.v21SummaryMetrics em,
+.v21SummaryBlock small,
+.v26HeaderSignals > span,
+.v26MarketPicker span,
+.v26Intervals button,
+.v26CredentialFields label span,
+.v26SetupGrid p,
+.v26SetupGrid code,
+.v26SetupGrid strong {
+  color: var(--text-muted) !important;
+}
+
+.v26Brand > span,
+.v26MarketTitle > svg,
+.v26Setup > header svg,
+.v26GateList article > span,
+.v26Nav button > svg,
+.v26HeaderSignals > span i,
+.demoHero > span,
+.executionHero > span,
+.commercialHero > span,
+.v21SummaryBlock svg,
+.v26BackToTop {
+  color: var(--text-strong) !important;
+}
+
+.v26Nav {
+  position: sticky;
+  top: 10px;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px;
+  background: var(--surface-2) !important;
+}
+
+.v26Nav button {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  text-align: left;
+}
+
+.v26Nav button:hover {
+  background: var(--surface-3) !important;
+  border-color: var(--border) !important;
+}
+
+.v26Nav button.active {
+  background: rgba(139, 138, 82, 0.16) !important;
+  border-color: rgba(163, 155, 99, 0.5) !important;
+  color: var(--text-strong) !important;
+}
+
+.v26Nav button > svg {
+  width: 20px;
+  height: 20px;
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+  box-sizing: content-box;
+}
+
+.v26Nav button.active > svg {
+  background: rgba(163, 155, 99, 0.28) !important;
+  color: var(--text-strong) !important;
+}
+
+.v26ModeBar,
+.v26MarketBar,
+.v26Setup > header,
+.v26SetupGrid > article,
+.v26GateList article,
+.v26Footer,
+.demoCommandBar,
+.demoAccountStrip,
+.demoMessage,
+.demoOrderConfirmation,
+.demoTicketFeedback,
+.executionActionBar,
+.commercialTabs,
+.exchangeModeSwitch,
+.terminalMobileNav {
+  background: var(--surface-3) !important;
+  border-color: var(--border) !important;
+}
+
+.v26MarketBar,
+.v26Setup,
+.v26Setup > header,
+.v26SetupGrid,
+.v26GateList,
+.v26Footer {
+  margin-top: 12px;
+}
+
+.v26Refresh,
+.v26BackToTop,
+.demoConnect,
+.demoUnlock,
+.demoEmergency,
+.demoSubmit,
+.demoAnalysisFill,
+.executionActionBar button,
+.commercialPrimary,
+.commercialTabs button,
+.testOrder,
+.liveOrder,
+.savePolicy,
+.v26HeaderSignals > span,
+.v21PeriodPicker button,
+.terminalMobileNav button {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+}
+
+.v26Refresh,
+.demoConnect,
+.demoUnlock,
+.demoSubmit,
+.demoAnalysisFill,
+.commercialPrimary,
+.liveOrder,
+.testOrder,
+.savePolicy,
+.v26HeaderSignals .ok,
+.v21PeriodPicker .active {
+  background: rgba(79, 138, 98, 0.18) !important;
+  border-color: rgba(79, 138, 98, 0.5) !important;
+  color: var(--text-strong) !important;
+}
+
+.demoEmergency,
+.v21AutoControl > button.stop,
+.executionActionBar .danger,
+.v26HeaderSignals .locked {
+  background: rgba(168, 92, 85, 0.18) !important;
+  border-color: rgba(168, 92, 85, 0.5) !important;
+  color: var(--text-strong) !important;
+}
+
+.v26Refresh:hover:not(:disabled),
+.demoConnect:hover:not(:disabled),
+.demoUnlock:hover:not(:disabled),
+.demoSubmit:hover:not(:disabled),
+.demoEmergency:hover:not(:disabled),
+.demoAnalysisFill:hover:not(:disabled),
+.executionActionBar button:hover:not(:disabled),
+.commercialTabs button:hover:not(:disabled),
+.commercialPrimary:hover:not(:disabled),
+.testOrder:hover:not(:disabled),
+.liveOrder:hover:not(:disabled),
+.savePolicy:hover:not(:disabled),
+.terminalMobileNav button:hover {
+  background: var(--surface-4) !important;
+  border-color: var(--border-strong) !important;
+  transform: translateY(-1px);
+}
+
+.v26App input,
+.v26App select,
+.v26App textarea,
+.binanceDemoDeck input,
+.binanceDemoDeck select,
+.binanceDemoDeck textarea,
+.v26CredentialFields input {
+  color: var(--text) !important;
+  background: var(--surface-0) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+.v26App input::placeholder,
+.v26App textarea::placeholder,
+.binanceDemoDeck input::placeholder,
+.binanceDemoDeck textarea::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 1;
+}
+
+.v26App option,
+.binanceDemoDeck option {
+  color: var(--text) !important;
+  background: var(--surface-2) !important;
+}
+
+.v26App table,
+.binanceDemoDeck table,
+.v26App thead,
+.binanceDemoDeck thead,
+.v26App tbody,
+.binanceDemoDeck tbody {
+  background: transparent !important;
+  color: var(--text) !important;
+}
+
+.v26App th,
+.binanceDemoDeck th {
+  color: var(--text-muted) !important;
+  background: var(--surface-0) !important;
+  border-color: var(--border) !important;
+}
+
+.v26App td,
+.binanceDemoDeck td {
+  color: var(--text) !important;
+  background: transparent !important;
+  border-color: var(--border) !important;
+}
+
+.v26App tr:hover td,
+.binanceDemoDeck tr:hover td {
+  background: rgba(139, 138, 82, 0.08) !important;
+  color: var(--text) !important;
+}
+
+[role="dialog"],
+.dialog,
+.modal,
+.popover,
+.tooltip,
+.v26NotificationPanel,
+.v26NotificationList {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35) !important;
+  color: var(--text) !important;
+}
+
+.v26ChartShell,
+.v26Chart,
+.demoChartCanvas,
+.v26ChartStatus,
+.v26Loading,
+.v26NotificationEmpty,
+.v21ScannerEmpty,
+.v21EmptyMini,
+.v21LargeEmpty,
+.demoEmpty {
+  background: var(--surface-0) !important;
+  border-color: var(--border) !important;
+}
+
+.v26ChartStatus {
+  background: rgba(24, 27, 23, 0.94) !important;
+}
+
+.v26ChartStatus span.live {
+  color: var(--success) !important;
+}
+
+.v26ChartStatus span.error {
+  color: var(--danger) !important;
+}
+
+.v21ExecutiveSummary {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.8fr) minmax(210px, 0.8fr);
+  gap: 18px;
+  align-items: stretch;
+  margin: 18px 0;
+  padding: 22px;
+}
+
+.v21SummaryMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.v21SummaryMetrics span {
+  min-width: 0;
+  padding: 14px 12px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-0) !important;
+}
+
+.v21SummaryMetrics b {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.v21SummaryBlock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px !important;
+  border: 1px solid rgba(168, 92, 85, 0.4) !important;
+  background: rgba(168, 92, 85, 0.08) !important;
+  color: var(--danger) !important;
+}
+
+.v21SummaryBlock b,
+.v21SummaryBlock strong,
+.v21SummaryBlock small {
+  color: inherit !important;
+}
+
+.v21SummaryBlock strong {
+  font-size: 14px;
+}
+
+.v21GateStrip span.passed,
+.v21PerformanceGrid article,
+.v21MetricRow > span,
+.v21BacktestMetrics > span {
+  background: rgba(79, 138, 98, 0.08) !important;
+  border-color: rgba(79, 138, 98, 0.3) !important;
+}
+
+.demoProfit,
+.summaryPositive,
+.demoLong,
+.v21Running,
+.ok,
+.up,
+.passed,
+.statusOn { color: var(--success) !important; }
+
+.demoLoss,
+.summaryNegative,
+.demoShort,
+.error,
+.down,
+.negative,
+.statusOff { color: var(--danger) !important; }
+
+.warning,
+.locked,
+.v21Pending,
+.v21Stopped { color: var(--warning) !important; }
+
+.v26App .demoHero,
+.v26App .demoSetupCard,
+.v26App .demoCommandBar,
+.v26App .demoMessage,
+.v26App .demoAccountStrip,
+.v26App .demoLiveChart,
+.v26App .demoTicket,
+.v26App .demoPositions,
+.v26App .demoOrderPanel,
+.v26App .demoEventPanel,
+.v26App .executionHero,
+.v26App .executionCard,
+.v26App .executionPulse,
+.v26App .commercialHero,
+.v26App .commercialPanel,
+.v26App .commercialMetrics article,
+.v26App .commercialPlans article,
+.v26App .commercialTabs,
+.v26App .exchangeHero,
+.v26App .exchangeNotice,
+.v26App .exchangeModeSwitch,
+.v26App .exchangeCard,
+.v26App .exchangeSafety,
+.v26App .v27Panel,
+.v26App .v27Pulse,
+.v26App .v27Metrics {
+  background: var(--surface-2) !important;
+}
+
+.terminalMobileNav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border) !important;
+  background: rgba(17, 19, 16, 0.96) !important;
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.32) !important;
+}
+
+.terminalMobileNav button {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 6px 4px;
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--text-muted) !important;
+}
+
+.terminalMobileNav button.active {
+  background: rgba(163, 155, 99, 0.12) !important;
+  color: var(--text-strong) !important;
+}
+
+@media (min-width: 701px) {
+  .terminalMobileNav {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .v21ExecutiveSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .v21SummaryMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .v26App {
+    padding: 12px;
+  }
+
+  .v26Header {
+    grid-template-columns: 1fr auto;
+    min-height: 64px;
+    height: auto;
+    padding: 12px 14px;
+  }
+
+  .v26HeaderSignals {
+    display: none !important;
+  }
+
+  .v26Nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .v26SetupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .v26MarketPicker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .v26SummaryMetrics,
+  .v21SummaryMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .v26App {
+    padding: 10px;
+  }
+
+  .v26Nav {
+    grid-template-columns: 1fr;
+  }
+
+  .v26ModeBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .v26MarketPicker,
+  .v26GateList {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
