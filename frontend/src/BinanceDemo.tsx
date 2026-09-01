@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, BarChart3, Bell, Calculator, CircleDollarSign, ClipboardList, Crosshair, Gauge, History, LockKeyhole, Play, Radio, RefreshCw, Save, Send, Settings2, ShieldCheck, Target, TestTube2, TriangleAlert, UnlockKeyhole, Wallet, Zap } from 'lucide-react'
 import { API_BASE } from './api'
+import './binance-demo.css'
 
 const API = `${API_BASE}/binance-demo`
 const V21_API = `${API_BASE}/v21`
@@ -605,7 +606,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const rewardAmount = Math.abs(tp1Value - entryValue)
   const rewardRatio = riskAmount > 0 ? (rewardAmount / riskAmount).toFixed(2) : '—'
 
-  return <section className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü">
+  return <div className="binanceDemoRoot"><section className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü">
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
       <div className="demoHeroStatus">
@@ -935,4 +936,5 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <div className="v21SafetyLock"><LockKeyhole/><span><b>GERÇEK PARA VE GERÇEK BINANCE EMİR KANALI FİZİKSEL OLARAK YOK</b><small>Bu paket yalnızca https://demo-fapi.binance.com ve wss://demo-fstream.binance.com adreslerini kullanır.</small></span><strong>DEMO ONLY</strong></div>
     </section>}
   </section>
+  </div>
 }

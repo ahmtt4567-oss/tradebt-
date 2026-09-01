@@ -640,7 +640,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const replayTrade = historyItems[0]
   const replayEvents = replayTrade ? [{label:'Entry',time:replayTrade.entry_time,detail:fmt(replayTrade.entry)},{label:'Close',time:replayTrade.exit_time,detail:fmt(replayTrade.exit)}] : []
 
-  return <section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
+  return <div className="binanceDemoRoot"><section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
     <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
       <div className="demoHeroStatus">
@@ -851,4 +851,5 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <div className="v21SafetyLock"><LockKeyhole/><span><b>GERÇEK PARA VE GERÇEK BINANCE EMİR KANALI FİZİKSEL OLARAK YOK</b><small>Bu paket yalnızca https://demo-fapi.binance.com ve wss://demo-fstream.binance.com adreslerini kullanır.</small></span><strong>DEMO ONLY</strong></div>
     </section>}
   </section>
+  </div>
 }
