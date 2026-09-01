@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, BarChart3, Bell, Calculator, CheckCircle2, CircleDollarSign, ClipboardList, Crosshair, Gauge, History, LockKeyhole, Play, Radio, RefreshCw, Save, Send, Settings2, ShieldCheck, Target, TestTube2, TriangleAlert, UnlockKeyhole, Wallet, Zap } from 'lucide-react'
 import { API_BASE } from './api'
+import './binance-demo.css'
 
 const API = `${API_BASE}/binance-demo`
 const V21_API = `${API_BASE}/v21`
