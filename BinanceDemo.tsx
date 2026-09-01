@@ -554,10 +554,12 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const workflowSteps = [
     {label:'Discover',target:'auto' as V21Tab,status:v21?.scanner.last_scan_at ? 'completed' : 'available'},
     {label:'Analyze',target:'trade' as V21Tab,status:setupAvailable ? 'completed' : 'unavailable'},
+    {label:'Setup',target:'trade' as V21Tab,status:setupAvailable ? 'available' : 'unavailable'},
     {label:'Risk Check',target:'risk' as V21Tab,status:riskAvailable ? 'completed' : setupAvailable ? 'available' : 'unavailable'},
     {label:'Execute',target:'trade' as V21Tab,status:liveTradeAvailable ? 'completed' : riskAvailable ? 'available' : 'unavailable'},
     {label:'Review',target:'performance' as V21Tab,status:reviewAvailable ? 'available' : 'unavailable'},
   ]
+  const workflowCurrentIndex = tab === 'auto' ? 0 : tab === 'risk' ? 3 : tab === 'performance' || tab === 'journal' ? 5 : 2
   const nextAction = liveTradeAvailable ? {label:'Monitor Live Trade',target:'journal' as V21Tab,detail:'Open position data is available in the live journal.'} : reviewAvailable ? {label:'Review Performance',target:'performance' as V21Tab,detail:'Recent journal or performance data is available for review.'} : !setupAvailable ? {label:'Review Market Scanner',target:'auto' as V21Tab,detail:'No live setup is available yet.'} : !riskAvailable ? {label:'Run Risk Check',target:'risk' as V21Tab,detail:'A live setup is available and requires risk review.'} : {label:'Open Trade Desk',target:'trade' as V21Tab,detail:'Risk context is available; review the trade desk before execution.'}
 
   return <section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
@@ -591,7 +593,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
     <nav className="v21Workflow" aria-label="Trading workflow">
       <div className="v21WorkflowTitle"><span>TRADING WORKFLOW</span><small>Current operating path</small></div>
       <div className="v21WorkflowSteps">
-        {workflowSteps.map((step,index) => <button key={step.label} className={`v21WorkflowStep ${step.status} ${tab === step.target ? 'current' : ''}`} onClick={() => setTab(step.target)} aria-current={tab === step.target ? 'step' : undefined}>
+        {workflowSteps.map((step,index) => <button key={step.label} className={`v21WorkflowStep ${step.status} ${workflowCurrentIndex === index ? 'current' : ''}`} onClick={() => setTab(step.target)} aria-current={workflowCurrentIndex === index ? 'step' : undefined}>
           <i>{index + 1}</i><span><b>{step.label}</b><small>{step.status}</small></span>{index < workflowSteps.length - 1 && <em>→</em>}
         </button>)}
       </div>
