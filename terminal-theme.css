@@ -1290,6 +1290,88 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21PatternInsights { margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
 .v21PatternInsights p { margin: 7px 0 0; color: var(--text); font-size: 10px; line-height: 1.5; }
 
+.v21AiTradeJournal,
+.v21StrategyPerformance,
+.v21MarketRegime,
+.v21BotHealthMonitor { width: 100%; margin-top: 14px; }
+.v21AiTradeJournal { border-top: 2px solid rgba(34,211,238,.4); }
+.v21AiJournalList { display: grid; gap: 12px; margin-top: 12px; }
+.v21AiJournalList article { min-width: 0; padding: 13px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
+.v21AiJournalList article > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.v21AiJournalList article > header > div { display: grid; gap: 4px; min-width: 0; }
+.v21AiJournalList article > header b { color: var(--text-primary); font-size: 11px; letter-spacing: .08em; }
+.v21AiJournalList article > header strong { color: var(--text); font-size: 11px; }
+.v21AiJournalList article > header small { color: var(--text-muted); font-size: 9px; }
+.v21AiJournalList article > header em { flex: 0 0 auto; padding: 6px 8px; border-radius: 7px; font-size: 9px; font-style: normal; font-weight: 750; letter-spacing: .05em; }
+.v21AiJournalList article > header em.win { background: rgba(34,197,94,.1); color: var(--success); }
+.v21AiJournalList article > header em.loss { background: rgba(239,68,68,.1); color: var(--danger); }
+.v21AiJournalList article > header em.breakeven { background: rgba(148,163,184,.1); color: var(--text-muted); }
+.v21AiJournalFacts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 11px; }
+.v21AiJournalFacts span { display: grid; gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid rgba(37,48,59,.72); border-radius: 8px; background: rgba(15,23,42,.3); }
+.v21AiJournalFacts small { color: var(--text-muted); font-size: 8px; letter-spacing: .06em; }
+.v21AiJournalFacts b { overflow: hidden; color: var(--text-primary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.v21AiJournalSections { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+.v21AiJournalSections section { min-width: 0; padding: 9px; border-left: 2px solid rgba(34,211,238,.32); background: rgba(15,23,42,.22); }
+.v21AiJournalSections b { display: block; color: var(--text-muted); font-size: 8px; letter-spacing: .05em; line-height: 1.35; text-transform: uppercase; }
+.v21AiJournalSections p { margin: 6px 0 0; color: var(--text); font-size: 9px; line-height: 1.45; }
+.v21AiJournalSections ul { display: grid; gap: 3px; margin: 6px 0 0; padding-left: 13px; color: var(--text); font-size: 9px; line-height: 1.4; }
+.v21StrategyPerformance { border-top: 2px solid rgba(168,85,247,.4); }
+.v21MarketRegime { border-top: 2px solid rgba(245,158,11,.4); }
+.v21RegimeHeadline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.v21RegimeHeadline strong { color: var(--text-primary); font-size: 18px; letter-spacing: .04em; }
+.v21RegimeHeadline span { color: var(--text-muted); font-size: 9px; }
+.v21RegimeSignals { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.v21RegimeSignals span { display: grid; gap: 5px; min-width: 0; padding: 10px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21RegimeSignals small { color: var(--text-muted); font-size: 9px; text-transform: uppercase; }
+.v21RegimeSignals b { overflow: hidden; color: var(--text-primary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.v21RegimeBehavior { margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21RegimeBehavior > b { color: var(--text-primary); font-size: 9px; letter-spacing: .07em; }
+.v21RegimeBehavior p { margin: 6px 0 0; color: var(--text); font-size: 10px; }
+.v21RegimeBehavior small { display: block; margin-top: 8px; color: var(--text-muted); font-size: 9px; }
+.v21BotHealthMonitor { border-top: 2px solid rgba(34,211,238,.45); }
+.v21HealthOverview { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
+.v21HealthOverview span { display: grid; gap: 5px; min-width: 0; padding: 8px; border-right: 1px solid rgba(37,48,59,.72); }
+.v21HealthOverview span:last-child { border-right: 0; }
+.v21HealthOverview small { color: var(--text-muted); font-size: 8px; letter-spacing: .07em; }
+.v21HealthOverview strong { color: var(--success); font-size: 15px; letter-spacing: .06em; }
+.v21HealthOverview b { color: var(--text-primary); font-size: 13px; }
+.v21HealthUnknown strong,
+.v21HealthUnknown b { color: var(--text-muted); }
+.v21HealthDegraded strong { color: var(--warning); }
+.v21HealthLimited strong { color: var(--danger); }
+.v21HealthServices { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.v21HealthServices article { display: grid; grid-template-columns: 8px minmax(0,1fr); gap: 9px; min-width: 0; padding: 10px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21HealthServices article > i { width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; background: var(--text-muted); }
+.v21HealthServices article.v21HealthHealthy > i { background: var(--success); box-shadow: 0 0 0 3px rgba(34,197,94,.08); }
+.v21HealthServices article.v21HealthDegraded > i { background: var(--warning); }
+.v21HealthServices article.v21HealthOffline > i { background: var(--danger); }
+.v21HealthServices article > div { display: grid; gap: 4px; min-width: 0; }
+.v21HealthServices b { color: var(--text-primary); font-size: 9px; letter-spacing: .04em; }
+.v21HealthServices strong { color: var(--text-muted); font-size: 9px; }
+.v21HealthServices article.v21HealthHealthy strong { color: var(--success); }
+.v21HealthServices article.v21HealthDegraded strong { color: var(--warning); }
+.v21HealthServices article.v21HealthOffline strong { color: var(--danger); }
+.v21HealthServices small { overflow: hidden; color: var(--text-muted); font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.v21HealthHeartbeat,
+.v21HealthEvents,
+.v21HealthLatency { margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21HealthHeartbeat h3,
+.v21HealthEvents h3 { margin: 0 0 9px; color: var(--text-muted); font-size: 9px; letter-spacing: .07em; }
+.v21HealthHeartbeat { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.v21HealthHeartbeat h3 { grid-column: 1 / -1; }
+.v21HealthHeartbeat span,
+.v21HealthLatency span { display: grid; gap: 4px; min-width: 0; }
+.v21HealthHeartbeat b,
+.v21HealthLatency b { color: var(--text-primary); font-size: 9px; }
+.v21HealthHeartbeat small,
+.v21HealthLatency small { color: var(--text-muted); font-size: 9px; line-height: 1.4; }
+.v21HealthEvents p { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; margin: 0; padding: 7px 0; border-top: 1px solid rgba(37,48,59,.58); }
+.v21HealthEvents p b { color: var(--info); font-size: 8px; }
+.v21HealthEvents p span { color: var(--text); font-size: 9px; }
+.v21HealthEvents p small { color: var(--text-muted); font-size: 8px; }
+.v21HealthEvents > div { color: var(--text-muted); font-size: 9px; }
+.v21HealthLatency { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+
 .v21RiskHeadline {
   display: flex;
   align-items: baseline;
