@@ -1185,6 +1185,107 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
   line-height: 1.35;
   word-break: break-word;
 }
+.v21FiveDayChart {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0,1fr));
+  align-items: end;
+  gap: 8px;
+  min-height: 154px;
+  margin-top: 12px;
+  padding: 12px 10px 10px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 10px;
+  background: rgba(13,17,23,.42);
+}
+.v21ChartDay {
+  display: grid;
+  grid-template-rows: 78px auto auto auto;
+  gap: 4px;
+  min-width: 0;
+  text-align: center;
+}
+.v21ChartBar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+  border-bottom: 1px solid rgba(100,116,139,.28);
+}
+.v21ChartBar i {
+  display: block;
+  width: min(22px,70%);
+  min-height: 6px;
+  border-radius: 4px 4px 0 0;
+  background: var(--success);
+}
+.v21ChartBar i.negative { background: var(--danger); }
+.v21ChartDay b,
+.v21ChartDay small,
+.v21ChartDay em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v21ChartDay b { color: var(--text-primary); font-size: 9px; text-transform: uppercase; }
+.v21ChartDay small { color: var(--text); font-size: 9px; }
+.v21ChartDay em { color: var(--text-muted); font-size: 8px; font-style: normal; }
+.v21FiveDayEmpty { min-height: 154px; }
+.v21FiveDayEmpty small,
+.v21InsightEmpty small { color: var(--text-muted); font-size: 9px; line-height: 1.45; }
+
+.v21RiskHeadline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+.v21RiskHeadline strong { margin-top: 0; }
+.v21RiskHeadline b { color: var(--text-muted); font-size: 9px; letter-spacing: .06em; }
+.v21RiskReasons {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0 0;
+  padding: 0 0 0 14px;
+  color: var(--text-primary);
+  font-size: 9px;
+  line-height: 1.45;
+}
+.v21RiskReasons li::marker { color: var(--warning); }
+
+.v21LifecycleStages {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+.v21LifecycleStages span {
+  display: grid;
+  grid-template-columns: 9px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 8px;
+  background: rgba(13,17,23,.36);
+}
+.v21LifecycleStages i { width: 7px; height: 7px; border-radius: 50%; background: rgba(148,163,184,.7); }
+.v21LifecycleStages b { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.v21LifecycleStages small { color: var(--text-muted); font-size: 8px; }
+.v21LifecycleStages span.done i { background: var(--success); }
+.v21LifecycleStages span.done b { color: var(--text-primary); }
+.v21LifecycleStages span.active { border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.08); }
+.v21LifecycleStages span.active i { background: var(--info); box-shadow: 0 0 0 4px rgba(34,211,238,.1); }
+.v21LifecycleStages span.active b,
+.v21LifecycleStages span.active small { color: var(--info); }
+
+.v21ReplayAnalysis,
+.v21ReplayDetailSteps { margin-top: 12px; padding: 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.4); }
+.v21ReplayAnalysis h3 { margin: 0 0 9px; color: var(--text-primary); font-size: 10px; letter-spacing: .08em; }
+.v21ReplayAnalysis > div,
+.v21ReplayDetailSteps { display: grid; gap: 8px; }
+.v21ReplayAnalysis span,
+.v21ReplayDetailSteps span { display: grid; gap: 4px; min-width: 0; }
+.v21ReplayAnalysis b,
+.v21ReplayDetailSteps b { color: var(--text-primary); font-size: 9px; }
+.v21ReplayAnalysis small,
+.v21ReplayDetailSteps small { color: var(--text-muted); font-size: 9px; line-height: 1.45; }
 
 .v21TradeIntelligenceStack {
   display: grid;
