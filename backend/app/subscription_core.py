@@ -18,7 +18,7 @@ PLAN_CATALOG: dict[str, dict[str, Any]] = {
 
 def active_subscription(state: dict[str, Any], user_id: str) -> dict[str, Any] | None:
     now = datetime.now(timezone.utc)
-    rows = [row for row in state.get("subscriptions", []) if row.get("user_id") == user_id and row.get("status") in {"ACTIVE", "TRIAL"}]
+    rows = [row for row in state.get("subscriptions", []) if row.get("user_id") == user_id and row.get("status") in {"ACTIVE", "TRIAL", "CANCELED", "PAST_DUE"}]
     valid = []
     for row in rows:
         end = row.get("currentPeriodEnd") or row.get("trialEnd") or row.get("period_end")
@@ -39,4 +39,6 @@ def entitlement_snapshot(state: dict[str, Any], user_id: str) -> dict[str, Any]:
         return {"status": "FREE", "plan": None, "features": [], "entitlements": {"canUseDemoTrading": False, "canUseLiveTrading": False, "canUseAdvancedAnalytics": False, "canUseBacktesting": False, "canUseAdvancedAI": False, "maxActivePositions": 0}, "mode": "DEVELOPMENT", "cancelAtPeriodEnd": False}
     plan = str(row.get("plan") or "STARTER").upper()
     catalog = PLAN_CATALOG.get(plan, PLAN_CATALOG["STARTER"])
-    return {"status": row.get("status", "ACTIVE"), "plan": plan, "billingInterval": row.get("billingInterval") or row.get("billing_interval", "monthly"), "trialStart": row.get("trialStart"), "trialEnd": row.get("trialEnd"), "currentPeriodStart": row.get("currentPeriodStart"), "currentPeriodEnd": row.get("currentPeriodEnd") or row.get("period_end"), "currentPrice": row.get("currentPrice"), "features": catalog["features"], "entitlements": catalog["entitlements"], "cancelAtPeriodEnd": bool(row.get("cancelAtPeriodEnd", False)), "mode": "STRIPE" if row.get("provider") == "STRIPE" else "DEVELOPMENT"}
+    status = row.get("status", "ACTIVE")
+    entitlements = catalog["entitlements"] if status != "PAST_DUE" else {key: False if isinstance(value, bool) else 0 for key, value in catalog["entitlements"].items()}
+    return {"status": status, "plan": plan, "billingInterval": row.get("billingInterval") or row.get("billing_interval", "monthly"), "trialStart": row.get("trialStart"), "trialEnd": row.get("trialEnd"), "currentPeriodStart": row.get("currentPeriodStart"), "currentPeriodEnd": row.get("currentPeriodEnd") or row.get("period_end"), "currentPrice": row.get("currentPrice"), "features": catalog["features"] if status != "PAST_DUE" else [], "entitlements": entitlements, "mode": "STRIPE" if row.get("provider") == "STRIPE" else "DEVELOPMENT", "cancelAtPeriodEnd": bool(row.get("cancelAtPeriodEnd", False))}

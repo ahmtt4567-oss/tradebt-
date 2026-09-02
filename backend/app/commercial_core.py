@@ -256,6 +256,7 @@ def default_commercial_state() -> dict[str, Any]:
         "owner_user_id": None,
         "users": [],
         "subscriptions": [],
+        "stripe_event_ids": [],
         "licenses": [],
         "pairing_codes": [],
         "agents": [],

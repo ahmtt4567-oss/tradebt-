@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -41,6 +42,11 @@ from .commerce_core import sanitize_business_settings
 from .local_storage import DATA_DIR, migrate_legacy_files
 from .web_security import MIN_ACCESS_TOKEN_LENGTH, bootstrap_access_allowed
 from .subscription_core import PLAN_CATALOG as SUBSCRIPTION_PLAN_CATALOG, TRIAL_DAYS, active_subscription, entitlement_snapshot
+
+try:
+    import stripe
+except ImportError:  # pragma: no cover - dependency is installed in deployed environments
+    stripe = None
 
 
 router = APIRouter(prefix="/api/v22", tags=["V24 Commercial Complete"])
@@ -95,7 +101,7 @@ def sanitize_state(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return base
     for key in (
-        "users", "subscriptions", "licenses", "pairing_codes", "agents", "audit", "plans",
+        "users", "subscriptions", "stripe_event_ids", "licenses", "pairing_codes", "agents", "audit", "plans",
         "release_evidence", "leads", "demo_invoices", "support_tickets", "acceptances",
     ):
         if key in payload and isinstance(payload[key], type(base[key])):
@@ -566,6 +572,102 @@ def subscription_for_user(state: dict[str, Any], user_id: str) -> dict[str, Any]
     }
 
 
+def stripe_configured() -> bool:
+    required = ("STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "APP_BASE_URL")
+    price_keys = tuple(f"STRIPE_PRICE_{plan}_{interval}" for plan in ("STARTER", "PRO", "ELITE") for interval in ("MONTHLY", "YEARLY"))
+    return bool(stripe and all(os.getenv(key, "").strip() for key in (*required, *price_keys)))
+
+
+def stripe_base_url() -> str:
+    value = os.getenv("APP_BASE_URL", "").strip().rstrip("/")
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
+        raise HTTPException(503, "APP_BASE_URL is not configured as a safe absolute URL")
+    return value
+
+
+def stripe_price_id(plan: str, interval: str) -> str:
+    if plan not in SUBSCRIPTION_PLAN_CATALOG or interval not in {"monthly", "annual"}:
+        raise HTTPException(422, "Invalid subscription plan or billing interval")
+    key = f"STRIPE_PRICE_{plan}_{'YEARLY' if interval == 'annual' else 'MONTHLY'}"
+    price_id = os.getenv(key, "").strip()
+    if not price_id:
+        raise HTTPException(503, "Stripe price mapping is not configured")
+    return price_id
+
+
+def stripe_value(value: Any, key: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def stripe_customer_for_user(state: dict[str, Any], user_id: str) -> str | None:
+    rows = [row for row in state.get("subscriptions", []) if row.get("user_id") == user_id]
+    return next((str(row.get("stripeCustomerId") or row.get("stripe_customer_id")) for row in reversed(rows) if row.get("stripeCustomerId") or row.get("stripe_customer_id")), None)
+
+
+def subscription_user_for_customer(state: dict[str, Any], customer_id: str | None) -> str | None:
+    if not customer_id:
+        return None
+    return next((str(row.get("user_id")) for row in state.get("subscriptions", []) if str(row.get("stripeCustomerId") or row.get("stripe_customer_id") or "") == str(customer_id)), None)
+
+
+def normalize_stripe_status(value: Any) -> str:
+    return {"active": "ACTIVE", "trialing": "TRIAL", "past_due": "PAST_DUE", "canceled": "CANCELED", "unpaid": "PAST_DUE", "incomplete": "PAST_DUE", "incomplete_expired": "CANCELED"}.get(str(value or "").lower(), "FREE")
+
+
+def upsert_stripe_subscription(state: dict[str, Any], payload: Any, *, fallback_user_id: str | None = None, fallback_plan: str | None = None, fallback_interval: str | None = None) -> dict[str, Any]:
+    metadata = stripe_value(payload, "metadata", {}) or {}
+    customer_id = str(stripe_value(payload, "customer") or stripe_value(payload, "customer_id") or "") or None
+    user_id = str(metadata.get("user_id") or fallback_user_id or subscription_user_for_customer(state, customer_id) or "")
+    if not user_id:
+        raise HTTPException(422, "Stripe subscription is not linked to an application user")
+    items = stripe_value(payload, "items", {}) or {}
+    data = stripe_value(items, "data", []) or []
+    price = stripe_value(data[0], "price", {}) if data else {}
+    price_id = str(stripe_value(price, "id") or "")
+    reverse = next(((plan, interval) for plan in SUBSCRIPTION_PLAN_CATALOG for interval in ("monthly", "annual") if price_id and os.getenv(f"STRIPE_PRICE_{plan}_{'YEARLY' if interval == 'annual' else 'MONTHLY'}", "").strip() == price_id), (fallback_plan or metadata.get("plan") or "STARTER", fallback_interval or metadata.get("billing_interval") or "monthly"))
+    plan, interval = reverse
+    status = normalize_stripe_status(stripe_value(payload, "status"))
+    now = now_iso()
+    row = next((item for item in reversed(state.setdefault("subscriptions", [])) if item.get("stripeSubscriptionId") == str(stripe_value(payload, "id") or "")), None)
+    if row is None:
+        row = {"id": uuid.uuid4().hex, "user_id": user_id}
+        state["subscriptions"].append(row)
+    row.update({"status": status, "plan": plan, "billingInterval": interval, "stripeCustomerId": customer_id, "stripeSubscriptionId": str(stripe_value(payload, "id") or "") or None, "currentPeriodStart": datetime.fromtimestamp(int(stripe_value(payload, "current_period_start") or 0), timezone.utc).isoformat() if stripe_value(payload, "current_period_start") else row.get("currentPeriodStart"), "currentPeriodEnd": datetime.fromtimestamp(int(stripe_value(payload, "current_period_end") or 0), timezone.utc).isoformat() if stripe_value(payload, "current_period_end") else row.get("currentPeriodEnd"), "cancelAtPeriodEnd": bool(stripe_value(payload, "cancel_at_period_end", False)), "currentPrice": SUBSCRIPTION_PLAN_CATALOG[plan]["annual_price"] if interval == "annual" else SUBSCRIPTION_PLAN_CATALOG[plan]["monthly_price"], "provider": "STRIPE", "updatedAt": now})
+    return row
+
+
+def apply_stripe_event(state: dict[str, Any], event: Any) -> bool:
+    event_id = str(stripe_value(event, "id") or "")
+    event_type = str(stripe_value(event, "type") or "")
+    if not event_id:
+        raise HTTPException(400, "Stripe event ID is required")
+    processed = state.setdefault("stripe_event_ids", [])
+    if event_id in processed:
+        return False
+    event_data = stripe_value(stripe_value(event, "data", {}), "object", {})
+    if event_type == "checkout.session.completed":
+        metadata = stripe_value(event_data, "metadata", {}) or {}
+        upsert_stripe_subscription(state, {"id": stripe_value(event_data, "subscription"), "customer": stripe_value(event_data, "customer"), "status": "active", "metadata": metadata}, fallback_user_id=metadata.get("user_id"), fallback_plan=metadata.get("plan"), fallback_interval=metadata.get("billing_interval"))
+    elif event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
+        upsert_stripe_subscription(state, event_data)
+    elif event_type in {"invoice.paid", "invoice.payment_failed"}:
+        customer_id = str(stripe_value(event_data, "customer") or "")
+        user_id = subscription_user_for_customer(state, customer_id)
+        if user_id:
+            row = active_subscription(state, user_id)
+            if row:
+                row["status"] = "ACTIVE" if event_type == "invoice.paid" else "PAST_DUE"
+                row["updatedAt"] = now_iso()
+    else:
+        raise HTTPException(400, "Unsupported Stripe event")
+    processed.append(event_id)
+    del processed[:-1000]
+    return True
+
+
 @router.get("/subscription")
 async def v22_subscription(request: Request):
     user = authenticated_user(request)
@@ -593,8 +695,60 @@ async def v22_start_trial(request: Request):
 @router.post("/subscription/checkout")
 async def v22_subscription_checkout(payload: CheckoutRequest, request: Request):
     user = authenticated_user(request)
-    stripe_configured = bool(os.getenv("STRIPE_SECRET_KEY", "").strip() and os.getenv("STRIPE_WEBHOOK_SECRET", "").strip())
-    return {"mode": "STRIPE" if stripe_configured else "DEVELOPMENT", "checkout_url": None, "plan": payload.plan, "billing_interval": payload.billing_interval, "message": "Stripe Checkout is ready to be configured; no payment is collected in development mode.", "user_id": user["id"]}
+    if not stripe_configured():
+        raise HTTPException(503, "Stripe billing is not configured; no subscription was activated")
+    price_id = stripe_price_id(payload.plan, payload.billing_interval)
+    base_url = stripe_base_url()
+    state = runtime(request)["state"]
+    customer_id = stripe_customer_for_user(state, user["id"])
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    if not customer_id:
+        customer = stripe.Customer.create(email=user["email"], name=user.get("display_name"), metadata={"user_id": user["id"]})
+        customer_id = str(stripe_value(customer, "id"))
+    metadata = {"user_id": user["id"], "plan": payload.plan, "billing_interval": payload.billing_interval}
+    session = stripe.checkout.Session.create(
+        mode="subscription", customer=customer_id, line_items=[{"price": price_id, "quantity": 1}],
+        success_url=f"{base_url}/billing?checkout=success", cancel_url=f"{base_url}/pricing?checkout=cancelled",
+        metadata=metadata, subscription_data={"metadata": metadata},
+    )
+    return {"mode": "STRIPE", "checkout_url": stripe_value(session, "url"), "session_id": stripe_value(session, "id"), "plan": payload.plan, "billing_interval": payload.billing_interval}
+
+
+@router.post("/subscription/customer-portal")
+async def v22_customer_portal(request: Request):
+    user = authenticated_user(request)
+    if not stripe_configured():
+        raise HTTPException(503, "Stripe billing is not configured; customer portal is unavailable")
+    customer_id = stripe_customer_for_user(runtime(request)["state"], user["id"])
+    if not customer_id:
+        raise HTTPException(409, "No Stripe customer is linked to this account")
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    portal = stripe.billing_portal.Session.create(customer=customer_id, return_url=f"{stripe_base_url()}/billing")
+    return {"url": stripe_value(portal, "url"), "mode": "STRIPE"}
+
+
+@router.post("/subscription/webhook")
+async def v22_subscription_webhook(request: Request):
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+    signature = request.headers.get("stripe-signature", "").strip()
+    body = await request.body()
+    if not stripe or not secret or not signature:
+        raise HTTPException(503, "Stripe webhook verification is not configured")
+    try:
+        event = stripe.Webhook.construct_event(body, signature, secret)
+    except Exception as exc:
+        raise HTTPException(400, "Invalid Stripe webhook signature") from exc
+    rt = runtime(request)
+    async with rt["lock"]:
+        state = rt["state"]
+        event_id = str(stripe_value(event, "id") or "")
+        event_type = str(stripe_value(event, "type") or "")
+        applied = apply_stripe_event(state, event)
+        if not applied:
+            return {"ok": True, "duplicate": True, "event_id": event_id}
+        save_state(state)
+    await persist_v22_commercial(request.app)
+    return {"ok": True, "event_id": event_id, "event_type": event_type}
 
 
 @router.post("/subscription/cancel")
