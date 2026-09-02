@@ -428,12 +428,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21InsightPanel > header span { display: block; color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .v21InsightPanel > header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 16px; }
 .v21InsightPanel > header > svg { flex: 0 0 auto; width: 19px; color: var(--info); }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { min-width: 0; }
+.v21DashboardInsights .v21DecisionIntelligence > *,
+.v21DashboardInsights .v21ProtectionCenter > *,
+.v21DashboardInsights .v21RiskStatus > *,
+.v21DashboardInsights .v21SmartAlerts > *,
+.v21DashboardInsights .v21LiveActivity > *,
+.v21DashboardInsights .v21LifecyclePanel > *,
+.v21DashboardInsights .v21ReplayPanel > * { min-width: 0; }
 .v21AccountOverview { grid-column: span 8; border-top: 2px solid rgba(34,211,238,.46); }
-.v21RiskStatus { grid-column: span 4; border-top: 2px solid rgba(245,158,11,.5); }
-.v21SmartAlerts { grid-column: span 4; border-top: 2px solid rgba(239,68,68,.4); }
-.v21QualityScore { grid-column: span 4; border-top: 2px solid rgba(129,112,190,.55); }
-.v21LiveActivity { grid-column: span 4; border-top: 2px solid rgba(34,211,238,.4); }
-.v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
+.v21RiskStatus { border-top: 2px solid rgba(245,158,11,.5); }
+.v21SmartAlerts { border-top: 2px solid rgba(239,68,68,.4); }
+.v21QualityScore { border-top: 2px solid rgba(129,112,190,.55); }
+.v21LiveActivity { border-top: 2px solid rgba(34,211,238,.4); }
 .v21InsightMetrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; margin-top: 12px; overflow: hidden; border: 1px solid rgba(37,48,59,.7); border-radius: 8px; background: rgba(37,48,59,.55); }
 .v21InsightMetrics span { min-width: 0; padding: 10px; background: var(--surface-1); }
 .v21InsightMetrics small, .v21InsightMetrics b { display: block; }
@@ -460,6 +468,21 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21ActivityList small, .v21JournalFeed small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; }
 .v21LifecycleList article, .v21ReplaySteps span, .v21ActivityList article { min-width: 0; }
 .v21LifecycleList article > div, .v21ReplaySteps span > small, .v21ReplaySteps span > b, .v21ActivityList article > div { min-width: 0; }
+.v21DecisionIntelligence .v21DecisionChecks,
+.v21DecisionIntelligence .v21IntelligenceActions,
+.v21ProtectionCenter .v21ProtectionMetrics,
+.v21RiskStatus p,
+.v21SmartAlerts .v21AlertList,
+.v21LiveActivity .v21ActivityList,
+.v21LifecyclePanel .v21LifecycleList,
+.v21ReplayPanel .v21ReplaySteps { min-width: 0; }
+.v21DecisionIntelligence .v21DecisionChecks span,
+.v21ProtectionCenter .v21ProtectionMetrics span,
+.v21RiskStatus p,
+.v21SmartAlerts .v21AlertList > div,
+.v21LiveActivity .v21ActivityList article,
+.v21LifecyclePanel .v21LifecycleList article,
+.v21ReplayPanel .v21ReplaySteps span { min-width: 0; }
 .v21QualityHeadline { display: flex; align-items: baseline; gap: 6px; margin-top: 12px; }
 .v21QualityHeadline b { color: var(--text-primary); font-size: 28px; }
 .v21QualityHeadline span { color: var(--text-muted); font-size: 10px; }
