@@ -428,7 +428,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21InsightPanel > header span { display: block; color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .v21InsightPanel > header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 16px; }
 .v21InsightPanel > header > svg { flex: 0 0 auto; width: 19px; color: var(--info); }
-.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { min-width: 0; }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { min-width: 0; }
 .v21DashboardInsights .v21DecisionIntelligence > *,
 .v21DashboardInsights .v21ProtectionCenter > *,
 .v21DashboardInsights .v21RiskStatus > *,
@@ -437,7 +437,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21DashboardInsights .v21LifecyclePanel > *,
 .v21DashboardInsights .v21ReplayPanel > * { min-width: 0; }
 .v21AccountOverview { grid-column: span 8; border-top: 2px solid rgba(34,211,238,.46); }
-.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
 .v21RiskStatus { border-top: 2px solid rgba(245,158,11,.5); }
 .v21SmartAlerts { border-top: 2px solid rgba(239,68,68,.4); }
 .v21QualityScore { border-top: 2px solid rgba(129,112,190,.55); }
@@ -476,6 +476,231 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21LiveActivity .v21ActivityList,
 .v21LifecyclePanel .v21LifecycleList,
 .v21ReplayPanel .v21ReplaySteps { min-width: 0; }
+
+.v21DecisionSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(59,130,246,.26);
+  border-radius: 10px;
+  background: rgba(14,116,144,.08);
+}
+.v21DecisionSummary b,
+.v21DecisionSummary small,
+.v21DecisionSummary em {
+  display: block;
+}
+.v21DecisionSummary b {
+  color: var(--text-primary);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.v21DecisionSummary small {
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21DecisionSummary em {
+  color: var(--text-primary);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.v21DecisionNarrative {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 10px;
+  background: rgba(13,17,23,.4);
+}
+.v21DecisionNarrative h3 {
+  margin: 0 0 7px;
+  color: var(--text-primary);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.v21DecisionNarrative p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.v21QualityGrade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(168,85,247,.24);
+  border-radius: 10px;
+  background: rgba(168,85,247,.05);
+}
+.v21QualityGrade strong {
+  color: var(--text-primary);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.v21QualityGrade small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.v21CoachStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21CoachStatus i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.v21CoachStatus.positive {
+  background: rgba(34,197,94,.08);
+  color: var(--success);
+}
+.v21CoachStatus.warning,
+.v21CoachStatus.risk {
+  background: rgba(245,158,11,.08);
+  color: var(--warning);
+}
+.v21CoachStatus.neutral {
+  background: rgba(59,130,246,.08);
+  color: var(--info);
+}
+
+.v21AiCoach > p {
+  margin: 12px 0 0;
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.v21CoachMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.v21CoachMetrics span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 9px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 10px;
+  background: rgba(13,17,23,.42);
+}
+.v21CoachMetrics small {
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21CoachMetrics b {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.v21MarketScannerTable {
+  margin-top: 12px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.v21MarketScannerTable table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-size: 10px;
+}
+.v21MarketScannerTable th,
+.v21MarketScannerTable td {
+  padding: 9px 8px;
+  border-bottom: 1px solid rgba(37,48,59,.72);
+  text-align: left;
+}
+.v21MarketScannerTable th {
+  color: var(--text-muted);
+  background: rgba(13,17,23,.44);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21MarketScannerTable tbody tr {
+  cursor: pointer;
+  transition: background .18s ease;
+}
+.v21MarketScannerTable tbody tr:hover,
+.v21MarketScannerTable tbody tr.active {
+  background: rgba(34,211,238,.06);
+}
+.v21MarketScannerTable td.signalLong { color: var(--success); font-weight: 700; }
+.v21MarketScannerTable td.signalShort { color: var(--danger); font-weight: 700; }
+.v21MarketScannerTable td.signalWait { color: var(--warning); font-weight: 700; }
+
+.v21ScannerDetail {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 10px;
+  background: rgba(13,17,23,.4);
+}
+.v21ScannerDetail h3 {
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21ScannerMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+}
+.v21ScannerMeta span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 8px;
+  background: rgba(15,23,42,.3);
+}
+.v21ScannerMeta small {
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.v21ScannerMeta b {
+  color: var(--text-primary);
+  font-size: 10px;
+}
+.v21ScannerDetail p {
+  margin: 10px 0 0;
+  color: var(--text-primary);
+  font-size: 10px;
+  line-height: 1.6;
+}
 .v21DecisionIntelligence .v21DecisionChecks span,
 .v21ProtectionCenter .v21ProtectionMetrics span,
 .v21RiskStatus p,
@@ -1152,7 +1377,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
   .demoPositionList > article > footer { align-items: stretch; flex-direction: column; }
   .demoPositionList > article > footer button { width: 100%; }
   .v21DashboardInsights { grid-template-columns: 1fr; }
-  .v21AccountOverview, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21LiveActivity, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: auto; }
+  .v21AccountOverview, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: auto; }
   .v21InsightMetrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .v21HistoryList article { grid-template-columns: auto auto minmax(0,1fr); }
   .demoOrdersGrid > .demoOrderPanel,
