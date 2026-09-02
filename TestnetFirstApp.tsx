@@ -1,14 +1,15 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
-import { Activity, ArrowUp, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
+import { Activity, ArrowUp, Bell, CheckCircle2, CircleDollarSign, Cloud, CloudCog, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, Sparkles, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
 const CommercialHub = lazy(() => import('./CommercialHub'))
 const CloudOpsCenter = lazy(() => import('./CloudOpsCenter'))
+const SubscriptionCenter = lazy(() => import('./SubscriptionCenter'))
 const BUILD_COMMIT = import.meta.env.VITE_BUILD_COMMIT
 
-type View = 'testnet'|'ops'|'live'|'setup'
+type View = 'testnet'|'ops'|'live'|'setup'|'pricing'|'billing'
 type Market = {symbol:string;display:string;price:number;change:number;volume:number}
 type Candle = {time:number;open:number;high:number;low:number;close:number;volume:number}
 type Point = {time:number;value:number}
@@ -128,7 +129,8 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
 }
 
 export default function TestnetFirstApp() {
-  const [view,setView] = useState<View>('testnet')
+  const initialView = ():View => window.location.pathname === '/pricing' ? 'pricing' : window.location.pathname === '/billing' ? 'billing' : 'testnet'
+  const [view,setView] = useState<View>(initialView)
   const [markets,setMarkets] = useState<Market[]>([])
   const [symbol,setSymbol] = useState('BTCUSDT')
   const [interval,setInterval] = useState('15m')
@@ -143,10 +145,18 @@ export default function TestnetFirstApp() {
   const notificationRef = useRef<HTMLDivElement>(null)
   const notifications = healthNotifications(health)
 
+  const navigate = (target:View) => {
+    setView(target)
+    if (target === 'pricing' || target === 'billing') window.history.pushState({},'',`/${target}`)
+    else if (window.location.pathname === '/pricing' || window.location.pathname === '/billing') window.history.pushState({},'', '/')
+  }
+
   useEffect(() => {
-    const navigate = (event:Event) => setView((event as CustomEvent<View>).detail)
-    window.addEventListener('protrebot-navigate',navigate)
-    return () => window.removeEventListener('protrebot-navigate',navigate)
+    const onNavigate = (event:Event) => navigate((event as CustomEvent<View>).detail)
+    const onHistory = () => setView(initialView())
+    window.addEventListener('protrebot-navigate',onNavigate)
+    window.addEventListener('popstate',onHistory)
+    return () => { window.removeEventListener('protrebot-navigate',onNavigate);window.removeEventListener('popstate',onHistory) }
   },[])
 
   const refresh = async () => {
@@ -249,6 +259,7 @@ export default function TestnetFirstApp() {
         <span className={health?.live_guard === 'SALT OKUNUR BAĞLI' ? 'ok' : 'locked'}><LockKeyhole/>{health?.live_guard || 'CANLI API BEKLİYOR'}</span>
       </div>
       <div className="v26HeaderActions">
+        <button className="v26SubscriptionBadge" onClick={() => navigate('billing')}><Sparkles/> PLANS &amp; BILLING</button>
         <button className="v26Refresh" onClick={refresh} disabled={loading}><RefreshCw className={loading ? 'spin' : ''}/>{loading ? 'YENİLENİYOR' : 'YENİLE'}</button>
         <div className="v26Notifications" ref={notificationRef}>
           <button className="v26NotificationButton" type="button" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}><Bell/></button>
@@ -268,7 +279,7 @@ export default function TestnetFirstApp() {
     </nav>
 
     <section className="v26ModeBar">
-      <div><small>AKTİF ÇALIŞMA ALANI</small><h1>{view === 'testnet' ? 'Binance Futures Demo Merkezi' : view === 'ops' ? 'Bulut Operasyon ve Kanıt Merkezi' : view === 'live' ? 'Gerçek Futures Hazırlık Merkezi' : 'Sunucu ve Anahtar Kapıları'}</h1><p>{view === 'testnet' ? 'Gerçek Binance motoruna en yakın test ortamı; sanal bakiye, gerçek emir akışı ve borsa yanıtları.' : view === 'ops' ? 'Otonom taramanın son kararı, pozisyonlar ve yeniden başlatmaya dayanıklı PostgreSQL kanıt defteri.' : view === 'live' ? 'Şifreli canlı kasa kaydı ve tüm risk kapıları tamamlanana kadar emir gönderimi fail-closed olarak kilitli.' : 'Anahtar değerleri tarayıcıya veya GitHub’a yazılmaz; yalnızca sunucu tarafındaki şifreli kasa veya güvenli geçiş değişkenlerinde tutulur.'}</p></div>
+      <div><small>AKTİF ÇALIŞMA ALANI</small><h1>{view === 'testnet' ? 'Binance Futures Demo Merkezi' : view === 'ops' ? 'Bulut Operasyon ve Kanıt Merkezi' : view === 'live' ? 'Gerçek Futures Hazırlık Merkezi' : view === 'pricing' ? 'Plans & Pricing' : view === 'billing' ? 'Billing & Subscription' : 'Sunucu ve Anahtar Kapıları'}</h1><p>{view === 'testnet' ? 'Gerçek Binance motoruna en yakın test ortamı; sanal bakiye, gerçek emir akışı ve borsa yanıtları.' : view === 'ops' ? 'Otonom taramanın son kararı, pozisyonlar ve yeniden başlatmaya dayanıklı PostgreSQL kanıt defteri.' : view === 'live' ? 'Şifreli canlı kasa kaydı ve tüm risk kapıları tamamlanana kadar emir gönderimi fail-closed olarak kilitli.' : view === 'pricing' || view === 'billing' ? 'Choose a subscription level for your trading intelligence workspace.' : 'Anahtar değerleri tarayıcıya veya GitHub’a yazılmaz; yalnızca sunucu tarafındaki şifreli kasa veya güvenli geçiş değişkenlerinde tutulur.'}</p></div>
       <aside><span><CircleDollarSign/>GERÇEK PARA</span><b>{view === 'live' ? 'KİLİTLİ' : '0 USDT'}</b><em>Paper devre dışı</em></aside>
     </section>
 
@@ -282,6 +293,8 @@ export default function TestnetFirstApp() {
         <BinanceDemo active symbol={symbol} analysis={analysis} chart={<TestnetMarketChart symbol={symbol} interval={interval} onAnalysis={setAnalysis}/>}/>
       </Suspense>
     </>}
+
+    {(view === 'pricing' || view === 'billing') && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Subscription workspace hazırlanıyor…</div>}><SubscriptionCenter mode={view} onNavigate={navigate}/></Suspense>}
 
     {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><CommercialHub active initialTab="execution"/></Suspense>}
 

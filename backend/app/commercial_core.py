@@ -30,14 +30,15 @@ PLAN_CATALOG: dict[str, dict[str, Any]] = {
     "TRIAL": {
         "name": "Deneme",
         "monthly_usd": 0.0,
-        "days": 14,
+        "days": 7,
         "agents": 1,
         "bots": 1,
         "features": ["Paper/Demo kokpit", "Net kâr koruması", "1 güvenli ajan"],
     },
     "STARTER": {
         "name": "Başlangıç",
-        "monthly_usd": 29.0,
+        "monthly_usd": 19.0,
+        "annual_usd": 190.0,
         "days": 30,
         "agents": 1,
         "bots": 2,
@@ -45,7 +46,8 @@ PLAN_CATALOG: dict[str, dict[str, Any]] = {
     },
     "PRO": {
         "name": "Profesyonel",
-        "monthly_usd": 79.0,
+        "monthly_usd": 39.0,
+        "annual_usd": 390.0,
         "days": 30,
         "agents": 3,
         "bots": 8,
@@ -53,7 +55,8 @@ PLAN_CATALOG: dict[str, dict[str, Any]] = {
     },
     "ELITE": {
         "name": "Elite",
-        "monthly_usd": 199.0,
+        "annual_usd": 790.0,
+        "monthly_usd": 79.0,
         "days": 30,
         "agents": 10,
         "bots": 25,

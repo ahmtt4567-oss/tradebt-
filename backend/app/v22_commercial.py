@@ -40,6 +40,7 @@ from .commercial_core import (
 from .commerce_core import sanitize_business_settings
 from .local_storage import DATA_DIR, migrate_legacy_files
 from .web_security import MIN_ACCESS_TOKEN_LENGTH, bootstrap_access_allowed
+from .subscription_core import PLAN_CATALOG as SUBSCRIPTION_PLAN_CATALOG, TRIAL_DAYS, active_subscription, entitlement_snapshot
 
 
 router = APIRouter(prefix="/api/v22", tags=["V24 Commercial Complete"])
@@ -371,13 +372,18 @@ class LoginRequest(BaseModel):
 
 class CustomerRequest(BootstrapRequest):
     plan: Literal["TRIAL", "STARTER", "PRO", "ELITE"] = "TRIAL"
-    days: int = Field(default=14, ge=1, le=730)
+    days: int = Field(default=7, ge=1, le=730)
 
 
 class SubscriptionRequest(BaseModel):
     user_id: str = Field(min_length=8, max_length=80)
     plan: Literal["TRIAL", "STARTER", "PRO", "ELITE"]
     days: int = Field(default=30, ge=1, le=730)
+
+
+class CheckoutRequest(BaseModel):
+    plan: Literal["STARTER", "PRO", "ELITE"]
+    billing_interval: Literal["monthly", "annual"] = "monthly"
 
 
 class PlanUpdateRequest(BaseModel):
@@ -542,6 +548,70 @@ async def v22_session(request: Request):
     return {"user": public_user(user), "license": active_license(runtime(request)["state"], user["id"]), "demo_only": True}
 
 
+def subscription_for_user(state: dict[str, Any], user_id: str) -> dict[str, Any]:
+    subscription = active_subscription(state, user_id)
+    if subscription:
+        return entitlement_snapshot(state, user_id)
+    license_row = active_license(state, user_id)
+    if not license_row:
+        return entitlement_snapshot(state, user_id)
+    plan = str(license_row.get("plan") or "STARTER").upper()
+    catalog = SUBSCRIPTION_PLAN_CATALOG.get(plan, SUBSCRIPTION_PLAN_CATALOG["STARTER"])
+    return {
+        "status": "ACTIVE", "plan": plan, "billingInterval": "annual", "trialStart": None,
+        "trialEnd": None, "currentPeriodStart": license_row.get("starts_at"),
+        "currentPeriodEnd": license_row.get("expires_at"), "currentPrice": catalog["annual_price"],
+        "features": catalog["features"], "entitlements": catalog["entitlements"],
+        "cancelAtPeriodEnd": False, "mode": "DEVELOPMENT",
+    }
+
+
+@router.get("/subscription")
+async def v22_subscription(request: Request):
+    user = authenticated_user(request)
+    return subscription_for_user(runtime(request)["state"], user["id"])
+
+
+@router.post("/subscription/trial")
+async def v22_start_trial(request: Request):
+    user = authenticated_user(request)
+    rt = runtime(request)
+    async with rt["lock"]:
+        state = rt["state"]
+        if active_license(state, user["id"]):
+            raise HTTPException(409, "An active subscription or trial already exists")
+        started = now_iso()
+        expires = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
+        row = {"id": uuid.uuid4().hex, "user_id": user["id"], "plan": "STARTER", "status": "TRIAL", "billingInterval": "monthly", "trialStart": started, "trialEnd": expires, "currentPeriodStart": started, "currentPeriodEnd": expires, "currentPrice": 0, "stripeCustomerId": None, "stripeSubscriptionId": None, "cancelAtPeriodEnd": False, "provider": "DEVELOPMENT", "createdAt": started, "updatedAt": started}
+        state["subscriptions"].append(row)
+        state["licenses"].append({"id": uuid.uuid4().hex, "user_id": user["id"], "plan": "STARTER", "status": "ACTIVE", "starts_at": started, "expires_at": expires, "source": "FREE_TRIAL", "demo_only": True})
+        add_audit(state, "TRIAL_STARTED", "7-day Starter trial started.", actor=user["id"], subject=user["id"])
+        save_state(state)
+    return subscription_for_user(rt["state"], user["id"])
+
+
+@router.post("/subscription/checkout")
+async def v22_subscription_checkout(payload: CheckoutRequest, request: Request):
+    user = authenticated_user(request)
+    stripe_configured = bool(os.getenv("STRIPE_SECRET_KEY", "").strip() and os.getenv("STRIPE_WEBHOOK_SECRET", "").strip())
+    return {"mode": "STRIPE" if stripe_configured else "DEVELOPMENT", "checkout_url": None, "plan": payload.plan, "billing_interval": payload.billing_interval, "message": "Stripe Checkout is ready to be configured; no payment is collected in development mode.", "user_id": user["id"]}
+
+
+@router.post("/subscription/cancel")
+async def v22_subscription_cancel(request: Request):
+    user = authenticated_user(request)
+    rt = runtime(request)
+    async with rt["lock"]:
+        row = active_subscription(rt["state"], user["id"])
+        if not row:
+            raise HTTPException(409, "No active subscription exists")
+        row["cancelAtPeriodEnd"] = True
+        row["updatedAt"] = now_iso()
+        add_audit(rt["state"], "SUBSCRIPTION_CANCEL_SCHEDULED", "Subscription cancellation scheduled for period end.", actor=user["id"], subject=user["id"])
+        save_state(rt["state"])
+    return subscription_for_user(rt["state"], user["id"])
+
+
 @router.post("/auth/logout")
 async def v22_logout(request: Request):
     user = authenticated_user(request)
@@ -596,7 +666,8 @@ async def v22_create_customer(payload: CustomerRequest, request: Request):
         expires_at = (datetime.now(timezone.utc) + timedelta(days=payload.days)).isoformat()
         license_row = {"id": uuid.uuid4().hex, "user_id": user_id, "plan": payload.plan, "status": "ACTIVE", "starts_at": now_iso(), "expires_at": expires_at, "source": "MANUAL_DEMO", "demo_only": True}
         state["licenses"].append(license_row)
-        state["subscriptions"].append({"id": uuid.uuid4().hex, "user_id": user_id, "plan": payload.plan, "status": "TEST_ACTIVE", "period_end": expires_at, "provider": "MANUAL_DEMO", "created_at": now_iso()})
+        created_at = now_iso()
+        state["subscriptions"].append({"id": uuid.uuid4().hex, "user_id": user_id, "plan": "STARTER" if payload.plan == "TRIAL" else payload.plan, "status": "TRIAL" if payload.plan == "TRIAL" else "ACTIVE", "billingInterval": "monthly", "trialStart": created_at if payload.plan == "TRIAL" else None, "trialEnd": expires_at if payload.plan == "TRIAL" else None, "currentPeriodStart": created_at, "currentPeriodEnd": expires_at, "currentPrice": 0 if payload.plan == "TRIAL" else state["plans"].get(payload.plan, {}).get("monthly_usd"), "stripeCustomerId": None, "stripeSubscriptionId": None, "cancelAtPeriodEnd": False, "provider": "DEVELOPMENT", "createdAt": created_at, "updatedAt": created_at})
         add_audit(state, "CUSTOMER_CREATED", f"{email} için {payload.plan} Demo lisansı oluşturuldu.", actor=owner["id"], subject=user_id)
         save_state(state)
     return {"user": public_user(user), "license": license_row, "demo_only": True}
@@ -659,8 +730,8 @@ async def v22_revoke_license(license_id: str, payload: RevokeRequest, request: R
             raise HTTPException(409, "Sahip geliştirme lisansı iptal edilemez")
         row.update({"status": "REVOKED", "revoked_at": now_iso(), "revoked_reason": payload.reason})
         for subscription in rt["state"]["subscriptions"]:
-            if subscription.get("user_id") == row.get("user_id") and subscription.get("status") == "TEST_ACTIVE":
-                subscription["status"] = "TEST_CANCELLED"
+            if subscription.get("user_id") == row.get("user_id") and subscription.get("status") in {"TEST_ACTIVE", "ACTIVE", "TRIAL"}:
+                subscription["status"] = "CANCELED"
         for agent in rt["state"]["agents"]:
             if agent.get("user_id") == row.get("user_id") and agent.get("status") == "ACTIVE":
                 agent["status"] = "REVOKED"
