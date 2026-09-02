@@ -144,6 +144,14 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
         self.assertIn(".demoPositionMap", STYLE_TEXT)
         self.assertIn(".appShell.view-v20-demo>.binanceDemoDeck", STYLE_TEXT)
 
+    def test_demo_styles_are_scoped_under_demo_root(self):
+        self.assertIn(".binanceDemoRoot", STYLE_TEXT)
+        self.assertIn(".binanceDemoRoot .demoHero", STYLE_TEXT)
+        self.assertIn(".binanceDemoRoot .v21Tabs", STYLE_TEXT)
+        self.assertNotIn(".appShell.view-v20-demo>.paperPilotRibbon", STYLE_TEXT)
+        self.assertNotIn(".appShell.view-v20-demo>.workspace", STYLE_TEXT)
+        self.assertNotIn(".appShell.view-v20-demo>.bottom", STYLE_TEXT)
+
 
 class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
     async def test_isolated_margin_then_exact_leverage_and_symbol_config_are_required(self):
