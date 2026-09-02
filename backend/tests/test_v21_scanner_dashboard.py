@@ -9,6 +9,8 @@ BACKEND = Path(__file__).parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app import v21_demo  # noqa: E402
+from app import binance_demo
+from app.binance_demo import BinanceDemoError, DemoOrderRequest, ensure_one_way_position_mode, recover_pending_entry_intents, validate_entry_risk
 
 
 ROOT_FRONTEND = Path(__file__).parents[2] / "BinanceDemo.tsx"
@@ -23,8 +25,8 @@ class V21ScannerDashboardTests(unittest.TestCase):
     def test_performance_aggregation_uses_real_closed_journal_events(self):
         state = v21_demo.initial_state()
         state["journal"] = [
-            {"kind": "POSITION_CLOSED", "created_at": "2026-09-01T10:00:00+00:00", "realized_pnl": 12.0},
-            {"kind": "FILL", "reduce_only": True, "created_at": "2026-08-30T10:00:00+00:00", "realized_pnl": -4.0},
+            {"kind": "POSITION_CLOSED", "created_at": "2026-09-01T10:00:00+00:00", "realized_pnl": 12.0, "verified_realized": True},
+            {"kind": "FILL", "reduce_only": True, "created_at": "2026-08-30T10:00:00+00:00", "realized_pnl": -4.0, "verified_realized": True},
             {"kind": "AUTO_ORDER", "created_at": "2026-09-01T10:01:00+00:00", "realized_pnl": 999.0},
         ]
         result = v21_demo.performance_payload(state, "all")
@@ -35,6 +37,97 @@ class V21ScannerDashboardTests(unittest.TestCase):
         self.assertEqual(result["wins"], 1)
         self.assertEqual(result["losses"], 1)
         self.assertEqual(result["profit_factor"], 3.0)
+
+    def test_unverified_close_and_unrealized_pnl_are_excluded_from_daily_metrics(self):
+        state = v21_demo.initial_state()
+        state["journal"] = [
+            {"kind": "POSITION_MISSING", "created_at": "2026-09-02T10:00:00+00:00", "realized_pnl": 99.0},
+            {"kind": "FILL", "created_at": "2026-09-02T10:01:00+00:00", "realized_pnl": 4.0, "verified_realized": True},
+        ]
+        self.assertEqual(v21_demo.daily_metrics(state)["realized_pnl"], 4.0)
+
+    def test_stream_close_event_is_idempotent_and_verified_once(self):
+        state = v21_demo.initial_state()
+        payload = {"e": "ORDER_TRADE_UPDATE", "T": 123, "o": {"s": "BTCUSDT", "X": "FILLED", "x": "TRADE", "i": 7, "S": "SELL", "R": True, "rp": "2.5", "ap": "100"}}
+        self.assertTrue(v21_demo.process_stream_event(state, payload))
+        self.assertFalse(v21_demo.process_stream_event(state, payload))
+        verified = [item for item in state["journal"] if item.get("verified_realized")]
+        self.assertEqual(len(verified), 1)
+        self.assertEqual(v21_demo.daily_metrics(state)["realized_pnl"], 2.5)
+
+    def test_missing_position_never_records_last_unrealized_pnl(self):
+        state = v21_demo.initial_state()
+        previous = {"positions": [{"symbol": "BTCUSDT", "direction": "LONG", "mark_price": 100, "quantity": 1, "unrealized_pnl": -40}]}
+        self.assertTrue(v21_demo.reconcile_positions(state, None, previous))
+        self.assertTrue(v21_demo.reconcile_positions(state, previous, {"positions": []}))
+        missing = [item for item in state["journal"] if item["kind"] == "POSITION_MISSING"]
+        self.assertEqual(len(missing), 1)
+        self.assertIsNone(missing[0].get("realized_pnl"))
+        self.assertEqual(v21_demo.daily_metrics(state)["realized_pnl"], 0)
+
+    def test_shared_risk_gate_rejects_excess_loss_and_pending_exposure(self):
+        settings = dict(v21_demo.DEFAULT_SETTINGS)
+        body = DemoOrderRequest(symbol="BTCUSDT", direction="LONG", margin_usdt=50, leverage=2, stop_loss=90, tp1=105, tp2=110, tp3=115)
+        spec = {"notional_usdt": 100, "current_price": 100, "stop_loss": "90"}
+        snapshot = {"positions": [], "open_orders": [], "available_balance": 1000}
+        with self.assertRaises(BinanceDemoError):
+            validate_entry_risk(snapshot, body, spec, settings, daily_realized_pnl=0)
+        settings["max_positions"] = 1
+        body = DemoOrderRequest(symbol="BTCUSDT", direction="LONG", margin_usdt=5, leverage=1, stop_loss=99, tp1=101, tp2=102, tp3=103)
+        spec["notional_usdt"] = 5
+        with self.assertRaises(BinanceDemoError):
+            validate_entry_risk({"positions": [], "open_orders":[{"symbol":"ETHUSDT","reduce_only":False}], "available_balance":1000}, body, spec, settings, daily_realized_pnl=0)
+
+    def test_minimum_order_size_is_rejected_without_inflating_risk(self):
+        sizing = v21_demo.risk_size_values(100, 40, 5, 2, 50)
+        self.assertLess(sizing["margin_usdt"], 5)
+        source = (BACKEND / "app" / "v21_demo.py").read_text(encoding="utf-8")
+        self.assertIn('"MINIMUM_ORDER_SIZE"', source)
+
+    def test_pending_intent_recovers_by_client_order_id_without_new_submission(self):
+        state = {"plans": {"intent": {"symbol":"BTCUSDT", "status":"ENTRY_INTENT_PENDING", "entry_client_order_id":"PTB_ENTRY_123"}}}
+        class FakeClient:
+            async def signed(self, method, path, params=None):
+                self.last = (method, path, params)
+                if path == "/fapi/v1/order": return {"orderId": 42, "clientOrderId":"PTB_ENTRY_123"}
+                raise AssertionError((method, path, params))
+        with patch.object(v21_demo, "persist_runtime"):
+            changed = asyncio.run(recover_pending_entry_intents(FakeClient(), state))
+        self.assertTrue(changed)
+        self.assertEqual(state["plans"]["intent"]["entry_order_id"], 42)
+        self.assertEqual(state["plans"]["intent"]["status"], "DOLUM BEKLİYOR")
+
+    def test_one_way_mode_does_not_touch_protected_other_symbol_on_failed_transition(self):
+        class FakeClient:
+            def __init__(self): self.calls = []
+            async def signed(self, method, path, params=None):
+                self.calls.append((method, path, params))
+                if path == "/fapi/v1/positionSide/dual" and method == "GET": return {"dualSidePosition": True}
+                if path == "/fapi/v3/positionRisk": return [{"symbol":"ETHUSDT", "positionAmt":"1"}]
+                if path == "/fapi/v1/openOrders": return []
+                if path == "/fapi/v1/openAlgoOrders": return [{"symbol":"ETHUSDT", "algoId":77, "orderType":"STOP_MARKET"}]
+                raise AssertionError((method, path, params))
+        client = FakeClient()
+        with self.assertRaises(BinanceDemoError):
+            asyncio.run(ensure_one_way_position_mode(client))
+        self.assertFalse(any(method == "DELETE" for method, _, _ in client.calls))
+
+    def test_protection_failure_is_explicitly_critical_and_retries(self):
+        state = {"plans": {"p": {"symbol":"BTCUSDT", "status":"DOLUM BEKLİYOR", "position_status":"PENDING", "stop_loss":"90", "direction":"LONG", "targets":["105","110","115"], "step":"0.001", "min_qty":"0.001"}}}
+        plan = state["plans"]["p"]
+        class FakeClient:
+            async def signed(self, method, path, params=None):
+                if path == "/fapi/v3/positionRisk": return [{"symbol":"BTCUSDT", "positionAmt":"1"}]
+                raise AssertionError((method, path, params))
+        with patch.object(binance_demo, "post_algo", new=AsyncMock(side_effect=BinanceDemoError("stop unavailable"))), \
+                patch.object(binance_demo, "close_symbol_position", new=AsyncMock(return_value=None)), \
+                patch.object(binance_demo, "persist_runtime"):
+            with self.assertRaises(BinanceDemoError):
+                asyncio.run(binance_demo.install_protection(FakeClient(), state, plan))
+        self.assertEqual(plan["status"], "CRITICAL / UNPROTECTED")
+        self.assertEqual(plan["protection_status"], "CRITICAL / UNPROTECTED")
+        self.assertEqual(plan["recovery_attempts"], 1)
+        self.assertEqual(plan["position_status"], "OPEN")
 
     def _automation_app(self, candidate):
         state = v21_demo.initial_state()

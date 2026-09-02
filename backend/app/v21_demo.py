@@ -37,6 +37,7 @@ from .binance_demo import (
     account_snapshot,
     armed,
     credentials_configured,
+    close_symbol_position,
     decimal_text,
     execute_demo_order,
     load_demo_credentials,
@@ -44,11 +45,13 @@ from .binance_demo import (
     normalize_symbol,
     persist_runtime,
     post_algo,
+    position_amount,
     response_rows,
     reconcile_demo_plans,
     round_tick,
     safe_exchange_error,
     symbol_rules,
+    validate_entry_risk,
 )
 from .local_storage import DATA_DIR, migrate_legacy_files
 
@@ -261,6 +264,7 @@ def record_event(
     event_id: str | None = None,
     source: str = "SYSTEM",
     reduce_only: bool = False,
+    verified_realized: bool = False,
 ) -> dict[str, Any] | None:
     stable_id = event_id or uuid.uuid4().hex
     seen = state.setdefault("seen_event_ids", [])
@@ -282,6 +286,7 @@ def record_event(
         "message": message,
         "source": source,
         "reduce_only": reduce_only,
+        "verified_realized": verified_realized,
         "demo_only": True,
     }
     state.setdefault("journal", []).insert(0, item)
@@ -492,7 +497,7 @@ def daily_metrics(state: dict[str, Any]) -> dict[str, Any]:
     day = today()
     events = [item for item in state.get("journal", []) if str(item.get("created_at", "")).startswith(day)]
     auto_entries = [item for item in events if item.get("kind") == "AUTO_ORDER"]
-    realized = sum(float(item.get("realized_pnl") or 0) for item in events)
+    realized = sum(float(item.get("realized_pnl") or 0) for item in events if item.get("verified_realized") is True)
     return {
         "date": day,
         "auto_entries": len(auto_entries),
@@ -538,13 +543,12 @@ def reconcile_positions(state: dict[str, Any], previous: dict[str, Any] | None, 
             ) is not None
     for symbol, row in old_positions.items():
         if symbol not in new_positions:
-            pnl = float(row.get("unrealized_pnl") or 0)
             changed |= record_event(
-                state, "POSITION_CLOSED", f"{symbol} Demo pozisyonu kapandı; kesin sonuç işlem akışından eşleştiriliyor.",
+                state, "POSITION_MISSING", f"{symbol} Demo pozisyonu snapshot'tan kayboldu; doğrulanmış kapanış sonucu bekleniyor.",
                 symbol=symbol, status="CLOSED", side=row.get("direction"), price=row.get("mark_price"),
-                quantity=row.get("quantity"), realized_pnl=pnl, reason="Kapanış öncesi son görülen PnL tahmini",
+                quantity=row.get("quantity"), reason="Kapanış sonucu exchange fill/accounting verisiyle doğrulanacak",
                 source="RECONCILER", reduce_only=True,
-                event_id=f"pos-close-{symbol}-{int(time.time() // 3)}",
+                event_id=f"pos-missing-{symbol}-{row.get('entry_price')}-{row.get('quantity')}",
             ) is not None
     return changed
 
@@ -567,7 +571,7 @@ def process_stream_event(state: dict[str, Any], payload: dict[str, Any]) -> bool
             quantity=float(order.get("z") or order.get("l") or order.get("q") or 0),
             realized_pnl=realized, reason=str(order.get("er") or "") or None,
             event_id=f"order-{event_time}-{order_id}-{execution}-{status}", source="USER_STREAM",
-            reduce_only=bool(order.get("R", False)),
+            reduce_only=bool(order.get("R", False)), verified_realized=execution == "TRADE" and bool(order.get("R", False)),
         ) is not None
     if event_type == "ALGO_UPDATE":
         order = payload.get("o") if isinstance(payload.get("o"), dict) else payload.get("a", {})
@@ -668,10 +672,33 @@ async def ensure_stop_protection(application: Any, snapshot: dict[str, Any]) -> 
             "type": "STOP_MARKET", "triggerPrice": plan["stop_loss"], "closePosition": "true",
             "workingType": "MARK_PRICE", "priceProtect": "TRUE", "clientAlgoId": new_client_id("REPAIRSL"),
         }
-        result = await post_algo(client, params)
+        try:
+            result = await post_algo(client, params)
+        except BinanceDemoError as exc:
+            plan["status"] = "CRITICAL / UNPROTECTED"
+            plan["protection_status"] = "CRITICAL / UNPROTECTED"
+            plan["recovery_attempts"] = int(plan.get("recovery_attempts", 0)) + 1
+            plan["last_error"] = str(exc)
+            record_event(state, "ACİL KORUMA", f"{symbol} Stop onarımı başarısız; pozisyon korunmasız ve yeniden denenecek.", symbol=symbol, source="RISK_ENGINE")
+            try:
+                await close_symbol_position(client, symbol, str(position.get("position_side") or "BOTH"))
+                confirmation = response_rows(await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol}))
+                if not any(position_amount(item.get("positionAmt")) != 0 for item in confirmation):
+                    plan["status"] = "GÜVENLİK İÇİN KAPATILDI"
+                    plan["protection_status"] = "CLOSED_AFTER_PROTECTION_FAILURE"
+                    plan["position_status"] = "CLOSED"
+                    plan["remaining_quantity"] = "0"
+                    changed = True
+                    continue
+            except BinanceDemoError as close_exc:
+                plan["last_error"] = f"Stop onarımı: {exc}; güvenli kapatma: {close_exc}"
+            changed = True
+            continue
         if result.get("algoId"):
             plan["stop_algo_id"] = int(result["algoId"])
             plan.setdefault("protection_ids", []).append(int(result["algoId"]))
+        else:
+            raise BinanceDemoError("Binance Demo Stop onarım kimliği doğrulanamadı.", http_status=409)
         plan["status"] = "KORUMA ONARILDI"
         state["protection_repairs"] += 1
         record_event(state, "PROTECTION_REPAIRED", f"{symbol} eksik Stop koruması Demo hesabında yeniden kuruldu.", symbol=symbol, source="RISK_ENGINE")
@@ -821,7 +848,9 @@ async def automatic_cycle(application: Any) -> None:
     client = client_for(application)
     snapshot = await account_snapshot(client)
     max_positions = min(settings["max_positions"], MAX_OPEN_POSITIONS)
-    available_slots = max_positions - len(snapshot["positions"]) - len(state.get("paper_positions", []))
+    pending_entries = sum(1 for item in snapshot.get("open_orders", []) if not bool(item.get("reduce_only", False)))
+    pending_entries += len(state.get("paper_positions", []))
+    available_slots = max_positions - len(snapshot["positions"]) - pending_entries
     if available_slots <= 0:
         _set_rejection(state, "MAX_POSITIONS", "Açık pozisyon sınırı dolu.")
         state["scanner"].update({"active": True, "last_stage": "DOLU", "selected_symbols": []})
@@ -859,7 +888,10 @@ async def automatic_cycle(application: Any) -> None:
             float(candidate["entry"]), float(candidate["stop_loss"]), float(settings["max_loss_per_trade"]),
             MAX_LEVERAGE, min(float(settings["max_margin_per_trade"]), float(MAX_MARGIN_USDT)),
         )
-        margin = max(5.0, min(float(MAX_MARGIN_USDT), sizing["margin_usdt"]))
+        if sizing["margin_usdt"] < 5.0:
+            _set_rejection(state, "MINIMUM_ORDER_SIZE", f"{symbol} için borsa minimumu işlem başı zarar limitine uymuyor; emir açılmadı.")
+            continue
+        margin = min(float(MAX_MARGIN_USDT), sizing["margin_usdt"])
         body = DemoOrderRequest(
             symbol=symbol, direction=direction, order_type="MARKET", margin_usdt=margin,
             leverage=MAX_LEVERAGE, stop_loss=candidate["stop_loss"], tp1=candidate["tp1"],
@@ -1098,9 +1130,7 @@ def performance_payload(state: dict[str, Any], period: str = "all") -> dict[str,
     cutoff = {"daily": 1, "weekly": 7, "monthly": 31}.get(period)
     events = []
     for item in state.get("journal", []):
-        if item.get("kind") != "POSITION_CLOSED" and not (item.get("kind") == "FILL" and item.get("reduce_only")):
-            continue
-        if item.get("realized_pnl") is None:
+        if item.get("verified_realized") is not True or item.get("realized_pnl") is None:
             continue
         try:
             created = datetime.fromisoformat(str(item.get("created_at", "")).replace("Z", "+00:00"))

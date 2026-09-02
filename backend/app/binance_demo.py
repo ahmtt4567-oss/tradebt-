@@ -525,47 +525,25 @@ async def position_mode(client: BinanceDemoClient) -> bool:
 
 
 async def ensure_one_way_position_mode(client: BinanceDemoClient) -> int:
-    """Prepare the Demo account for one-way mode without racing mode changes."""
+    """Prepare one-way mode without deleting positions or protection orders."""
     if not DEMO_REST_BASE.endswith("demo-fapi.binance.com"):
         raise BinanceDemoError("Demo sunucu kilidi doğrulanamadı.", http_status=500)
     if not await position_mode(client):
         return 0
 
-    cancelled = 0
-    attempt = 0
-    while attempt < 2:
-        orders = response_rows(await client.signed("GET", "/fapi/v1/openOrders"))
-        algo_orders = response_rows(await client.signed("GET", "/fapi/v1/openAlgoOrders"))
-        for order in orders:
-            symbol = normalize_symbol(str(order.get("symbol") or ""))
-            order_id = int(order.get("orderId") or 0)
-            if order_id <= 0:
-                raise BinanceDemoError("Demo açık emri güvenli biçimde tanımlanamadı.", http_status=409)
-            await client.signed("DELETE", "/fapi/v1/order", {"symbol": symbol, "orderId": order_id})
-            cancelled += 1
-        for order in algo_orders:
-            symbol = normalize_symbol(str(order.get("symbol") or ""))
-            algo_id = int(order.get("algoId") or 0)
-            if algo_id <= 0:
-                raise BinanceDemoError("Demo koşullu açık emri güvenli biçimde tanımlanamadı.", http_status=409)
-            await client.signed("DELETE", "/fapi/v1/algoOrder", {"symbol": symbol, "algoId": algo_id})
-            cancelled += 1
-
-        remaining = response_rows(await client.signed("GET", "/fapi/v1/openOrders"))
-        remaining_algos = response_rows(await client.signed("GET", "/fapi/v1/openAlgoOrders"))
-        if remaining or remaining_algos:
-            raise BinanceDemoError("Demo açık emirleri temizlenemedi; pozisyon modu değiştirilmedi.", http_status=409)
-        try:
-            await client.signed("POST", "/fapi/v1/positionSide/dual", {"dualSidePosition": "false"})
-        except BinanceDemoError as exc:
-            if exc.exchange_code != -4067 or attempt > 0:
-                raise
-            attempt += 1
-            continue
-        if await position_mode(client):
-            raise BinanceDemoError("Binance Demo Pozisyon Modu ONE-WAY olarak doğrulanamadı.", http_status=409)
-        return cancelled
-    raise BinanceDemoError("Binance Demo Pozisyon Modu değişikliği açık emir nedeniyle tamamlanamadı.", http_status=409, exchange_code=-4067)
+    positions = await client.signed("GET", "/fapi/v3/positionRisk")
+    orders = await client.signed("GET", "/fapi/v1/openOrders")
+    algo_orders = await client.signed("GET", "/fapi/v1/openAlgoOrders")
+    actual_positions = [item for item in response_rows(positions) if position_amount(item.get("positionAmt")) != 0]
+    if actual_positions or response_rows(orders) or response_rows(algo_orders):
+        raise BinanceDemoError(
+            "Pozisyon modu güvenli biçimde değiştirilemez; mevcut pozisyon ve koruma emirleri korunuyor.",
+            http_status=409,
+        )
+    await client.signed("POST", "/fapi/v1/positionSide/dual", {"dualSidePosition": "false"})
+    if await position_mode(client):
+        raise BinanceDemoError("Binance Demo Pozisyon Modu ONE-WAY olarak doğrulanamadı.", http_status=409)
+    return 0
 
 
 async def optional_symbol_configurations(client: BinanceDemoClient) -> Any:
@@ -807,8 +785,28 @@ async def find_order_by_client_id(client: BinanceDemoClient, symbol: str, client
         return None
 
 
-async def submit_entry(client: BinanceDemoClient, spec: dict[str, Any], *, test_only: bool) -> dict[str, Any]:
-    client_id = new_client_id("TEST" if test_only else "ENTRY")
+async def recover_pending_entry_intents(client: BinanceDemoClient, state: dict[str, Any]) -> bool:
+    changed = False
+    for plan in state.get("plans", {}).values():
+        if plan.get("status") != "ENTRY_INTENT_PENDING" or not plan.get("entry_client_order_id"):
+            continue
+        found = await find_order_by_client_id(client, str(plan["symbol"]), str(plan["entry_client_order_id"]))
+        if found is None:
+            rows = response_rows(await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": plan["symbol"]}))
+            found = {"orderId": None, "clientOrderId": plan["entry_client_order_id"]} if any(position_amount(item.get("positionAmt")) != 0 for item in rows) else None
+        if found is None:
+            continue
+        plan["entry_order_id"] = int(found.get("orderId") or 0) or None
+        plan["status"] = "DOLUM BEKLİYOR"
+        plan["recovered_at"] = utc_now()
+        changed = True
+    if changed:
+        persist_runtime(state)
+    return changed
+
+
+async def submit_entry(client: BinanceDemoClient, spec: dict[str, Any], *, test_only: bool, client_id: str | None = None) -> dict[str, Any]:
+    client_id = client_id or new_client_id("TEST" if test_only else "ENTRY")
     params: dict[str, Any] = {
         "symbol": spec["symbol"],
         "side": spec["side"],
@@ -906,6 +904,54 @@ def duplicate_entry_reason(snapshot: dict[str, Any], symbol: str) -> str | None:
     return None
 
 
+def validate_entry_risk(
+    snapshot: dict[str, Any],
+    body: DemoOrderRequest,
+    spec: dict[str, Any],
+    settings: dict[str, Any],
+    *,
+    daily_realized_pnl: float,
+    paper_positions: list[dict[str, Any]] | None = None,
+) -> None:
+    """Final fail-closed gate shared by manual and automatic Demo entries."""
+    symbol = normalize_symbol(body.symbol)
+    allowed = {normalize_symbol(value) for value in settings.get("allowed_symbols", [])}
+    if symbol not in allowed:
+        raise BinanceDemoError(f"{symbol} izinli pariteler dışında; emir açılmadı.", http_status=409)
+    if body.direction == "LONG" and not settings.get("allow_long", True):
+        raise BinanceDemoError("LONG girişleri risk politikası tarafından kapatıldı.", http_status=409)
+    if body.direction == "SHORT" and not settings.get("allow_short", True):
+        raise BinanceDemoError("SHORT girişleri risk politikası tarafından kapatıldı.", http_status=409)
+    if body.leverage > MAX_LEVERAGE or body.margin_usdt > MAX_MARGIN_USDT:
+        raise BinanceDemoError("Demo kaldıraç veya marjin güvenlik sınırını aşıyor.", http_status=422)
+    if float(spec["notional_usdt"]) > float(MAX_NOTIONAL_USDT):
+        raise BinanceDemoError("Demo notional güvenlik sınırını aşıyor.", http_status=422)
+    if daily_realized_pnl <= -float(settings.get("daily_loss_limit", 0)):
+        raise BinanceDemoError("Günlük doğrulanmış zarar limiti aktif; yeni giriş kilitli.", http_status=409)
+    existing_positions = len(snapshot.get("positions", []))
+    pending_entries = sum(1 for item in snapshot.get("open_orders", []) if not bool(item.get("reduce_only", False)))
+    pending_entries += len(paper_positions or [])
+    if existing_positions + pending_entries >= min(int(settings.get("max_positions", MAX_OPEN_POSITIONS)), MAX_OPEN_POSITIONS):
+        raise BinanceDemoError("Açık veya bekleyen girişler maksimum pozisyon sınırını dolduruyor.", http_status=409)
+    duplicate_reason = duplicate_entry_reason(snapshot, symbol)
+    if duplicate_reason:
+        raise BinanceDemoError(duplicate_reason, http_status=409)
+    if float(snapshot.get("available_balance", 0)) < float(body.margin_usdt):
+        raise BinanceDemoError("Demo hesabında seçilen marjin için yeterli kullanılabilir bakiye yok.", http_status=409)
+    distance = abs(float(spec["current_price"]) - float(spec["stop_loss"]))
+    estimated_loss = float(spec["notional_usdt"]) * distance / max(float(spec["current_price"]), 1e-12)
+    if estimated_loss > float(settings.get("max_loss_per_trade", 0)) + 1e-9:
+        raise BinanceDemoError("Stop Loss riski işlem başı maksimum zarar limitini aşıyor.", http_status=409)
+
+
+def verified_realized_pnl(state: dict[str, Any]) -> float:
+    return sum(
+        float(item.get("realized_pnl") or 0)
+        for item in state.get("journal", [])
+        if item.get("verified_realized") is True
+    )
+
+
 async def post_algo(client: BinanceDemoClient, params: dict[str, Any]) -> dict[str, Any]:
     """Create one conditional order without blind retry on ambiguous responses."""
     try:
@@ -966,21 +1012,39 @@ async def install_protection(client: BinanceDemoClient, state: dict[str, Any], p
             stop_algo_id = int(stop_result["algoId"])
             protection_ids.append(stop_algo_id)
             plan["stop_algo_id"] = stop_algo_id
+        else:
+            raise BinanceDemoError("Binance Demo Stop koruma kimliği doğrulanamadı.", http_status=409)
     except BinanceDemoError as exc:
-        plan["status"] = "KORUMA BAŞARISIZ - KAPATILIYOR"
+        plan["status"] = "CRITICAL / UNPROTECTED"
+        plan["protection_status"] = "CRITICAL / UNPROTECTED"
+        plan["recovery_attempts"] = int(plan.get("recovery_attempts", 0)) + 1
+        plan["last_error"] = str(exc)
         add_event(state, "ACİL KORUMA", f"{symbol} Stop kurulamadı; Demo pozisyon güvenlik için kapatılıyor.")
-        await cancel_entry_if_open(client, plan)
+        try:
+            await cancel_entry_if_open(client, plan)
+        except BinanceDemoError as cancel_exc:
+            plan["last_error"] = f"Stop: {exc}; Entry iptali: {cancel_exc}"
         try:
             await close_symbol_position(client, symbol)
         except BinanceDemoError as close_exc:
             plan["last_error"] = f"Stop: {exc}; Kapatma: {close_exc}"
+        try:
+            confirmation = response_rows(await client.signed("GET", "/fapi/v3/positionRisk", {"symbol": symbol}))
+            still_open = any(position_amount(item.get("positionAmt")) != 0 for item in confirmation)
+        except BinanceDemoError as verify_exc:
+            plan["last_error"] = f"{plan.get('last_error', str(exc))}; Durum doğrulama: {verify_exc}"
             plan["position_status"] = "OPEN"
             persist_runtime(state)
             raise
-        plan["last_error"] = str(exc)
+        if still_open:
+            plan["position_status"] = "OPEN"
+            persist_runtime(state)
+            raise BinanceDemoError(f"{symbol} CRITICAL / UNPROTECTED; güvenli kapatma doğrulanamadı.", http_status=409)
         plan["position_status"] = "CLOSED"
         plan["status"] = "GÜVENLİK İÇİN KAPATILDI"
-        return
+        plan["protection_status"] = "CLOSED_AFTER_PROTECTION_FAILURE"
+        persist_runtime(state)
+        raise BinanceDemoError(f"{symbol} Stop kurulamadı; pozisyon güvenli biçimde kapatıldı.", http_status=409)
 
     step = Decimal(str(plan["step"]))
     min_qty = Decimal(str(plan["min_qty"]))
@@ -1049,6 +1113,7 @@ async def protection_loop(application: Any) -> None:
         try:
             api_key, secret_key = load_demo_credentials()
             client = BinanceDemoClient(application.state.http, api_key, secret_key)
+            await recover_pending_entry_intents(client, state)
             changed = False
             for plan in list(state["plans"].values()):
                 if plan.get("status") in {"KAPANDI", "İPTAL", "GÜVENLİK İÇİN KAPATILDI"}:
@@ -1217,18 +1282,25 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
             reconciliation = reconcile_demo_plans(state, snapshot)
             if reconciliation["changed"]:
                 persist_runtime(state)
-            if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:
-                raise BinanceDemoError("En fazla 3 açık Demo pozisyonuna izin verilir.", http_status=409)
-            duplicate_reason = duplicate_entry_reason(snapshot, symbol)
-            if duplicate_reason:
-                raise BinanceDemoError(duplicate_reason, http_status=409)
-            if snapshot["available_balance"] < body.margin_usdt:
-                raise BinanceDemoError("Demo hesabında seçilen marjin için yeterli kullanılabilir bakiye yok.", http_status=409)
             spec = await build_order_spec(client, body)
+            policy = getattr(application.state, "v21_demo", {}).get("settings", {})
+            v21_state = getattr(application.state, "v21_demo", {})
+            validate_entry_risk(
+                snapshot, body, spec, policy,
+                daily_realized_pnl=verified_realized_pnl(v21_state),
+                paper_positions=v21_state.get("paper_positions", []),
+            )
             await set_isolated_margin(client, spec["symbol"])
             leverage_audit = await apply_verified_leverage(client, spec["symbol"], spec["leverage"])
-            result = await submit_entry(client, spec, test_only=False)
+            spec = await build_order_spec(client, body)
+            snapshot = await account_snapshot(client)
+            validate_entry_risk(
+                snapshot, body, spec, policy,
+                daily_realized_pnl=verified_realized_pnl(v21_state),
+                paper_positions=v21_state.get("paper_positions", []),
+            )
             plan_id = uuid.uuid4().hex[:12]
+            client_order_id = new_client_id("ENTRY")
             plan = {
                 "id": plan_id,
                 "position_id": plan_id,
@@ -1252,9 +1324,9 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
                 "targets": spec["targets"],
                 "step": decimal_text(spec["step"]),
                 "min_qty": decimal_text(spec["min_qty"]),
-                "entry_order_id": int(result.get("orderId", 0)) or None,
-                "entry_client_order_id": result.get("clientOrderId"),
-                "status": "DOLUM BEKLİYOR",
+                "entry_order_id": None,
+                "entry_client_order_id": client_order_id,
+                "status": "ENTRY_INTENT_PENDING",
                 "position_status": "PENDING",
                 "created_at": utc_now(),
                 "demo_only": True,
@@ -1262,6 +1334,11 @@ async def execute_demo_order(application: Any, body: DemoOrderRequest, *, source
                 "initial_stop_loss": spec["stop_loss"],
             }
             state.setdefault("plans", {})[plan_id] = plan
+            persist_runtime(state)
+            result = await submit_entry(client, spec, test_only=False, client_id=client_order_id)
+            plan["entry_order_id"] = int(result.get("orderId", 0)) or None
+            plan["entry_client_order_id"] = result.get("clientOrderId") or client_order_id
+            plan["status"] = "DOLUM BEKLİYOR"
             persist_runtime(state)
             add_event(
                 state,

@@ -100,7 +100,8 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
             self.assertEqual(result["reconciled_active_positions"], count)
 
     def test_position_limit_uses_exchange_reconciled_count_not_stale_plans(self):
-        self.assertIn('if reconciliation["reconciled_active_positions"] >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
+        self.assertIn("validate_entry_risk(", SOURCE_TEXT)
+        self.assertIn("pending_entries", SOURCE_TEXT)
         self.assertNotIn('if len(snapshot["positions"]) >= MAX_OPEN_POSITIONS:', SOURCE_TEXT)
         self.assertIn('"exchange_position_diagnostics"', SOURCE_TEXT)
         self.assertIn('"raw_position_risk_count"', SOURCE_TEXT)
@@ -276,7 +277,7 @@ class V203BinanceDemoSafetyTests(unittest.TestCase):
 
 
 class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
-    async def test_one_way_mode_cleans_demo_orders_before_mode_change(self):
+    async def test_one_way_mode_rejects_without_cancelling_existing_protection(self):
         class FakeClient:
             def __init__(self):
                 self.calls = []
@@ -288,6 +289,8 @@ class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
                 self.calls.append((method, path, params or {}))
                 if path == "/fapi/v1/positionSide/dual" and method == "GET":
                     return {"dualSidePosition": self.hedge}
+                if path == "/fapi/v3/positionRisk":
+                    return []
                 if path == "/fapi/v1/openOrders":
                     return list(self.orders)
                 if path == "/fapi/v1/openAlgoOrders":
@@ -304,12 +307,11 @@ class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
                 raise AssertionError((method, path, params))
 
         client = FakeClient()
-        self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 2)
-        self.assertEqual([call[1] for call in client.calls], [
-            "/fapi/v1/positionSide/dual", "/fapi/v1/openOrders", "/fapi/v1/openAlgoOrders",
-            "/fapi/v1/order", "/fapi/v1/algoOrder", "/fapi/v1/openOrders",
-            "/fapi/v1/openAlgoOrders", "/fapi/v1/positionSide/dual", "/fapi/v1/positionSide/dual",
-        ])
+        with self.assertRaises(CORE["BinanceDemoError"]):
+            await CORE["ensure_one_way_position_mode"](client)
+        self.assertFalse(any(call[0] == "DELETE" for call in client.calls))
+        self.assertEqual(client.orders, [{"symbol": "BTCUSDT", "orderId": 11}])
+        self.assertEqual(client.algo_orders, [{"symbol": "ETHUSDT", "algoId": 22}])
 
     async def test_one_way_mode_is_noop_when_already_one_way(self):
         class FakeClient:
@@ -321,7 +323,7 @@ class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 0)
         self.assertEqual(client.calls, 1)
 
-    async def test_one_way_mode_rechecks_orders_after_binance_4067(self):
+    async def test_one_way_mode_rejects_failed_transition_without_touching_orders(self):
         class FakeClient:
             def __init__(self):
                 self.hedge = True
@@ -331,6 +333,8 @@ class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
             async def signed(self, method, path, params=None):
                 if path == "/fapi/v1/positionSide/dual" and method == "GET":
                     return {"dualSidePosition": self.hedge}
+                if path == "/fapi/v3/positionRisk":
+                    return []
                 if path == "/fapi/v1/openOrders":
                     return list(self.orders)
                 if path == "/fapi/v1/openAlgoOrders":
@@ -347,8 +351,10 @@ class V203BinanceDemoAsyncSafetyTests(unittest.IsolatedAsyncioTestCase):
                 raise AssertionError((method, path, params))
 
         client = FakeClient()
-        self.assertEqual(await CORE["ensure_one_way_position_mode"](client), 1)
-        self.assertEqual(client.mode_attempts, 2)
+        with self.assertRaises(CORE["BinanceDemoError"]):
+            await CORE["ensure_one_way_position_mode"](client)
+        self.assertEqual(client.mode_attempts, 0)
+        self.assertEqual(client.orders, [{"symbol": "BTCUSDT", "orderId": 11}])
 
     async def test_isolated_margin_then_exact_leverage_and_symbol_config_are_required(self):
         class FakeClient:
