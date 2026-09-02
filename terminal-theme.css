@@ -501,6 +501,191 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21PerformanceStats small, .v21PerformanceStats b { display: block; }
 .v21PerformanceStats b { margin-top: 4px; color: var(--text-primary); font-size: 12px; }
 
+.v21TradeIntelligenceStack {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+.v21SafetyGate,
+.v21SetupScore,
+.v21DailyCoach,
+.v21SafetyChecks,
+.v21CoachInsights {
+  min-width: 0;
+}
+.v21SafetyGate,
+.v21SetupScore,
+.v21DailyCoach {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: 0 12px 28px rgba(0,0,0,.12);
+}
+.v21TradeIntelligenceStack header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid rgba(37,48,59,.8);
+}
+.v21TradeIntelligenceStack header span {
+  display: block;
+  color: var(--info);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.v21TradeIntelligenceStack header h2 {
+  margin: 5px 0 0;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+.v21TradeIntelligenceStack header svg {
+  flex: 0 0 auto;
+  width: 19px;
+  color: var(--info);
+}
+.v21SafetySummary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0;
+}
+.v21SafetySummary b {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.v21SafetySummary small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.v21SafetyChecks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.v21SafetyCheck {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 9px;
+  background: rgba(13,17,23,.42);
+}
+.v21SafetyCheck span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 650;
+}
+.v21SafetyCheck i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(148,163,184,.8);
+}
+.v21SafetyCheck b {
+  font-size: 10px;
+}
+.v21SafetyCheck small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.v21SafetyCheck.pass b { color: var(--success); }
+.v21SafetyCheck.warning b { color: var(--warning); }
+.v21SafetyCheck.blocked b { color: var(--danger); }
+.v21SafetyCheck.unavailable b { color: var(--text-muted); }
+.v21SafetyCheck.pass i { background: var(--success); }
+.v21SafetyCheck.warning i { background: var(--warning); }
+.v21SafetyCheck.blocked i { background: var(--danger); }
+.v21SetupScore header strong {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(34,197,94,.12);
+  color: var(--success);
+  font-size: 10px;
+}
+.v21ScoreBreakdown {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.v21ScoreBreakdown div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 8px;
+  background: rgba(13,17,23,.42);
+}
+.v21ScoreBreakdown small,
+.v21ScoreBreakdown b {
+  display: block;
+}
+.v21ScoreBreakdown small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.v21ScoreBreakdown b {
+  color: var(--text-primary);
+  font-size: 10px;
+}
+.v21DailyCoach .v21CoachSummary,
+.v21DailyCoach .v21CoachInsights,
+.v21DailyCoach .v21CoachStats {
+  min-width: 0;
+}
+.v21CoachInsights {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.v21CoachInsights div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(37,48,59,.72);
+  border-radius: 8px;
+  background: rgba(13,17,23,.42);
+}
+.v21CoachInsights small,
+.v21CoachInsights b {
+  display: block;
+}
+.v21CoachInsights small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.v21CoachInsights b {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 10px;
+}
+@media (max-width: 1100px) {
+  .v21TradeIntelligenceStack { grid-template-columns: 1fr 1fr; }
+  .v21DailyCoach { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .v21TradeIntelligenceStack { grid-template-columns: 1fr; gap: 10px; }
+  .v21DailyCoach { grid-column: auto; }
+  .v21SafetyChecks { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 700px) {
   .demoPositionMetrics span + span { border-top: 1px solid rgba(37,48,59,.68); border-left: 0; }
   .demoPositionMeta { grid-template-columns: 1fr; }
