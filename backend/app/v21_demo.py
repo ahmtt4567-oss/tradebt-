@@ -1140,23 +1140,76 @@ def performance_payload(state: dict[str, Any], period: str = "all") -> dict[str,
             created = created.replace(tzinfo=timezone.utc)
         if cutoff is None or (now - created).total_seconds() <= cutoff * 86400:
             events.append(item)
+    unique_events: list[dict[str, Any]] = []
+    seen_events: set[str] = set()
+    for item in events:
+        identity = str(item.get("id") or f"{item.get('symbol')}|{item.get('created_at')}|{item.get('realized_pnl')}")
+        if identity in seen_events:
+            continue
+        seen_events.add(identity)
+        unique_events.append(item)
+    events = unique_events
+    def event_time(item: dict[str, Any]) -> datetime:
+        try:
+            value = datetime.fromisoformat(str(item.get("created_at", "")).replace("Z", "+00:00"))
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return datetime.min.replace(tzinfo=timezone.utc)
+    events.sort(key=event_time)
     pnls = [round(float(item.get("realized_pnl") or 0), 4) for item in events]
     wins = [pnl for pnl in pnls if pnl > 0]
     losses = [pnl for pnl in pnls if pnl < 0]
     equity = 0.0
     peak = 0.0
     max_drawdown = 0.0
-    for pnl in reversed(pnls):
+    for pnl in pnls:
         equity += pnl
         peak = max(peak, equity)
         max_drawdown = max(max_drawdown, peak - equity)
+    average_win = round(sum(wins) / len(wins), 4) if wins else None
+    average_loss = round(sum(losses) / len(losses), 4) if losses else None
+    winning_streak = losing_streak = 0
+    current_wins = current_losses = 0
+    equity_curve: list[dict[str, float | int]] = []
+    running_equity = 0.0
+    for index, item in enumerate(events, start=1):
+        pnl = round(float(item.get("realized_pnl") or 0), 4)
+        running_equity += pnl
+        equity_curve.append({"index": index, "pnl": pnl, "equity": round(running_equity, 4)})
+        if pnl > 0:
+            current_wins += 1
+            current_losses = 0
+        elif pnl < 0:
+            current_losses += 1
+            current_wins = 0
+        else:
+            current_wins = current_losses = 0
+        winning_streak = max(winning_streak, current_wins)
+        losing_streak = max(losing_streak, current_losses)
+    directional: dict[str, dict[str, Any]] = {}
+    for direction in ("LONG", "SHORT"):
+        rows = [item for item in events if ("LONG" if str(item.get("side") or item.get("direction") or "").upper() == "BUY" else "SHORT" if str(item.get("side") or item.get("direction") or "").upper() == "SELL" else str(item.get("side") or item.get("direction") or "").upper()) == direction]
+        row_pnls = [float(item.get("realized_pnl") or 0) for item in rows]
+        row_wins = [pnl for pnl in row_pnls if pnl > 0]
+        row_losses = [pnl for pnl in row_pnls if pnl < 0]
+        directional[direction] = {
+            "trades": len(row_pnls),
+            "win_rate": round(len(row_wins) / len(row_pnls) * 100, 2) if row_pnls else None,
+            "realized_pnl": round(sum(row_pnls), 4) if row_pnls else None,
+            "profit_factor": round(sum(row_wins) / abs(sum(row_losses)), 2) if row_losses else None,
+        }
     return {
         "period": period, "total_trades": len(pnls), "wins": len(wins), "losses": len(losses),
         "win_rate": round(len(wins) / len(pnls) * 100, 2) if pnls else 0,
         "total_profit": round(sum(wins), 4), "total_loss": round(sum(losses), 4),
         "net_profit": round(sum(pnls), 4), "average_trade": round(sum(pnls) / len(pnls), 4) if pnls else 0,
         "best_trade": max(pnls) if pnls else 0, "worst_trade": min(pnls) if pnls else 0,
-        "profit_factor": round(sum(wins) / abs(sum(losses)), 2) if losses else (99.0 if wins else 0),
+        "profit_factor": round(sum(wins) / abs(sum(losses)), 2) if losses else None,
+        "average_win": average_win, "average_loss": average_loss,
+        "winning_streak": winning_streak, "losing_streak": losing_streak,
+        "equity_curve": equity_curve if len(equity_curve) >= 2 else [],
+        "directional": directional,
+        "history_quality": "VERIFIED" if len(events) >= 2 else "INSUFFICIENT HISTORY",
         "max_drawdown": round(max_drawdown, 4), "demo_only": True, "read_only": True,
     }
 

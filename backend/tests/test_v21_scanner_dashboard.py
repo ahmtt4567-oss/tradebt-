@@ -46,6 +46,30 @@ class V21ScannerDashboardTests(unittest.TestCase):
         ]
         self.assertEqual(v21_demo.daily_metrics(state)["realized_pnl"], 4.0)
 
+    def test_verified_performance_exposes_streaks_equity_and_directional_results(self):
+        state = v21_demo.initial_state()
+        state["journal"] = [
+            {"id":"a", "kind":"FILL", "side":"BUY", "created_at":"2026-09-01T10:00:00+00:00", "realized_pnl":10.0, "verified_realized":True},
+            {"id":"b", "kind":"FILL", "side":"SELL", "created_at":"2026-09-01T11:00:00+00:00", "realized_pnl":-4.0, "verified_realized":True},
+            {"id":"c", "kind":"FILL", "side":"BUY", "created_at":"2026-09-01T12:00:00+00:00", "realized_pnl":6.0, "verified_realized":True},
+        ]
+        result = v21_demo.performance_payload(state, "all")
+        self.assertEqual(result["average_win"], 8.0)
+        self.assertEqual(result["average_loss"], -4.0)
+        self.assertEqual(result["winning_streak"], 1)
+        self.assertEqual(result["losing_streak"], 1)
+        self.assertEqual([point["equity"] for point in result["equity_curve"]], [10.0, 6.0, 12.0])
+        self.assertEqual(result["directional"]["LONG"]["trades"], 2)
+        self.assertEqual(result["directional"]["SHORT"]["realized_pnl"], -4.0)
+
+    def test_verified_performance_deduplicates_same_event_id(self):
+        state = v21_demo.initial_state()
+        state["journal"] = [
+            {"id":"same", "kind":"FILL", "created_at":"2026-09-01T10:00:00+00:00", "realized_pnl":10.0, "verified_realized":True},
+            {"id":"same", "kind":"FILL", "created_at":"2026-09-01T10:00:00+00:00", "realized_pnl":10.0, "verified_realized":True},
+        ]
+        self.assertEqual(v21_demo.performance_payload(state, "all")["total_trades"], 1)
+
     def test_stream_close_event_is_idempotent_and_verified_once(self):
         state = v21_demo.initial_state()
         payload = {"e": "ORDER_TRADE_UPDATE", "T": 123, "o": {"s": "BTCUSDT", "X": "FILLED", "x": "TRADE", "i": 7, "S": "SELL", "R": True, "rp": "2.5", "ap": "100"}}
