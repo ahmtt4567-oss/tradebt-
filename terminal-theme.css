@@ -428,7 +428,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21InsightPanel > header span { display: block; color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .v21InsightPanel > header h2 { margin: 4px 0 0; color: var(--text-primary); font-size: 16px; }
 .v21InsightPanel > header > svg { flex: 0 0 auto; width: 19px; color: var(--info); }
-.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { min-width: 0; }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics, .v21PortfolioOverview { min-width: 0; }
 .v21DashboardInsights .v21DecisionIntelligence > *,
 .v21DashboardInsights .v21ProtectionCenter > *,
 .v21DashboardInsights .v21RiskStatus > *,
@@ -437,7 +437,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21DashboardInsights .v21LifecyclePanel > *,
 .v21DashboardInsights .v21ReplayPanel > * { min-width: 0; }
 .v21AccountOverview { grid-column: span 8; border-top: 2px solid rgba(34,211,238,.46); }
-.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
+.v21DecisionIntelligence, .v21ProtectionCenter, .v21RiskStatus, .v21SmartAlerts, .v21QualityScore, .v21AiCoach, .v21MarketScanner, .v21LiveActivity, .v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics, .v21PortfolioOverview { grid-column: span 4; }
 .v21RiskStatus { border-top: 2px solid rgba(245,158,11,.5); }
 .v21SmartAlerts { border-top: 2px solid rgba(239,68,68,.4); }
 .v21QualityScore { border-top: 2px solid rgba(129,112,190,.55); }
@@ -1228,6 +1228,67 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21FiveDayEmpty { min-height: 154px; }
 .v21FiveDayEmpty small,
 .v21InsightEmpty small { color: var(--text-muted); font-size: 9px; line-height: 1.45; }
+
+.v21PortfolioOverview { border-top: 2px solid rgba(34,211,238,.36); }
+.v21PortfolioMetrics,
+.v21AdvancedMetrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.v21PortfolioMetrics span,
+.v21AdvancedMetrics span { display: grid; gap: 5px; min-width: 0; padding: 10px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21PortfolioMetrics small,
+.v21AdvancedMetrics small { color: var(--text-muted); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+.v21PortfolioMetrics b,
+.v21AdvancedMetrics b { overflow: hidden; color: var(--text-primary); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.v21EquityTrend { margin-top: 12px; padding: 11px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
+.v21EquityTrend h3,
+.v21PatternInsights h3 { margin: 0 0 9px; color: var(--text-muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.v21EquityTrend > div { display: flex; align-items: flex-end; gap: 9px; height: 86px; }
+.v21EquityTrend span { display: flex; flex: 1 1 0; flex-direction: column; align-items: center; justify-content: flex-end; gap: 5px; min-width: 0; height: 100%; }
+.v21EquityTrend i { display: block; width: min(24px,70%); min-height: 7px; border-radius: 4px 4px 0 0; background: var(--success); }
+.v21EquityTrend span.negative i { background: var(--danger); }
+.v21EquityTrend small { color: var(--text-muted); font-size: 8px; text-transform: uppercase; }
+.v21PortfolioEmpty { display: grid; place-items: center; gap: 7px; min-height: 130px; margin-top: 12px; padding: 14px; border: 1px dashed rgba(100,116,139,.48); border-radius: 10px; color: var(--text-muted); font-size: 10px; text-align: center; }
+.v21PortfolioEmpty svg { width: 20px; color: var(--info); }
+
+.v21DecisionHistoryPanel,
+.v21SmartAlertCenter,
+.v21AdvancedAnalytics { width: 100%; margin-top: 14px; }
+.v21DecisionHistoryPanel { border-top: 2px solid rgba(34,211,238,.36); }
+.v21DecisionFeed,
+.v21SmartAlertList { display: grid; gap: 9px; margin-top: 12px; }
+.v21DecisionFeed article { display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 11px; min-width: 0; padding: 11px 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
+.v21DecisionFeed article > i { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--info); box-shadow: 0 0 0 4px rgba(34,211,238,.08); }
+.v21DecisionFeed article > i.long { background: var(--success); }
+.v21DecisionFeed article > i.short { background: var(--danger); }
+.v21DecisionFeed article > i.exit { background: var(--warning); }
+.v21DecisionFeed article > div,
+.v21DecisionFeed article > div > header { min-width: 0; }
+.v21DecisionFeed article > div > header { display: flex; align-items: center; gap: 9px; }
+.v21DecisionFeed article > div > header b { color: var(--text-primary); font-size: 10px; letter-spacing: .06em; }
+.v21DecisionFeed article > div > header strong { color: var(--text); font-size: 10px; }
+.v21DecisionFeed article > div > header time { margin-left: auto; color: var(--text-muted); font-size: 9px; white-space: nowrap; }
+.v21DecisionFeed article > div > span { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 7px; }
+.v21DecisionFeed article > div > span small { color: var(--text-muted); font-size: 9px; }
+.v21DecisionFeed article > div > span b { color: var(--text-primary); font-size: 9px; }
+.v21DecisionFeed article p { margin: 7px 0 0; color: var(--text); font-size: 10px; line-height: 1.5; }
+
+.v21SmartAlertCenter { border-top: 2px solid rgba(245,158,11,.45); }
+.v21AlertFilters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.v21AlertFilters button { min-height: 27px; padding: 5px 10px; border: 1px solid rgba(100,116,139,.42); border-radius: 7px; background: rgba(13,17,23,.5); color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; cursor: pointer; }
+.v21AlertFilters button.active { border-color: rgba(34,211,238,.5); background: rgba(34,211,238,.08); color: var(--info); }
+.v21SmartAlertList article { display: grid; grid-template-columns: 27px minmax(0,1fr); gap: 10px; min-width: 0; padding: 10px 11px; border: 1px solid rgba(37,48,59,.72); border-radius: 9px; background: rgba(13,17,23,.42); }
+.v21SmartAlertList article > i { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; background: rgba(59,130,246,.1); color: var(--info); }
+.v21SmartAlertList article > i svg { width: 14px; }
+.v21SmartAlertList article.warning > i { background: rgba(245,158,11,.1); color: var(--warning); }
+.v21SmartAlertList article.critical > i { background: rgba(239,68,68,.1); color: var(--danger); }
+.v21SmartAlertList article > div > header { display: flex; justify-content: space-between; gap: 9px; }
+.v21SmartAlertList article b { color: var(--text-primary); font-size: 10px; }
+.v21SmartAlertList article time { color: var(--text-muted); font-size: 9px; white-space: nowrap; }
+.v21SmartAlertList article p { margin: 5px 0 0; color: var(--text); font-size: 10px; line-height: 1.45; }
+.v21SmartAlertList article small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 9px; }
+
+.v21AdvancedAnalytics { border-top: 2px solid rgba(168,85,247,.42); }
+.v21PatternInsights { margin-top: 12px; padding: 11px 12px; border: 1px solid rgba(37,48,59,.72); border-radius: 10px; background: rgba(13,17,23,.42); }
+.v21PatternInsights p { margin: 7px 0 0; color: var(--text); font-size: 10px; line-height: 1.5; }
 
 .v21RiskHeadline {
   display: flex;
