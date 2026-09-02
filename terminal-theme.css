@@ -433,7 +433,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21SmartAlerts { grid-column: span 4; border-top: 2px solid rgba(239,68,68,.4); }
 .v21QualityScore { grid-column: span 4; border-top: 2px solid rgba(129,112,190,.55); }
 .v21LiveActivity { grid-column: span 4; border-top: 2px solid rgba(34,211,238,.4); }
-.v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
+.v21LifecyclePanel, .v21ReplayPanel, .v21TradeHistory, .v21TradingJournal, .v21PerformanceAnalytics { grid-column: span 4; }
 .v21InsightMetrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; margin-top: 12px; overflow: hidden; border: 1px solid rgba(37,48,59,.7); border-radius: 8px; background: rgba(37,48,59,.55); }
 .v21InsightMetrics span { min-width: 0; padding: 10px; background: var(--surface-1); }
 .v21InsightMetrics small, .v21InsightMetrics b { display: block; }
@@ -458,6 +458,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21AlertList b, .v21ActivityList b, .v21JournalFeed b { display: block; color: var(--text-primary); font-size: 10px; }
 .v21AlertList small, .v21ActivityList span, .v21JournalFeed span { display: block; margin-top: 3px; color: var(--text); font-size: 10px; line-height: 1.4; }
 .v21ActivityList small, .v21JournalFeed small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; }
+.v21LifecycleList article, .v21ReplaySteps span, .v21ActivityList article { min-width: 0; }
+.v21LifecycleList article > div, .v21ReplaySteps span > small, .v21ReplaySteps span > b, .v21ActivityList article > div { min-width: 0; }
 .v21QualityHeadline { display: flex; align-items: baseline; gap: 6px; margin-top: 12px; }
 .v21QualityHeadline b { color: var(--text-primary); font-size: 28px; }
 .v21QualityHeadline span { color: var(--text-muted); font-size: 10px; }
