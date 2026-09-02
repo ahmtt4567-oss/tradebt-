@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: tradebt15
+    runtime: python
+    plan: free
+    region: frankfurt
+    autoDeploy: true
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: protrebot-db
+          property: connectionString
+      - key: REDIS_URL
+        value: ""
+      - key: PROTREBOT_WEB_REQUIRE_AUTH
+        value: "true"
+      - key: PROTREBOT_WEB_ACCESS_TOKEN
+        sync: false
+      - key: PROTREBOT_CORS_ORIGINS
+        value: https://pro-tre-bot-r4pjrxk8t-gezginci9.vercel.app,https://pro-tre-bot-web.vercel.app,https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app
+      - key: PROTREBOT_DATA_DIR
+        value: /tmp/protrebot-data
+      - key: PROTREBOT_EXECUTION_MODE
+        value: TESTNET_FIRST
+      - key: PROTREBOT_PAPER_ENABLED
+        value: "false"
+      - key: PROTREBOT_LIVE_CHANNEL_ENABLED
+        value: "true"
+      - key: PROTREBOT_DEPLOYMENT_TIER
+        value: "FREE_PREVIEW"
+      - key: PROTREBOT_DURABLE_AUTH_REQUIRED
+        value: "true"
+
+databases:
+  - name: protrebot-db
+    plan: free
+    region: frankfurt
+    databaseName: protrebot
+    user: protrebot

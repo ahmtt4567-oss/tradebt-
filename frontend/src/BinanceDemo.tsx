@@ -39,6 +39,7 @@ type DemoStatus = {
 type DemoPosition = {
   symbol:string
   direction:'LONG'|'SHORT'
+  opened_at?:string|null
   quantity:number
   entry_price:number
   mark_price:number
