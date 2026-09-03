@@ -344,6 +344,130 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .webAccessIcon { border: 1px solid rgba(245,158,11,.35); color: var(--accent-strong); }
 .webAccessCard footer { background: transparent; }
 
+@media (max-width: 640px) {
+  html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
+  body { font-size: 14px; }
+  .v26App { width: 100%; max-width: 100%; min-width: 0; padding: 10px 10px calc(82px + env(safe-area-inset-bottom)); overflow-x: clip; }
+  .v26Header { position: relative; z-index: 22; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; min-height: 66px; padding: 10px 12px; transition: transform .2s ease, opacity .2s ease; }
+  .v26HeaderHidden { transform: translateY(calc(-100% - 14px)); opacity: .2; pointer-events: none; }
+  .v26Brand { min-width: 0; gap: 9px; }
+  .v26Brand > span { width: 36px; height: 36px; font-size: 17px; }
+  .v26Brand b { overflow-wrap: anywhere; font-size: 14px; letter-spacing: .02em; }
+  .v26Brand small { max-width: 190px; overflow-wrap: anywhere; font-size: 8px; line-height: 1.25; }
+  .v26HeaderActions { min-width: 0; margin-top: 0; gap: 6px; }
+  .v26SubscriptionBadge, .v26NotificationButton { display: none; }
+  .v26Refresh { min-height: 38px; padding: 0 9px; font-size: 10px; white-space: nowrap; }
+  .v26Nav { display: none; }
+  .v26ModeBar { align-items: stretch; gap: 12px; margin-top: 10px; padding: 16px 14px; }
+  .v26ModeBar h1 { margin: 5px 0 7px; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+  .v26ModeBar p { font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+  .v26ModeBar aside { min-width: 0; width: 100%; }
+  .v26MarketBar { gap: 10px; margin-top: 10px; padding: 10px; }
+  .v26MarketTitle { align-items: flex-start; flex-wrap: wrap; }
+  .v26MarketTitle strong { margin-left: auto; }
+  .v26MarketPicker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .v26MarketPicker button { min-height: 52px; padding: 9px; }
+  .v26Intervals { overflow-x: auto; padding-bottom: 2px; }
+  .v26Intervals button { flex: 0 0 42px; }
+  .v26Footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; padding: 12px; }
+  .v26Footer span { min-width: 0; align-items: flex-start; line-height: 1.35; }
+  .v26Footer span svg { flex: 0 0 auto; }
+  .v26Footer em { grid-column: 1 / -1; width: auto; margin: 2px 0 0; line-height: 1.45; }
+  .terminalMobileNav { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); left: 10px; z-index: 30; min-height: 62px; padding: 6px; transition: transform .2s ease, opacity .2s ease; }
+  .terminalMobileNavHidden { transform: translateY(calc(100% + 16px)); opacity: 0; pointer-events: none; }
+  .terminalMobileNav button { min-width: 0; min-height: 50px; gap: 4px; padding: 6px 3px; font-size: 10px; }
+  .terminalMobileNav button svg { width: 17px; height: 17px; }
+  .terminalMobileNav button span { min-width: 0; overflow-wrap: anywhere; }
+  .v26BackToTop { right: 16px; bottom: calc(82px + env(safe-area-inset-bottom)); width: 40px; height: 40px; }
+  .v26BackToTop svg { width: 18px; height: 18px; }
+  .demoHero, .executionHero, .v27OpsHero { padding: 16px; }
+  .demoHeroCopy h2, .executionHero h2, .v27OpsTitle h2 { font-size: 19px; line-height: 1.25; overflow-wrap: anywhere; }
+  .demoHeroCopy p, .executionHero p, .v27OpsTitle p { line-height: 1.55; overflow-wrap: anywhere; }
+  .demoHeroStatus, .demoAccountStrip, .executionPulse, .v27Pulse, .v27Metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .demoAccountStrip article, .executionPulse article, .v27Pulse article, .v27Metrics article { min-width: 0; padding: 11px 10px; }
+  .demoAccountStrip b, .executionPulse b, .v27Pulse b, .v27Metrics b { overflow-wrap: anywhere; }
+  .demoCommandBar, .executionActionBar, .executionFields, .demoFieldGrid { grid-template-columns: 1fr; }
+  .demoCommandBar > label { grid-column: auto; }
+  .demoMainGrid, .demoOrdersGrid, .executionColumns, .executionColumns.lower, .v27Grid { grid-template-columns: 1fr; }
+  .demoChartCanvas, .v26ChartShell, .liveExecutionChart { min-height: 310px; }
+  .v26Chart, .demoChartCanvas canvas { min-height: 310px; }
+  .demoSidePicker, .demoTypePicker, .demoExposure, .accountMetrics { grid-template-columns: 1fr 1fr; }
+  .v21Tabs { display: flex; overflow-x: auto; gap: 6px; }
+  .v21Tabs button { flex: 0 0 132px; text-align: left; }
+  .v21MetricRow, .v21JournalStats, .v21BacktestMetrics { grid-template-columns: 1fr 1fr; }
+  .v27Events article, .v27Gates article { grid-template-columns: auto minmax(0, 1fr); }
+  .v27Events article > :last-child, .v27Gates article > :last-child { grid-column: 2; justify-self: start; }
+  .v26Setup > header { align-items: flex-start; gap: 12px; padding: 14px; }
+  .v26Setup > header > div, .v26Setup > header > b { max-width: 100%; overflow-wrap: anywhere; }
+  .v26SetupGrid > article { grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 14px; }
+  .v26CredentialFields { grid-column: 1 / -1; }
+  .v26SetupGrid strong { grid-column: 1 / -1; }
+  .v26App table { display: block; max-width: 100%; overflow-x: auto; }
+  .v26App img, .v26App svg, .v26App canvas { max-width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .v26App { padding-right: 8px; padding-left: 8px; }
+  .v26Brand b { font-size: 13px; }
+  .v26Brand small { font-size: 7px; }
+  .v26Refresh { padding: 0 7px; font-size: 9px; }
+  .v26ModeBar h1 { font-size: 18px; }
+  .v26Footer { grid-template-columns: 1fr; }
+  .v26Footer em { grid-column: auto; }
+}
+
+@media (max-width: 640px) {
+  .v21InsightPanel, .v21Workspace { padding: 14px; border-radius: 10px; }
+  .v21InsightPanel > header, .v21WorkspaceHead, .executionHead, .v27Panel > header { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+  .v21InsightPanel > header h2, .v21WorkspaceHead h2, .executionHead h3, .v27Panel h3 { font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+  .v21InsightPanel > header span, .v21WorkspaceHead > div > span { font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
+  .v21InsightPanel p, .v21InsightPanel small, .v21InsightPanel span, .v21WorkspaceHead p { overflow-wrap: anywhere; line-height: 1.5; }
+  .v21InsightMetrics, .v21CoachMetrics, .v21ScannerMeta, .v21PerformanceStats, .v21AdvancedMetrics, .v21RegimeSignals, .v21HealthOverview { grid-template-columns: 1fr 1fr; }
+  .v21SummaryMetrics { grid-template-columns: 1fr 1fr; }
+  .v21ExecutiveSummary { display: block; margin: 10px 0; padding: 14px; }
+  .v21SummaryMetrics, .v21SummaryBlock { margin-top: 10px; }
+  .v21SummaryBlock { border-left: 0; border-top: 1px solid var(--border); }
+  .v21NextAction { display: grid; gap: 9px; }
+  .v21NextAction button, .v21HeaderActions button { width: 100%; min-height: 42px; }
+  .v21HistoryList article { grid-template-columns: minmax(0,1fr) auto; gap: 6px 10px; padding: 12px 0; }
+  .v21HistoryList article > span { grid-column: 1 / -1; line-height: 1.45; }
+  .v21HistoryList article > small { grid-column: 1; }
+  .v21HistoryList article > strong { grid-column: 2; grid-row: 3; align-self: end; }
+  .v21MarketScannerTable { overflow: visible; }
+  .v21MarketScannerTable table, .v21MarketScannerTable tbody { display: block; }
+  .v21MarketScannerTable thead { display: none; }
+  .v21MarketScannerTable tr { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px 10px; margin-top: 8px; padding: 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); }
+  .v21MarketScannerTable td { display: block; padding: 0; border: 0; line-height: 1.35; }
+  .v21MarketScannerTable td:first-child { font-size: 14px; font-weight: 750; }
+  .v21MarketScannerTable td:nth-child(2) { grid-column: 2; grid-row: 1; }
+  .v21MarketScannerTable td:nth-child(3)::before { content: 'Score '; color: var(--text-muted); font-size: 10px; }
+  .v21MarketScannerTable td:nth-child(4)::before { content: 'Trend '; color: var(--text-muted); font-size: 10px; }
+  .v21MarketScannerTable td:nth-child(5)::before { content: 'Status '; color: var(--text-muted); font-size: 10px; }
+  .v21MarketScannerTable td:nth-child(3), .v21MarketScannerTable td:nth-child(4), .v21MarketScannerTable td:nth-child(5) { color: var(--text); font-size: 11px; }
+  .v21MarketScannerTable td:nth-child(5) { grid-column: 2; grid-row: 2; text-align: right; }
+  .v21AiJournalList > article { padding: 13px; }
+  .v21AiJournalList > article > header { align-items: flex-start; flex-wrap: wrap; }
+  .v21AiJournalFacts { grid-template-columns: 1fr 1fr; }
+  .v21AiJournalSections { grid-template-columns: 1fr; gap: 0; }
+  .v21AiJournalSections section { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .v21AiJournalSections section:last-child { border-bottom: 0; }
+  .v21AiJournalSections section > b { font-size: 10px; line-height: 1.35; }
+  .v21AiJournalSections p, .v21AiJournalSections li { font-size: 12px; line-height: 1.55; }
+  .v21DecisionFeed article, .v21SmartAlertList article, .v21JournalFeed article, .v21ActivityList article, .v21LifecycleList article { grid-template-columns: auto minmax(0,1fr); gap: 8px; }
+  .v21DecisionFeed article time, .v21SmartAlertList article time, .v21JournalFeed article small, .v21ActivityList article small, .v21LifecycleList article time { grid-column: 2; }
+  .v21FiveDayChart { gap: 5px; min-height: 170px; }
+  .v21SafetyChecks { grid-template-columns: 1fr; }
+  .v21SettingsGrid, .v21AutoRules > div { grid-template-columns: 1fr; }
+  .v21GateStrip { grid-template-columns: 1fr; }
+  .commercialHero, .commercialAuth { grid-template-columns: 1fr; }
+  .commercialHeroTitle h2, .commercialAuthHero h2 { font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
+  .commercialTabs { display: flex; overflow-x: auto; }
+  .commercialTabs button { flex: 0 0 auto; min-height: 42px; }
+  .commercialMetrics, .commercialSplit, .commercialColumns, .feeColumns, .auditLayout { grid-template-columns: 1fr; }
+  .exchangeModeSwitch { display: grid; grid-template-columns: 1fr 1fr; }
+  .exchangeModeSwitch button { min-height: 42px; }
+}
+
 .demoOrdersGrid > .demoOrderPanel,
 .demoOrdersGrid > .demoEventPanel { min-height: 218px; padding: 16px; border-color: rgba(37,48,59,.9); box-shadow: 0 12px 28px rgba(0,0,0,.18); }
 .demoOrdersGrid > .demoOrderPanel:nth-child(1) { border-top: 2px solid rgba(212,168,79,.62); background: linear-gradient(180deg, rgba(212,168,79,.08), rgba(18,24,32,.98) 32%); }
