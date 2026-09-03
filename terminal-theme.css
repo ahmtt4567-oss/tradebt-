@@ -593,6 +593,140 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
   .v27Metrics { grid-template-columns: 1fr; }
 }
 
+/* V3 compact terminal composition. Keep semantic colors, reduce nested-card weight. */
+.v26App .v21DashboardHome > *,
+.v26App .demoTicket,
+.v26App .demoPositions,
+.v26App .v21Workspace,
+.v26App .v21Card,
+.v26App .executionCard,
+.v26App .v27Panel { box-shadow: 0 8px 22px rgba(0,0,0,.14); }
+.v26App .v21DashboardHome { max-width: 1180px; margin-right: auto; margin-left: auto; }
+.v26App .v21DashboardWelcome { position: relative; overflow: hidden; }
+.v26App .v21DashboardWelcome::before { position: absolute; right: 11%; bottom: -38px; width: 180px; height: 90px; border-top: 1px solid rgba(34,211,238,.2); border-radius: 50%; content: ''; transform: rotate(-12deg); pointer-events: none; }
+.v26App .v21DashboardSubscription { max-width: 920px; }
+.v26App .v21DashboardStatusGrid b { white-space: nowrap; }
+.v26App .v21DashboardStatusGrid span:nth-child(2) b::before,
+.v26App .v21DashboardStatusGrid span:nth-child(3) b::before { background: var(--info); }
+.v26App .v21DashboardStatusGrid span:nth-child(4) b::before { background: var(--success); }
+.v26App .demoTicket > header,
+.v26App .demoPositions > header,
+.v26App .demoOrderPanel > header,
+.v26App .demoEventPanel > header { min-width: 0; }
+.v26App .demoTicket > header h3,
+.v26App .demoPositions > header h3,
+.v26App .demoOrderPanel > header h3,
+.v26App .demoEventPanel > header h3 { color: #f8fafc; font-size: 18px; }
+.v26App .demoTicket > header > b,
+.v26App .demoPositions > header > b,
+.v26App .demoOrderPanel > header > b,
+.v26App .demoEventPanel > header > b { flex: 0 0 auto; color: #fcd34d; }
+.v26App .demoSidePicker button.activeLong,
+.v26App .demoTypePicker button.activeType { border-color: rgba(245,158,11,.7); background: rgba(245,158,11,.13); color: #fde68a; }
+.v26App .demoAnalysisFill { min-height: 42px; border-color: rgba(34,211,238,.38); background: rgba(34,211,238,.06); color: #a5f3fc; }
+.v26App .demoTest { border-color: rgba(34,211,238,.55); background: transparent; color: #a5f3fc; }
+.v26App .demoSubmit { border-color: rgba(245,158,11,.65); background: rgba(245,158,11,.16); color: #fde68a; }
+.v26App .demoPositions > header > b { white-space: nowrap; }
+.v26App .demoEmpty { min-height: 180px; border: 1px dashed rgba(100,116,139,.48); border-radius: 10px; background: rgba(13,17,23,.28); }
+.v26App .v21PerformanceCenter .v21MetricRow,
+.v26App .v21VerifiedAnalytics .v21MetricRow { background: #0b131b; }
+.v26App .v21PerformanceCenter .v21MetricRow span,
+.v26App .v21VerifiedAnalytics .v21MetricRow span { border: 1px solid rgba(71,85,105,.5); border-radius: 8px; }
+.v26App .v21ScoreRing { box-shadow: 0 0 0 5px rgba(34,211,238,.06); }
+.v26App .v21CertificateLayout .v21Card { min-width: 0; }
+.v26App .v21CertificateLayout .v21Score { background: linear-gradient(145deg, #12232c, #101820); }
+.v26App .v21CertificateLayout .v21GateList,
+.v26App .v21CertificateLayout .v21Gates { min-width: 0; }
+.v26App .v21CertificateLayout .v21GateList article,
+.v26App .v21CertificateLayout .v21Gates article { min-width: 0; }
+.v26App .v27DecisionBody > div,
+.v26App .v27Certificate > header > div { min-width: 0; }
+.v26App .v27DecisionBody b { color: #f8fafc; font-size: 15px; line-height: 1.35; }
+.v26App .v27DecisionBody span { color: #94a3b8; font-size: 12px; line-height: 1.5; }
+.v26App .v27Decision > footer { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(71,85,105,.5); }
+.v26App .v27Decision > footer span { color: #94a3b8; font-size: 11px; }
+.v26App .v27Decision > footer b { color: #e2e8f0; }
+.v26App .v27Certificate .v27Gates article { grid-template-columns: 20px minmax(0,1fr); align-items: start; }
+.v26App .v27Certificate .v27Gates article > div { min-width: 0; }
+.v26App .v27Certificate .v27Gates article b,
+.v26App .v27Certificate .v27Gates article span { display: block; overflow-wrap: anywhere; line-height: 1.4; }
+.v26App .v27Certificate .v27Gates article b { color: #f8fafc; font-size: 12px; }
+.v26App .v27Certificate .v27Gates article span { margin-top: 3px; color: #94a3b8; font-size: 11px; }
+.v26App .v26Footer { font-size: 10px; }
+
+@media (max-width: 700px) {
+  .v26App .v21DashboardWelcome { min-height: 0; padding: 16px; }
+  .v26App .v21DashboardWelcome h2 { max-width: none; font-size: 27px; }
+  .v26App .v21DashboardSubscription { max-width: none; }
+  .v26App .v21DashboardStatusGrid b { white-space: nowrap; font-size: 11px; }
+  .v26App .v21DashboardPerformanceBody { gap: 9px; }
+  .v26App .demoMainGrid { gap: 10px; }
+  .v26App .demoTicket, .v26App .demoPositions { padding: 14px; }
+  .v26App .demoTicket > header h3, .v26App .demoPositions > header h3 { font-size: 17px; }
+  .v26App .demoSidePicker button, .v26App .demoTypePicker button { min-height: 44px; }
+  .v26App .demoTicket .demoExposure { gap: 6px; }
+  .v26App .demoTicket .demoExposure span { min-width: 0; padding: 9px 8px; }
+  .v26App .demoTicket .demoExposure b { font-size: 12px; overflow-wrap: anywhere; }
+  .v26App .demoPositions > header { align-items: flex-start; }
+  .v26App .demoEmpty { min-height: 150px; padding: 18px 12px; }
+  .v26App .v21WorkflowTitle { padding: 12px 14px; }
+  .v26App .v21WorkflowStep { flex-basis: 144px; }
+  .v26App .v21PerformanceCenter .v21MetricRow,
+  .v26App .v21VerifiedAnalytics .v21MetricRow { grid-template-columns: 1fr 1fr; }
+  .v26App .v21CertificateLayout .v21Score { min-height: 210px; }
+  .v26App .v21CertificateLayout .v21GateList article,
+  .v26App .v21CertificateLayout .v21Gates article { grid-template-columns: 20px minmax(0,1fr); }
+  .v26App .v27Decision > footer { display: grid; gap: 8px; }
+  .v26App .v27Pulse article { min-height: 106px; }
+  .v26App .v26Footer { grid-template-columns: 1fr 1fr; }
+  .v26App .v26Footer em { grid-column: 1 / -1; }
+}
+
+@media (max-width: 430px) {
+  .v26App .v21DashboardWelcome h2 { max-width: none; font-size: 25px; }
+  .v26App .v21DashboardWelcome p { max-width: 28ch; font-size: 12px; }
+  .v26App .v21DashboardStatusGrid { gap: 6px; }
+  .v26App .v21DashboardStatusGrid span { padding: 10px 8px; }
+  .v26App .v21DashboardStatusGrid b { font-size: 10px; }
+  .v26App .v21DashboardActions { grid-template-columns: 1fr; }
+  .v26App .v21CertificateLayout .v21Score { min-height: 190px; }
+  .v26App .v26Footer { grid-template-columns: 1fr; }
+  .v26App .v26Footer em { grid-column: auto; }
+}
+
+/* Active certificate, position and system rail selectors. */
+.v26App .v21CertificateGates > div { display: grid; gap: 8px; margin-top: 12px; }
+.v26App .v21CertificateGates > div > section { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 11px 12px; border: 1px solid rgba(71,85,105,.56); border-radius: 8px; background: #0c141c; }
+.v26App .v21CertificateGates > div > section > i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(245,158,11,.12); color: #fcd34d; font-style: normal; font-weight: 800; }
+.v26App .v21CertificateGates > div > section.passed > i { background: rgba(34,197,94,.12); color: #86efac; }
+.v26App .v21CertificateGates > div > section > span { display: grid; gap: 3px; min-width: 0; }
+.v26App .v21CertificateGates > div > section b, .v26App .v21CertificateGates > div > section small { display: block; overflow-wrap: anywhere; line-height: 1.35; }
+.v26App .v21CertificateGates > div > section b { color: #f8fafc; font-size: 12px; }
+.v26App .v21CertificateGates > div > section small { color: #94a3b8; font-size: 10px; }
+.v26App .v21CertificateGates > div > section > strong { color: #e2e8f0; font-size: 12px; white-space: nowrap; }
+.v26App .v21Health > span { display: flex; justify-content: space-between; gap: 10px; min-width: 0; padding: 9px 0; border-bottom: 1px solid rgba(71,85,105,.45); }
+.v26App .v21Health > span small { color: #64748b; }
+.v26App .v21Health > span b { color: #e2e8f0; text-align: right; overflow-wrap: anywhere; }
+.v26App .v21Health > div { min-width: 0; }
+.v26App .demoTicket .demoFieldGrid label > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; min-width: 0; }
+.v26App .demoTicket .demoFieldGrid label > div em { padding-left: 8px; color: #94a3b8; font-size: 11px; font-style: normal; white-space: nowrap; }
+.v26App .demoTicket .demoFieldGrid input { min-width: 0; }
+
+@media (max-width: 700px) {
+  .v26App .v21DashboardWelcome { display: grid; grid-template-columns: minmax(0,1fr); }
+  .v26App .v21DashboardWelcome > div { width: 100%; }
+  .v26App .v21DashboardWelcome h2 { max-width: none !important; width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .v26App .v21CertificateGates > div > section { grid-template-columns: 24px minmax(0,1fr); align-items: start; }
+  .v26App .v21CertificateGates > div > section > strong { grid-column: 2; justify-self: start; }
+  .v26App .v21CertificateGates > div > section b { font-size: 11px; }
+  .v26App .v21CertificateGates > div > section small { font-size: 10px; }
+  .v26App .v21Health > span { align-items: flex-start; }
+  .v26App .demoTicket .demoFieldGrid label > div { grid-template-columns: minmax(0,1fr) auto; }
+}
+
 @media (max-width: 640px) {
   html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
   body { font-size: 14px; }
