@@ -8,6 +8,7 @@ its owner.  A later multi-tenant release can replace it with per-user scopes.
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -27,10 +28,19 @@ def env_flag(name: str, *, default: bool = False) -> bool:
     return value in {"1", "true", "yes", "on", "enabled"}
 
 
-def cors_origins(value: str | None) -> list[str]:
+def cors_origins(value: str | None, *, fallback: list[str] | None = None) -> list[str]:
+    raw_value = str(value or "").strip()
+    if raw_value.startswith("[") and raw_value.endswith("]"):
+        try:
+            parsed_value = json.loads(raw_value)
+            raw_items = parsed_value if isinstance(parsed_value, list) else [raw_value]
+        except json.JSONDecodeError:
+            raw_items = [raw_value]
+    else:
+        raw_items = raw_value.split(",")
     configured = []
-    for item in str(value or "").split(","):
-        origin = item.strip().rstrip("/")
+    for item in raw_items:
+        origin = str(item).strip().strip('"\'').rstrip("/")
         if not origin or origin == "*":
             continue
         try:
@@ -50,7 +60,7 @@ def cors_origins(value: str | None) -> list[str]:
             continue
         configured.append(origin)
     configured = list(dict.fromkeys(configured))
-    return configured or ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return configured or (fallback if fallback is not None else ["http://localhost:5173", "http://127.0.0.1:5173"])
 
 
 def bearer_token(value: str | None) -> str:
