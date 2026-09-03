@@ -692,6 +692,35 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v21DashboardActivity article span { margin-top: 3px; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
 .v21DashboardActivity article time { color: var(--text-muted); font-size: 10px; white-space: nowrap; }
 .v21DashboardActivity > button { margin-top: 12px; }
+.v21DashboardHome { position: relative; }
+.v21DashboardWelcome { min-height: 148px; border-color: rgba(34,211,238,.24); box-shadow: 0 18px 40px rgba(0,0,0,.16); }
+.v21DashboardWelcome::after { position: absolute; top: 18px; right: 28px; width: 120px; height: 120px; border: 1px solid rgba(34,211,238,.16); border-radius: 50%; box-shadow: 0 0 0 18px rgba(34,211,238,.03), 0 0 0 36px rgba(34,211,238,.02); content: ''; pointer-events: none; }
+.v21DashboardWelcome > div { position: relative; z-index: 1; }
+.v21DashboardWelcome > div > span, .v21DashboardSubscription > div > span { color: var(--accent); }
+.v21DashboardWelcome > strong { position: relative; z-index: 1; border: 1px solid rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+.v21DashboardWelcome > strong.active { border-color: rgba(22,163,74,.42); }
+.v21DashboardSubscription { position: relative; overflow: hidden; min-height: 134px; border-color: rgba(212,168,79,.58); box-shadow: 0 18px 42px rgba(0,0,0,.18); }
+.v21DashboardSubscription::after { position: absolute; top: -40px; right: 28px; width: 150px; height: 150px; border: 1px solid rgba(212,168,79,.2); border-radius: 50%; box-shadow: 0 0 0 16px rgba(212,168,79,.04); content: ''; }
+.v21DashboardSubscription > div, .v21DashboardSubscription > button { position: relative; z-index: 1; }
+.v21DashboardSubscription h3 { font-size: 23px; }
+.v21DashboardSubscription p { max-width: 560px; }
+.v21DashboardSubscription button { border-color: rgba(212,168,79,.62); background: rgba(212,168,79,.15); color: #f5d98e; }
+.v21DashboardStatus, .v21DashboardPerformance, .v21DashboardActivity { box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+.v21DashboardStatusGrid span { transition: border-color .16s ease, transform .16s ease; }
+.v21DashboardStatusGrid span:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.v21DashboardStatusGrid span:nth-child(2) b::before, .v21DashboardStatusGrid span:nth-child(3) b::before, .v21DashboardStatusGrid span:nth-child(4) b::before { background: var(--info); }
+.v21DashboardPerformance { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px 20px; }
+.v21DashboardPerformance > header { grid-column: 1 / -1; }
+.v21DashboardPerformanceBody, .v21DashboardPerformance > .v21DashboardEmpty { grid-column: 1 / -1; }
+.v21DashboardPerformanceBody strong { color: var(--text-primary); }
+.v21DashboardPerformanceBody strong.positive { color: #86efac; }
+.v21DashboardPerformanceBody strong.negative { color: #fca5a5; }
+.v21DashboardActivity { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 0 18px; }
+.v21DashboardActivity > header, .v21DashboardActivity > div { grid-column: 1 / -1; }
+.v21DashboardActivity > button { justify-self: start; }
+.v21DashboardActions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.v21DashboardActions button { min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text-primary); font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+.v21DashboardActions button:hover { border-color: var(--accent); background: var(--surface-3); }
 .v21InsightPanel { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
 .v21InsightPanel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 11px; border-bottom: 1px solid rgba(37,48,59,.8); }
 .v21InsightPanel > header > div { min-width: 0; }
