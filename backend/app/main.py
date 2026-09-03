@@ -2,7 +2,6 @@ import asyncio
 import json
 import math
 import os
-import re
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -66,19 +65,7 @@ DATABASE_URL = os.getenv(
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0").strip()
 WEB_REQUIRE_AUTH = env_flag("PROTREBOT_WEB_REQUIRE_AUTH", default=False)
 WEB_ACCESS_TOKEN = os.getenv("PROTREBOT_WEB_ACCESS_TOKEN", "").strip()
-WEB_CORS_ORIGINS = list(dict.fromkeys([
-    *cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS")),
-    "https://pro-tre-bot-r4pjrxk8t-gezginci9.vercel.app",
-    "https://pro-tre-bot-web.vercel.app",
-    "https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app",
-    "https://protrebot-web.vercel.app",
-    "https://protrebot-app.vercel.app",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-]))
-WEB_CORS_ORIGIN_REGEX = r"^https://pro-tre-bot-[a-zA-Z0-9-]+\.vercel\.app$"
+WEB_CORS_ORIGINS = cors_origins(os.getenv("PROTREBOT_CORS_ORIGINS"))
 PAPER_ENABLED = env_flag("PROTREBOT_PAPER_ENABLED", default=True)
 RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
@@ -714,7 +701,6 @@ app = FastAPI(title="ProTreBot Elite X API", version="28.0.0", lifespan=lifespan
 app.add_middleware(
     CORSMiddleware,
     allow_origins=WEB_CORS_ORIGINS,
-    allow_origin_regex=WEB_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -723,10 +709,10 @@ app.add_middleware(
 
 def apply_cors_headers(request, response):
     origin = request.headers.get("origin")
-    if origin and (origin in WEB_CORS_ORIGINS or re.fullmatch(WEB_CORS_ORIGIN_REGEX, origin)):
+    if origin in WEB_CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers.setdefault("Vary", "Origin")
+        response.headers["Vary"] = "Origin"
     return response
 
 
@@ -752,9 +738,12 @@ async def owner_preview_gate(request, call_next):
     )
     paper_prefixes = ("/api/paper", "/api/v6", "/api/v7", "/api/v10", "/api/v11", "/api/v9/paper")
     if not PAPER_ENABLED and request.method.upper() in {"POST", "PUT", "DELETE", "PATCH"} and request.url.path.startswith(paper_prefixes):
-        return JSONResponse(
-            {"detail": "Paper motoru V28 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
-            status_code=410,
+        return apply_cors_headers(
+            request,
+            JSONResponse(
+                {"detail": "Paper motoru V28 Testnet-First sürümünde devre dışıdır; Binance Futures Demo kanalını kullanın."},
+                status_code=410,
+            ),
         )
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")

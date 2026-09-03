@@ -21,7 +21,7 @@ services:
       - key: PROTREBOT_WEB_ACCESS_TOKEN
         sync: false
       - key: PROTREBOT_CORS_ORIGINS
-        value: https://pro-tre-bot-r4pjrxk8t-gezginci9.vercel.app,https://pro-tre-bot-web.vercel.app,https://pro-tre-bot-hc8usc7vw-gezginci9.vercel.app
+        value: https://frontend-nu-two-18.vercel.app
       - key: PROTREBOT_DATA_DIR
         value: /tmp/protrebot-data
       - key: PROTREBOT_EXECUTION_MODE

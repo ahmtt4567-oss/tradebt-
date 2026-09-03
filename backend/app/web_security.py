@@ -10,6 +10,7 @@ from __future__ import annotations
 import hmac
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 
 MIN_ACCESS_TOKEN_LENGTH = 24
@@ -27,7 +28,28 @@ def env_flag(name: str, *, default: bool = False) -> bool:
 
 
 def cors_origins(value: str | None) -> list[str]:
-    configured = [item.strip().rstrip("/") for item in str(value or "").split(",") if item.strip()]
+    configured = []
+    for item in str(value or "").split(","):
+        origin = item.strip().rstrip("/")
+        if not origin or origin == "*":
+            continue
+        try:
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                continue
+            parsed.port
+        except ValueError:
+            continue
+        configured.append(origin)
+    configured = list(dict.fromkeys(configured))
     return configured or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 
