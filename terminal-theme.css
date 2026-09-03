@@ -432,9 +432,91 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v27Panel { background: #101820; }
 .v27Decision, .v27Certificate { border-top: 2px solid rgba(34,211,238,.36); }
 
+/* V2 terminal polish: restrained hierarchy for the active production shell. */
+.v26App { color: var(--text); font-variant-numeric: tabular-nums; }
+.v26Header, .v26Nav, .v26ModeBar, .v26MarketBar, .v21Tabs, .v21Pulse, .v21DashboardHome > *, .v21Workspace, .v21Card, .executionCard, .v27Panel { box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+.v26Header { min-height: 74px; padding: 14px 20px; border-color: rgba(100,116,139,.42); background: linear-gradient(108deg, #111b24, #0d141c 70%, #151c23); }
+.v26Brand > span { width: 44px; height: 44px; border-color: rgba(245,158,11,.46); background: linear-gradient(145deg, rgba(245,158,11,.18), rgba(34,211,238,.08)); box-shadow: 0 0 22px rgba(245,158,11,.08); }
+.v26Brand b { color: #f8fafc; font-size: 20px; letter-spacing: .03em; }
+.v26Brand small { color: #7dd3fc; font-size: 10px; letter-spacing: .11em; }
+.v26HeaderSignals > span { min-height: 30px; padding: 7px 10px; }
+.v26Refresh { min-height: 40px; border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.1); color: #fde68a; }
+.v26Refresh:hover { border-color: var(--accent-strong); background: rgba(245,158,11,.18); }
+.v26Nav { margin-top: 14px; border-color: rgba(71,85,105,.7); background: #0c131a; }
+.v26Nav button { min-height: 62px; }
+.v26Nav button.active { box-shadow: inset 3px 0 var(--accent-strong), 0 0 20px rgba(245,158,11,.05); }
+.v26ModeBar { min-height: 98px; margin-top: 14px; padding: 20px; border-color: rgba(71,85,105,.7); background: linear-gradient(115deg, #13212b, #0f171f 62%, #151b21); }
+.v26ModeBar h1 { font-size: 25px; }
+.v26ModeBar p { max-width: 780px; font-size: 13px; }
+.v26ModeBar aside { min-width: 205px; border-color: rgba(245,158,11,.38); background: rgba(245,158,11,.08); }
+.v26MarketBar { margin-top: 14px; padding: 12px; border-color: rgba(34,211,238,.24); background: linear-gradient(105deg, #0e1821, #0b1219); }
+.v26MarketTitle { min-width: 0; }
+.v26MarketTitle > svg { width: 23px; height: 23px; color: var(--info); }
+.v26MarketTitle small { color: #67e8f9; font-size: 10px; letter-spacing: .08em; }
+.v26MarketTitle b { color: #f8fafc; font-size: 21px; }
+.v26MarketTitle strong { border: 1px solid rgba(34,211,238,.3); color: #67e8f9; }
+.v26MarketPicker button { min-height: 60px; background: #111c25; }
+.v26MarketPicker button b { color: #e2e8f0; font-size: 12px; }
+.v26MarketPicker button span { color: #f8fafc; font-size: 12px; font-weight: 700; }
+.v26MarketPicker button em { font-size: 10px; }
+.v26Intervals { background: #080e14; }
+
+.v21Tabs { margin-top: 14px; border-color: rgba(71,85,105,.7); background: #0b131b; }
+.v21Tabs button { min-height: 58px; }
+.v21Tabs button > svg { color: #7dd3fc; }
+.v21Tabs button.active { border-color: rgba(245,158,11,.72); background: linear-gradient(105deg, rgba(245,158,11,.13), rgba(245,158,11,.04)); }
+.v21Tabs b { color: #dbeafe; font-size: 11px; letter-spacing: .03em; }
+.v21Tabs small { color: #64748b; font-size: 10px; }
+.v21Pulse { margin-top: 14px; border-color: rgba(71,85,105,.68); background: #091118; }
+.v21Pulse > span { min-height: 66px; background: #101a23; }
+.v21Pulse > span b { color: #e2e8f0; }
+.v21Pulse > strong { color: #fcd34d; letter-spacing: .05em; }
+.v21Workflow { margin-top: 14px; border-color: rgba(71,85,105,.68); background: #0b131b; }
+.v21WorkflowTitle { border-bottom-color: rgba(71,85,105,.55); }
+.v21WorkflowStep { min-height: 58px; border-color: rgba(71,85,105,.62); background: #111b24; }
+.v21WorkflowStep.current { box-shadow: 0 0 18px rgba(245,158,11,.08); }
+
+.v21DashboardHome { gap: 14px; }
+.v21DashboardWelcome { min-height: 142px; border-color: rgba(34,211,238,.34); background: radial-gradient(circle at 92% 12%, rgba(34,211,238,.14), transparent 28%), linear-gradient(112deg, #142630, #101820 72%); }
+.v21DashboardWelcome h2 { font-size: 32px; }
+.v21DashboardWelcome p { max-width: 620px; font-size: 14px; }
+.v21DashboardSubscription { border-color: rgba(245,184,46,.68); background: radial-gradient(circle at 88% 22%, rgba(245,184,46,.13), transparent 25%), linear-gradient(112deg, rgba(245,184,46,.14), #111a22 68%); }
+.v21DashboardSubscription h3 { color: #fff7d6; font-size: 24px; }
+.v21DashboardSubscription button { min-height: 46px; border-color: rgba(245,184,46,.7); background: rgba(245,184,46,.15); color: #fde68a; }
+.v21DashboardStatus, .v21DashboardPerformance, .v21DashboardActivity { border-color: rgba(71,85,105,.65); background: #0e171f; }
+.v21DashboardStatusGrid span { min-height: 82px; background: #111c25; }
+.v21DashboardStatusGrid small { color: #64748b; font-size: 10px; letter-spacing: .08em; }
+.v21DashboardStatusGrid b { color: #e2e8f0; font-size: 13px; }
+.v21DashboardPerformanceBody strong { color: #86efac; font-size: 28px; }
+.v21DashboardActivity article { padding: 12px 0; }
+.v21DashboardActivity article b { color: #f8fafc; }
+.v21DashboardActivity article i { box-shadow: 0 0 0 4px rgba(34,211,238,.08); }
+.v21DashboardActions button { min-height: 46px; }
+
+.executionHero, .v27OpsHero { border-color: rgba(34,211,238,.28); background: radial-gradient(circle at 92% 0, rgba(34,211,238,.1), transparent 24%), linear-gradient(108deg, #12222c, #0f171f 70%); }
+.executionHero h2, .v27OpsTitle h2 { color: #f8fafc; font-size: 25px; }
+.executionActionArea { border-color: rgba(71,85,105,.66); background: #0b131b; }
+.executionActionArea .actionStep { border-color: rgba(71,85,105,.6); background: #111b24; }
+.executionActionArea .actionStepPrimary { border-color: rgba(245,158,11,.5); }
+.executionFields input, .executionFields select { min-height: 44px; }
+.executionCard, .v21Card, .v21Workspace, .v27Panel { border-color: rgba(71,85,105,.64); background: #101820; }
+.v27Pulse, .v27Metrics { border-color: rgba(71,85,105,.64); background: #0b131b; }
+.v27Pulse article, .v27Metrics article { min-width: 0; background: #111b24; }
+.v27Pulse article svg { color: var(--info); }
+.v27Panel > header, .executionHead { border-bottom-color: rgba(71,85,105,.56); }
+.v27SleepNotice { border-color: rgba(245,158,11,.34); background: rgba(245,158,11,.06); }
+
+.v26Footer { min-height: 52px; border-color: rgba(71,85,105,.55); background: #0b131b; }
+.v26Footer span { color: #94a3b8; }
+.v26Footer span:first-child b, .v26Footer span:nth-child(2) b, .v26Footer span:nth-child(3) b { color: #67e8f9; }
+.v26Footer span:nth-child(4) b { color: #fcd34d; }
+.v26Footer span:nth-child(5) b { color: #94a3b8; }
+.v26Footer em { color: #475569; }
+
 @media (max-width: 700px) {
   .v26App { padding: 12px 12px calc(86px + env(safe-area-inset-bottom)); }
   .v26Header { border-radius: 10px; }
+  .v26Nav button { min-height: 52px; }
   .v26ModeBar { border-radius: 10px; }
   .v26MarketBar { border-radius: 10px; }
   .v26MarketTitle { padding: 2px 2px 4px; }
@@ -486,6 +568,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
   .subscriptionPageHeader h1 { font-size: 30px; line-height: 1.1; }
   .subscriptionPlans { grid-template-columns: 1fr; }
   .subscriptionPlan { padding: 18px; }
+  .v21DashboardWelcome { min-height: 0; padding: 18px; }
+  .v21DashboardWelcome::after { top: 12px; right: -42px; width: 116px; height: 116px; opacity: .45; }
+  .v21DashboardWelcome h2 { max-width: 14ch; font-size: 28px; }
+  .v21DashboardWelcome p { max-width: 30ch; }
+  .v21DashboardWelcome > strong { max-width: 100%; font-size: 9px; }
+  .v21DashboardSubscription { min-height: 0; }
+  .v21DashboardSubscription::after { right: -48px; opacity: .45; }
+  .v21DashboardStatusGrid span { min-height: 72px; }
+  .v21DashboardStatusGrid b { font-size: 12px; }
 }
 
 @media (max-width: 430px) {
