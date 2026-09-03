@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart3, Bell, Calculator, CheckCircle2, CircleDollarSign, ClipboardList, Crosshair, Gauge, History, LockKeyhole, Play, Radar, Radio, RefreshCw, Save, Send, Settings2, ShieldCheck, Sparkles, Target, TestTube2, TriangleAlert, UnlockKeyhole, Wallet, Zap } from 'lucide-react'
+import { Activity, BarChart3, Bell, Calculator, CheckCircle2, CircleDollarSign, ClipboardList, Crosshair, Gauge, History, LayoutDashboard, LockKeyhole, Play, Radar, Radio, RefreshCw, Save, Send, Settings2, ShieldCheck, Sparkles, Target, TestTube2, TriangleAlert, UnlockKeyhole, Wallet, Zap } from 'lucide-react'
 import { API_BASE } from './api'
 
 const API = `${API_BASE}/binance-demo`
@@ -178,7 +178,7 @@ type V21Summary = {
 
 type V21RiskPreview = {symbol:string;leverage:number;risk_pct:number;notional_usdt:number;margin_usdt:number;estimated_stop_loss_usdt:number;capped:boolean;quantity_preview:string;step_size:string}
 type V21Performance = {period:string;total_trades:number;wins:number;losses:number;win_rate:number;total_profit:number;total_loss:number;net_profit:number;average_trade:number;best_trade:number;worst_trade:number;profit_factor:number|null;average_win:number|null;average_loss:number|null;winning_streak:number;losing_streak:number;equity_curve:{index:number;pnl:number;equity:number}[];directional:Record<'LONG'|'SHORT',{trades:number;win_rate:number|null;realized_pnl:number|null;profit_factor:number|null}>;history_quality:string;max_drawdown:number;demo_only:boolean;read_only:boolean}
-type V21Tab = 'trade'|'risk'|'journal'|'auto'|'backtest'|'performance'|'certificate'
+type V21Tab = 'dashboard'|'trade'|'risk'|'journal'|'auto'|'backtest'|'performance'|'certificate'
 
 const initialForm:FormState = {
   direction:'LONG',orderType:'MARKET',margin:'50',leverage:'2',limitPrice:'',stop:'',tp1:'',tp2:'',tp3:'',
@@ -280,7 +280,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const [message,setMessage] = useState('Önce bağlantıyı test edin; ardından analiz planını doğrulayın.')
   const [messageKind,setMessageKind] = useState<'info'|'ok'|'error'>('info')
   const [clock,setClock] = useState(Date.now())
-  const [tab,setTab] = useState<V21Tab>('trade')
+  const [tab,setTab] = useState<V21Tab>('dashboard')
   const [v21,setV21] = useState<V21Summary|null>(null)
   const [settingsDraft,setSettingsDraft] = useState<V21Settings|null>(null)
   const [v21Busy,setV21Busy] = useState(false)
@@ -398,7 +398,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   useEffect(() => { if (active && tab === 'performance') void refreshPerformance() },[active,tab,performancePeriod])
 
   useEffect(() => {
-    const target = tab === 'trade' ? demoDeckRef.current : workspaceRef.current
+    const target = tab === 'dashboard' || tab === 'trade' ? demoDeckRef.current : workspaceRef.current
     if (!target) return
     window.requestAnimationFrame(() => target.scrollIntoView({block:'start',behavior:'smooth'}))
   },[tab])
@@ -785,16 +785,17 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
   const systemEvents = [...(status?.events || []).map(event => ({kind:'INFO',title:event.kind,detail:event.message,time:event.created_at})),...(v21?.journal || []).slice(0,5).map(item => ({kind:'INFO',title:item.kind,detail:item.message,time:item.created_at}))]
 
   return <section ref={demoDeckRef} className="binanceDemoDeck" aria-label="Binance Futures Demo Köprüsü" data-build-marker="BUILD_COMMIT" data-build-commit={import.meta.env.VITE_BUILD_COMMIT} data-position-source="reconciled_active_positions" data-diagnostics="exchange_position_diagnostics">
-    <section className="demoHero">
+    {tab === 'trade' && <section className="demoHero">
       <div className="demoHeroCopy"><span>V21 · DEMO COMPLETE · TEK PAKET</span><h2>Binance Futures Demo Komuta Merkezi</h2><p>İşlem masası, risk kasası, canlı günlük, kontrollü otomasyon, kanıtlı backtest ve Demo sertifikası ayrı sekmelerde.</p><div><b><ShieldCheck/> DEMO ONLY</b><span>{status?.rest_host || 'https://demo-fapi.binance.com'}</span></div></div>
       <div className="demoHeroStatus">
         <span className={status?.configured ? 'demoOk' : 'demoWait'}><LockKeyhole/><small>ANAHTAR</small><b>{status?.configured ? 'YERELDE HAZIR' : 'AYAR BEKLİYOR'}</b></span>
         <span className={status?.connected ? 'demoOk' : 'demoWait'}><Radio/><small>DEMO API</small><b>{status?.connected ? 'BAĞLI' : 'BAĞLI DEĞİL'}</b></span>
         <span className={status?.armed ? 'demoArmed' : 'demoSafe'}>{status?.armed ? <UnlockKeyhole/> : <LockKeyhole/>}<small>EMİR KİLİDİ</small><b>{status?.armed ? `${Math.floor(armSeconds/60)}:${String(armSeconds%60).padStart(2,'0')}` : 'KAPALI'}</b></span>
       </div>
-    </section>
+    </section>}
 
     <nav className="v21Tabs" aria-label="V21 çalışma alanları">
+      <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><LayoutDashboard/><span><b>DASHBOARD</b><small>Özet · Durum · Aktivite</small></span></button>
       <button className={tab === 'trade' ? 'active' : ''} onClick={() => setTab('trade')}><Crosshair/><span><b>İŞLEM MASASI</b><small>Emir · Grafik · Pozisyon</small></span></button>
       <button className={tab === 'risk' ? 'active' : ''} onClick={() => setTab('risk')}><Gauge/><span><b>RİSK KASASI</b><small>Limit · Boyut · Stop</small></span></button>
       <button className={tab === 'journal' ? 'active' : ''} onClick={() => setTab('journal')}><ClipboardList/><span><b>CANLI GÜNLÜK</b><small>Dolum · Kapanış · Neden</small></span></button>
@@ -803,6 +804,15 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       <button className={tab === 'performance' ? 'active' : ''} onClick={() => setTab('performance')}><BarChart3/><span><b>PERFORMANS</b><small>PnL · Win rate · Drawdown</small></span></button><button className={tab === 'certificate' ? 'active' : ''} onClick={() => setTab('certificate')}><ShieldCheck/><span><b>SERTİFİKA</b><small>Sağlık · Tatbikat · Kanıt</small></span></button>
     </nav>
 
+    {tab === 'dashboard' && <section className="v21DashboardHome" aria-label="ProTreBot dashboard">
+      <header className="v21DashboardWelcome"><div><span>PROTREBOT ELITE X</span><h2>ProTreBot'a hoş geldin</h2><p>Botunu tek merkezden yönet, performansını izle ve sistem durumunu kontrol et.</p></div><strong className={v21?.stream.status === 'CANLI' ? 'active' : 'waiting'}><i/>{v21?.stream.status === 'CANLI' ? 'TESTNET AKTİF' : v21 ? 'TESTNET BEKLİYOR' : 'SİSTEM DURUMU YÜKLENİYOR'}</strong></header>
+      <section className="v21DashboardSubscription"><div><span>ABONELİĞİN</span><h3>Billing &amp; Subscription</h3><p>Plan ve yenileme bilgileri mevcut Billing ekranından yönetilir.</p></div><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('protrebot-navigate',{detail:'billing'}))}>ABONELİĞİ YÖNET <span>→</span></button></section>
+      <section className="v21DashboardStatus"><header><div><span>SİSTEM DURUMU</span><h3>Bot ve bağlantılar</h3></div><button type="button" onClick={() => void refreshV21()} aria-label="Sistem durumunu yenile"><RefreshCw/></button></header><div className="v21DashboardStatusGrid"><span><small>TRADING ENGINE</small><b>{v21?.auto.enabled ? 'AKTİF' : v21 ? 'KAPALI' : 'BEKLENİYOR'}</b></span><span><small>MARKET DATA</small><b>{v21?.stream.status === 'CANLI' ? 'BAĞLI' : v21 ? 'BEKLENİYOR' : '—'}</b></span><span><small>BINANCE TESTNET</small><b>{status?.connected ? 'BAĞLI' : status ? 'BEKLENİYOR' : '—'}</b></span><span><small>EVIDENCE LEDGER</small><b>{v21?.certificate ? 'AKTİF' : 'BEKLENİYOR'}</b></span></div><small className="v21DashboardSync">Son senkronizasyon: {stamp(v21?.stream.last_sync || v21?.last_saved)}</small></section>
+      <section className="v21DashboardPerformance"><header><div><span>PERFORMANS</span><h3>Özet görünüm</h3></div><BarChart3/></header>{performance ? <div className="v21DashboardPerformanceBody"><strong className={performance.net_profit >= 0 ? 'positive' : 'negative'}>{performance.net_profit >= 0 ? '+' : ''}{fmt(performance.net_profit)} USDT</strong><span>{performance.total_trades} işlem · %{performance.win_rate} win rate</span><button type="button" onClick={() => setTab('performance')}>DETAYLI ANALİZ <span>→</span></button></div> : <div className="v21DashboardEmpty"><b>Henüz yeterli işlem verisi yok</b><span>Detaylı performans, tamamlanan Demo işlemleri oluştuktan sonra burada görünür.</span><button type="button" onClick={() => setTab('performance')}>PERFORMANSI İNCELE <span>→</span></button></div>}</section>
+      <section className="v21DashboardActivity"><header><div><span>SON AKTİVİTELER</span><h3>Son önemli olaylar</h3></div><History/></header>{(v21?.journal?.length || status?.events?.length) ? <div>{[...(v21?.journal || []).map(item => ({title:item.kind,detail:item.message,time:item.created_at})),...(status?.events || []).map(item => ({title:item.kind,detail:item.message,time:item.created_at}))].slice(0,3).map((item,index) => <article key={`${item.time}-${index}`}><i/><div><b>{item.title}</b><span>{item.detail}</span></div><time>{stamp(item.time)}</time></article>)}</div> : <div className="v21DashboardEmpty"><b>Henüz aktivite bulunmuyor.</b><span>Yeni sistem ve Demo olayları burada görünecek.</span></div>}<button type="button" onClick={() => setTab('journal')}>TÜM AKTİVİTELER <span>→</span></button></section>
+    </section>}
+
+    {tab === 'trade' && <>
     <section className="v21Pulse">
       <span><i className={v21?.stream.status === 'CANLI' ? 'on' : ''}/><small>AKIŞ</small><b>{v21?.stream.status || 'BEKLENİYOR'}</b></span>
       <span><small>OTOMASYON</small><b>{v21?.auto.enabled ? 'ÇALIŞIYOR' : 'KAPALI'}</b></span>
@@ -832,6 +842,7 @@ export default function BinanceDemo({active,symbol,analysis,chart}:{active:boole
       </div>
       {v21?.auto.rejection_reason && <div className="v21SummaryBlock"><TriangleAlert/><span><b>İŞLEM AÇILMADI</b><strong>{gateLabel(v21.auto.rejection_gate)}</strong><small>{v21.auto.rejection_reason}</small></span></div>}
     </section>
+    </>}
 
     {tab === 'trade' && <section className="v21DashboardInsights" aria-label="Demo dashboard insights">
       <div className="v21InsightPanel v21AccountOverview"><header><div><span>ACCOUNT OVERVIEW</span><h2>Hesap Özeti</h2></div><Wallet/></header><div className="v21InsightMetrics">
