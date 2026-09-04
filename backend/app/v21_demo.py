@@ -28,6 +28,7 @@ from .binance_demo import (
     DEMO_REST_BASE,
     DEMO_WS_BASE,
     MAX_LEVERAGE,
+    MANUAL_MAX_LEVERAGE,
     MAX_MARGIN_USDT,
     MAX_NOTIONAL_USDT,
     MAX_OPEN_POSITIONS,
@@ -121,7 +122,7 @@ class RiskSizeRequest(BaseModel):
     entry: float = Field(gt=0)
     stop: float = Field(gt=0)
     max_loss_usdt: float = Field(ge=0.5, le=25)
-    leverage: int = Field(ge=1, le=2)
+    leverage: int = Field(ge=1, le=MANUAL_MAX_LEVERAGE)
 
 
 class AutoStartRequest(BaseModel):
@@ -508,6 +509,9 @@ def daily_metrics(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def risk_size_values(entry: float, stop: float, max_loss: float, leverage: int, max_margin: float) -> dict[str, float]:
+    manual_max_leverage = 10
+    if leverage < 1 or leverage > manual_max_leverage:
+        raise HTTPException(422, f"Demo kaldıraç 1x ile {manual_max_leverage}x arasında olmalı.")
     distance = abs(entry - stop)
     if distance <= 0:
         raise HTTPException(422, "Giriş ve Stop aynı olamaz.")

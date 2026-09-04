@@ -10,13 +10,34 @@ sys.path.insert(0, str(BACKEND))
 
 from app import v21_demo  # noqa: E402
 from app import binance_demo
-from app.binance_demo import BinanceDemoError, DemoOrderRequest, ensure_one_way_position_mode, recover_pending_entry_intents, validate_entry_risk
+from app.binance_demo import MANUAL_MAX_LEVERAGE, MAX_NOTIONAL_USDT, BinanceDemoError, DemoOrderRequest, ensure_one_way_position_mode, recover_pending_entry_intents, validate_entry_risk
 
 
 ROOT_FRONTEND = Path(__file__).parents[2] / "BinanceDemo.tsx"
 
 
 class V21ScannerDashboardTests(unittest.TestCase):
+    def test_manual_leverage_choices_are_bounded_and_default_ui_is_10x(self):
+        for leverage in (1, 2, 3, 5, 10):
+            body = DemoOrderRequest(symbol="BTCUSDT", direction="LONG", margin_usdt=5, leverage=leverage, stop_loss=99, tp1=101, tp2=102, tp3=103)
+            self.assertEqual(body.leverage, leverage)
+        with self.assertRaises(ValueError):
+            DemoOrderRequest(symbol="BTCUSDT", direction="LONG", margin_usdt=5, leverage=11, stop_loss=99, tp1=101, tp2=102, tp3=103)
+        self.assertEqual(MANUAL_MAX_LEVERAGE, 10)
+        source = ROOT_FRONTEND.read_text(encoding="utf-8")
+        self.assertIn("leverage:'10'", source)
+        self.assertIn("['AUTO','1','2','3','5','10']", source)
+
+    def test_manual_long_and_short_leverage_payloads_keep_notional_cap(self):
+        settings = dict(v21_demo.DEFAULT_SETTINGS)
+        snapshot = {"positions": [], "open_orders": [], "available_balance": 1_000}
+        for direction, stop, targets in (("LONG", 99, (101, 102, 103)), ("SHORT", 101, (99, 98, 97))):
+            body = DemoOrderRequest(symbol="BTCUSDT", direction=direction, margin_usdt=20, leverage=10, stop_loss=stop, tp1=targets[0], tp2=targets[1], tp3=targets[2])
+            validate_entry_risk(snapshot, body, {"notional_usdt": 200, "current_price": 100, "stop_loss": str(stop)}, settings, daily_realized_pnl=0)
+        self.assertEqual(float(MAX_NOTIONAL_USDT), 200.0)
+        with self.assertRaises(BinanceDemoError):
+            validate_entry_risk(snapshot, DemoOrderRequest(symbol="BTCUSDT", direction="LONG", margin_usdt=20, leverage=10, stop_loss=99, tp1=101, tp2=102, tp3=103), {"notional_usdt": 201, "current_price": 100, "stop_loss": "99"}, settings, daily_realized_pnl=0)
+
     def test_root_frontend_arm_uses_user_confirmation(self):
         source = ROOT_FRONTEND.read_text(encoding="utf-8")
         self.assertIn("confirmation:armText", source)

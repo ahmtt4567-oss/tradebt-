@@ -35,7 +35,8 @@ DEMO_REST_BASE = "https://demo-fapi.binance.com"
 DEMO_WS_BASE = "wss://demo-fstream.binance.com"
 MAX_MARGIN_USDT = Decimal("100")
 MAX_LEVERAGE = 2
-MAX_NOTIONAL_USDT = MAX_MARGIN_USDT * MAX_LEVERAGE
+MANUAL_MAX_LEVERAGE = 10
+MAX_NOTIONAL_USDT = Decimal("200")
 MAX_OPEN_POSITIONS = 3
 ARM_SECONDS = 10 * 60
 CLIENT_PREFIX = "PTB_"
@@ -106,7 +107,7 @@ class DemoOrderRequest(BaseModel):
     direction: Literal["LONG", "SHORT"]
     order_type: Literal["MARKET", "LIMIT"] = "MARKET"
     margin_usdt: float = Field(ge=5, le=100)
-    leverage: int = Field(ge=1, le=2)
+    leverage: int = Field(ge=1, le=MANUAL_MAX_LEVERAGE)
     limit_price: float | None = Field(default=None, gt=0)
     stop_loss: float = Field(gt=0)
     tp1: float = Field(gt=0)
@@ -370,7 +371,7 @@ def public_status(state: dict[str, Any]) -> dict[str, Any]:
         "real_trading_locked": True,
         "limits": {
             "max_margin_usdt": float(MAX_MARGIN_USDT),
-            "max_leverage": MAX_LEVERAGE,
+            "max_leverage": MANUAL_MAX_LEVERAGE,
             "max_notional_usdt": float(MAX_NOTIONAL_USDT),
             "max_open_positions": MAX_OPEN_POSITIONS,
             "arm_minutes": ARM_SECONDS // 60,
@@ -717,8 +718,11 @@ async def build_order_spec(client: BinanceDemoClient, order: DemoOrderRequest) -
     entry = Decimal(str(order.limit_price)) if order.order_type == "LIMIT" else current_price
     margin = Decimal(str(order.margin_usdt))
     notional = margin * Decimal(order.leverage)
-    if margin > MAX_MARGIN_USDT or order.leverage > MAX_LEVERAGE or notional > MAX_NOTIONAL_USDT:
-        raise BinanceDemoError("Demo güvenlik tavanı: en fazla 100 USDT marjin ve 2x kaldıraç.", http_status=422)
+    if margin > MAX_MARGIN_USDT or order.leverage > MANUAL_MAX_LEVERAGE or notional > MAX_NOTIONAL_USDT:
+        raise BinanceDemoError(
+            f"Demo güvenlik tavanı: en fazla 100 USDT marjin, {MANUAL_MAX_LEVERAGE}x kaldıraç ve {decimal_text(MAX_NOTIONAL_USDT)} USDT notional.",
+            http_status=422,
+        )
     quantity = floor_step(notional / entry, rules["step"])
     minimum_notional = max(rules["min_notional"], rules["min_qty"] * entry)
     if quantity < rules["min_qty"] or quantity * entry < rules["min_notional"]:
@@ -922,7 +926,7 @@ def validate_entry_risk(
         raise BinanceDemoError("LONG girişleri risk politikası tarafından kapatıldı.", http_status=409)
     if body.direction == "SHORT" and not settings.get("allow_short", True):
         raise BinanceDemoError("SHORT girişleri risk politikası tarafından kapatıldı.", http_status=409)
-    if body.leverage > MAX_LEVERAGE or body.margin_usdt > MAX_MARGIN_USDT:
+    if body.leverage > MANUAL_MAX_LEVERAGE or body.margin_usdt > MAX_MARGIN_USDT:
         raise BinanceDemoError("Demo kaldıraç veya marjin güvenlik sınırını aşıyor.", http_status=422)
     if float(spec["notional_usdt"]) > float(MAX_NOTIONAL_USDT):
         raise BinanceDemoError("Demo notional güvenlik sınırını aşıyor.", http_status=422)
