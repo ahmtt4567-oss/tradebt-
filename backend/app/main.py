@@ -361,6 +361,8 @@ def paper_snapshot_data(paper: dict) -> dict:
         "emergency_brake": paper.get("emergency_brake", {}),
         "notifications": paper.get("notifications", []),
         "decision_memory": paper.get("decision_memory", []),
+        "signal_history": paper.get("signal_history", []),
+        "alerts": paper.get("alerts", []),
         "grid_plans": paper.get("grid_plans", []),
         "grid_engine": paper.get("grid_engine", empty_grid_engine_state()),
         "strategy_orchestrator": paper.get("strategy_orchestrator", empty_strategy_orchestrator_state()),
@@ -417,6 +419,8 @@ async def restore_paper_snapshot(application: FastAPI) -> bool:
         paper["emergency_brake"] = payload.get("emergency_brake", paper["emergency_brake"]) if isinstance(payload.get("emergency_brake"), dict) else paper["emergency_brake"]
         paper["notifications"] = payload.get("notifications", paper["notifications"]) if isinstance(payload.get("notifications"), list) else paper["notifications"]
         paper["decision_memory"] = payload.get("decision_memory", paper["decision_memory"]) if isinstance(payload.get("decision_memory"), list) else paper["decision_memory"]
+        paper["signal_history"] = payload.get("signal_history", paper.get("signal_history", [])) if isinstance(payload.get("signal_history"), list) else paper.get("signal_history", [])
+        paper["alerts"] = payload.get("alerts", paper.get("alerts", [])) if isinstance(payload.get("alerts"), list) else paper.get("alerts", [])
         paper["grid_plans"] = payload.get("grid_plans", paper["grid_plans"]) if isinstance(payload.get("grid_plans"), list) else paper["grid_plans"]
         restored_engine = payload.get("grid_engine")
         if isinstance(restored_engine, dict):
@@ -604,6 +608,8 @@ async def lifespan(app: FastAPI):
         "emergency_brake": {"active": False, "reason": "Acil fren kapalı.", "source": None, "triggered_at": None},
         "notifications": [],
         "decision_memory": [],
+        "signal_history": [],
+        "alerts": [],
         "grid_plans": [],
         "grid_engine": empty_grid_engine_state(),
         "strategy_orchestrator": empty_strategy_orchestrator_state(),
@@ -3552,7 +3558,11 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
     async def inspect(market: dict) -> dict | None:
         try:
             async with semaphore:
-                result = analyze(await fetch_candles(market["symbol"], interval, 500))
+                candles = await fetch_candles(market["symbol"], interval, 500)
+                result, mtf = await asyncio.gather(
+                    asyncio.to_thread(analyze, candles),
+                    multi_timeframe_consensus(market["symbol"]),
+                )
             direction = result["direction"]
             aligned = (
                 result["ema"]["ema20"] > result["ema"]["ema50"] > result["ema"]["ema200"]
@@ -3561,9 +3571,21 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
                 if direction == "SHORT" else False
             )
             rsi_fit = 1.0 if (direction == "LONG" and 50 <= result["rsi"] <= 70) or (direction == "SHORT" and 30 <= result["rsi"] <= 50) else .45
-            smart_score = round(min(100.0, max(0.0, result["confidence"] * .40 + (20 if aligned else 8) + rsi_fit * 15 + min(15, result["volume_ratio"] * 8) + min(10, result["risk_reward"] / 3 * 10))), 1)
+            mtf_fit = min(100.0, float(mtf["alignment"]))
+            volatility_pct = abs(candles[-1]["high"] - candles[-1]["low"]) / max(candles[-1]["close"], 1e-9) * 100
+            volatility_fit = 1.0 if volatility_pct < 3 else .55
+            smart_score = round(min(100.0, max(0.0, result["confidence"] * .30 + mtf_fit * .20 + (18 if aligned else 7) + rsi_fit * 14 + min(12, result["volume_ratio"] * 6) + min(10, result["risk_reward"] / 3 * 10) * volatility_fit)), 1)
             risk_pct = abs(result["entry"] - result["stop_loss"]) / result["entry"] * 100
             potential_tp3_pct = abs(result["tp3"] - result["entry"]) / result["entry"] * 100
+            previous_volume = sum(candle["volume"] for candle in candles[-21:-1]) / max(1, len(candles[-21:-1]))
+            previous_close = candles[-2]["close"] if len(candles) > 1 else candles[-1]["close"]
+            anomaly = None
+            if result["volume_ratio"] >= 2:
+                anomaly = {"kind": "VOLUME_SPIKE", "label": "Volume spike", "strength": round(result["volume_ratio"] * 50)}
+            elif abs(candles[-1]["close"] - previous_close) / max(previous_close, 1e-9) >= .03:
+                anomaly = {"kind": "PRICE_SPIKE", "label": "Price spike", "strength": round(abs(candles[-1]["close"] - previous_close) / previous_close * 100)}
+            elif aligned and result["ema"]["ema20"] != result["ema"]["ema50"]:
+                anomaly = {"kind": "EMA_ALIGNMENT", "label": "EMA trend alignment", "strength": round(abs(result["ema"]["ema20"] - result["ema"]["ema50"]) / result["ema"]["ema50"] * 100, 2)}
             return {
                 **market, "rsi": round(float(result["rsi"]), 2),
                 "ema20": result["ema"]["ema20"], "ema50": result["ema"]["ema50"],
@@ -3575,6 +3597,10 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
                 "volume_ratio": round(float(result["volume_ratio"]), 2),
                 "risk_reward": result["risk_reward"], "smart_score": smart_score,
                 "risk_pct": round(risk_pct, 2), "potential_tp3_pct": round(potential_tp3_pct, 2),
+                "mtf_direction": mtf["direction"], "mtf_alignment": mtf["alignment"],
+                "mtf_timeframes": mtf["timeframes"], "anomaly": anomaly,
+                "volatility_pct": round(volatility_pct, 3),
+                "volume_change_pct": round((candles[-1]["volume"] - previous_volume) / max(previous_volume, 1e-9) * 100, 2),
             }
         except Exception:
             return None
@@ -3582,19 +3608,126 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
     inspected = await asyncio.gather(*(inspect(market) for market in market_list))
     results = [item for item in inspected if item is not None]
     results.sort(key=lambda item: item["volume"], reverse=True)
+    paper = app.state.paper
+    history_changed = False
+    async with paper["lock"]:
+        history = paper.setdefault("signal_history", [])
+        now = datetime.now(timezone.utc).isoformat()
+        for row in results:
+            fingerprint = f'{row["symbol"]}|{interval}|{row["direction"]}|{row["entry"]:.10g}'
+            existing = next((item for item in history[:200] if item.get("fingerprint") == fingerprint), None)
+            status = "OPEN"
+            if row["direction"] == "LONG":
+                if row["price"] <= row["stop_loss"]: status = "STOP"
+                elif row["price"] >= row["tp3"]: status = "TP3"
+                elif row["price"] >= row["tp2"]: status = "TP2"
+                elif row["price"] >= row["tp1"]: status = "TP1"
+            elif row["direction"] == "SHORT":
+                if row["price"] >= row["stop_loss"]: status = "STOP"
+                elif row["price"] <= row["tp3"]: status = "TP3"
+                elif row["price"] <= row["tp2"]: status = "TP2"
+                elif row["price"] <= row["tp1"]: status = "TP1"
+            if existing:
+                if existing.get("status") != status:
+                    existing.update({"status": status, "updated_at": now}); history_changed = True
+                continue
+            history.insert(0, {
+                "id": f'signal-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{len(history)}',
+                "fingerprint": fingerprint, "symbol": row["symbol"], "timestamp": now,
+                "signal": row["direction"], "score": row["smart_score"], "entry": row["entry"],
+                "stop": row["stop_loss"], "tp1": row["tp1"], "tp2": row["tp2"], "tp3": row["tp3"],
+                "timeframe": interval, "mtf": row["mtf_direction"], "risk_reward": row["risk_reward"],
+                "status": status, "updated_at": now,
+            }); history_changed = True
+        del history[500:]
+    if history_changed:
+        asyncio.create_task(persist_paper_snapshot(app))
+    alert_changed = False
+    async with paper["lock"]:
+        for alert in paper.get("alerts", []):
+            if not alert.get("active"):
+                continue
+            row = next((item for item in results if item["symbol"] == alert.get("symbol")), None)
+            if not row:
+                continue
+            bullish = sum(item["direction"] == "LONG" for item in row["mtf_timeframes"])
+            bearish = sum(item["direction"] == "SHORT" for item in row["mtf_timeframes"])
+            mtf_match = alert.get("mtf") == "ANY" or (alert.get("mtf") == "BULLISH_3" and bullish >= 3) or (alert.get("mtf") == "BULLISH_4" and bullish == 4) or (alert.get("mtf") == "BEARISH_3" and bearish >= 3) or (alert.get("mtf") == "BEARISH_4" and bearish == 4)
+            matches = (alert.get("signal") == "ANY" or alert.get("signal") == row["direction"]) and row["smart_score"] >= alert.get("score_min", 0) and row["rsi"] >= alert.get("rsi_min", 0) and (not alert.get("volume_spike") or row["volume_ratio"] >= 2) and (not alert.get("price_crosses_ema20") or row["price"] >= row["ema20"]) and mtf_match
+            if matches:
+                add_paper_notification(paper, "SCANNER ALARM", f'{row["symbol"]} alarm koşulları sağlandı · {row["direction"]} · skor {row["smart_score"]}')
+                alert["last_triggered_at"] = datetime.now(timezone.utc).isoformat()
+                alert_changed = True
+    if alert_changed:
+        asyncio.create_task(persist_paper_snapshot(app))
     ANALYSIS_UNIVERSE_CACHE[interval] = (time.monotonic(), results)
     return {"cached": False, "interval": interval, "results": results[:limit]}
 
 
+@app.get("/api/signal-history/{symbol}")
+async def signal_history(symbol: str, limit: int = Query(12, ge=1, le=50)):
+    await refresh_decision_memory()
+    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+    rows = [item for item in app.state.paper.get("signal_history", []) if item.get("symbol") == safe_symbol]
+    return {"symbol": safe_symbol, "history": rows[:limit], "available": bool(rows)}
+
+
+@app.get("/api/signal-performance/{symbol}")
+async def signal_performance(symbol: str):
+    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+    rows = [item for item in app.state.paper.get("signal_history", []) if item.get("symbol") == safe_symbol and item.get("status") != "OPEN"]
+    if len(rows) < 5:
+        return {"available": False, "message": "Not enough historical data", "total_signals": len(rows)}
+    total = len(rows)
+    return {
+        "available": True, "total_signals": total,
+        "tp1_hit_rate": round(sum(item.get("status") in {"TP1", "TP2", "TP3"} for item in rows) / total * 100, 1),
+        "tp2_hit_rate": round(sum(item.get("status") in {"TP2", "TP3"} for item in rows) / total * 100, 1),
+        "tp3_hit_rate": round(sum(item.get("status") == "TP3" for item in rows) / total * 100, 1),
+        "stop_rate": round(sum(item.get("status") == "STOP" for item in rows) / total * 100, 1),
+        "average_risk_reward": round(sum(float(item.get("risk_reward") or 0) for item in rows) / total, 2),
+    }
+
+
+@app.get("/api/scanner-alerts")
+async def scanner_alerts():
+    return {"alerts": app.state.paper.get("alerts", [])}
+
+
+@app.post("/api/scanner-alerts")
+async def scanner_alert_create(alert: ScannerAlert):
+    safe_symbol = "".join(char for char in alert.symbol.upper() if char.isalnum())
+    if not safe_symbol.endswith("USDT"):
+        raise HTTPException(422, "Alarm için geçerli bir USDT paritesi seçin")
+    item = {
+        **alert.model_dump(), "id": f"alert-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        "symbol": safe_symbol, "active": True, "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_triggered_at": None,
+    }
+    app.state.paper.setdefault("alerts", []).insert(0, item)
+    await persist_paper_snapshot(app)
+    return item
+
+
+@app.delete("/api/scanner-alerts/{alert_id}")
+async def scanner_alert_disable(alert_id: str):
+    item = next((row for row in app.state.paper.get("alerts", []) if row.get("id") == alert_id), None)
+    if not item:
+        raise HTTPException(404, "Alarm bulunamadı")
+    item["active"] = False
+    await persist_paper_snapshot(app)
+    return item
+
+
 @app.get("/api/consensus/{symbol}")
 async def multi_timeframe_consensus(symbol: str):
-    """15m, 1h ve 4h analizlerini birleştirir. Emir izni vermez; yalnızca doğrulama yapar."""
+    """15m, 1h, 4h ve 1d analizlerini birleştirir; emir izni vermez."""
     safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
     cached = CONSENSUS_CACHE.get(safe_symbol)
     if cached and time.monotonic() - cached[0] < 45:
         return {**cached[1], "cached": True}
 
-    intervals = [("15m", 0.25), ("1h", 0.35), ("4h", 0.40)]
+    intervals = [("15m", 0.20), ("1h", 0.30), ("4h", 0.30), ("1d", 0.20)]
 
     async def inspect(interval: str, weight: float):
         result = analyze(await fetch_candles(safe_symbol, interval, 260))
@@ -3620,12 +3753,13 @@ async def multi_timeframe_consensus(symbol: str):
         entry_direction in {"LONG", "SHORT"}
         and by_timeframe["1h"] == entry_direction
         and by_timeframe["4h"] == entry_direction
+        and by_timeframe["1d"] == entry_direction
     )
     # Keep the 15m signal as the entry direction only after 1h and 4h confirm it.
     direction = entry_direction if higher_timeframe_confirmation else "BEKLE"
-    if higher_timeframe_confirmation and matching == 3 and alignment >= 70:
+    if higher_timeframe_confirmation and matching == 4 and alignment >= 70:
         verdict, permission = "GÜÇLÜ ONAY", True
-        reason = "Üç zaman dilimi aynı yönü doğruluyor."
+        reason = "Dört zaman dilimi aynı yönü doğruluyor."
     elif higher_timeframe_confirmation and matching >= 2 and alignment >= 55:
         verdict, permission = "KISMİ ONAY", False
         reason = "Yön baskın ancak işlem öncesi mum kapanışı ve Tuzak Radarı kontrol edilmeli."
@@ -4534,6 +4668,16 @@ class PaperOrder(BaseModel):
     session_label: str | None = None
     session_mode: str | None = None
     session_confidence_bonus: int | None = Field(default=None, ge=0, le=20)
+
+
+class ScannerAlert(BaseModel):
+    symbol: str
+    signal: Literal["LONG", "SHORT", "ANY"] = "ANY"
+    score_min: float = Field(default=0, ge=0, le=100)
+    rsi_min: float = Field(default=0, ge=0, le=100)
+    volume_spike: bool = False
+    price_crosses_ema20: bool = False
+    mtf: Literal["ANY", "BULLISH_3", "BULLISH_4", "BEARISH_3", "BEARISH_4"] = "ANY"
 
 
 class PaperLimitOrder(BaseModel):
