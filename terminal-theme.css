@@ -606,9 +606,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); backgro
 .v26App .executionCard,
 .v26App .v27Panel { box-shadow: 0 8px 22px rgba(0,0,0,.14); }
 .v26App .v21DashboardHome { max-width: 1180px; margin-right: auto; margin-left: auto; }
+.v26App { max-width: 1480px; margin-right: auto; margin-left: auto; padding: 18px clamp(14px, 2.2vw, 30px) 84px; }
+.v26App .v21DashboardHome > * { border-radius: 8px; box-shadow: none; }
+.v26App .v21DashboardSubscription { max-width: none; }
+.v26App .v21DashboardStatus, .v26App .v21DashboardPerformance, .v26App .v21DashboardActivity { background: #0f1720; }
+.v26App .v21DashboardStatusGrid span { background: #131d27; }
+.v26App .v21DashboardStatusGrid b { overflow-wrap: normal; word-break: keep-all; }
+.v26App .v26Footer { border-radius: 8px; background: #0f1720; }
 .v26App .v21DashboardWelcome { position: relative; overflow: hidden; }
 .v26App .v21DashboardWelcome::before { position: absolute; right: 11%; bottom: -38px; width: 180px; height: 90px; border-top: 1px solid rgba(34,211,238,.2); border-radius: 50%; content: ''; transform: rotate(-12deg); pointer-events: none; }
-.v26App .v21DashboardSubscription { max-width: 920px; }
+.v26App .v21DashboardSubscription { max-width: none; }
 .v26App .v21DashboardStatusGrid b { white-space: nowrap; }
 .v26App .v21DashboardStatusGrid span:nth-child(2) b::before,
 .v26App .v21DashboardStatusGrid span:nth-child(3) b::before { background: var(--info); }

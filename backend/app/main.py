@@ -3559,10 +3559,22 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
         try:
             async with semaphore:
                 candles = await fetch_candles(market["symbol"], interval, 500)
-                result, mtf = await asyncio.gather(
-                    asyncio.to_thread(analyze, candles),
-                    multi_timeframe_consensus(market["symbol"]),
-                )
+                if interval == "15m":
+                    mtf_intervals = ("1h", "4h", "1d")
+                    higher_timeframes = await asyncio.gather(
+                        *(fetch_candles(market["symbol"], timeframe, 260) for timeframe in mtf_intervals)
+                    )
+                    mtf_candles = {"15m": candles[-260:]}
+                    mtf_candles.update(dict(zip(mtf_intervals, higher_timeframes)))
+                    result, mtf = await asyncio.gather(
+                        asyncio.to_thread(analyze, candles),
+                        consensus_from_candles(market["symbol"], mtf_candles),
+                    )
+                else:
+                    result, mtf = await asyncio.gather(
+                        asyncio.to_thread(analyze, candles),
+                        multi_timeframe_consensus(market["symbol"]),
+                    )
             direction = result["direction"]
             aligned = (
                 result["ema"]["ema20"] > result["ema"]["ema50"] > result["ema"]["ema200"]
@@ -3719,18 +3731,12 @@ async def scanner_alert_disable(alert_id: str):
     return item
 
 
-@app.get("/api/consensus/{symbol}")
-async def multi_timeframe_consensus(symbol: str):
-    """15m, 1h, 4h ve 1d analizlerini birleştirir; emir izni vermez."""
-    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
-    cached = CONSENSUS_CACHE.get(safe_symbol)
-    if cached and time.monotonic() - cached[0] < 45:
-        return {**cached[1], "cached": True}
-
+async def consensus_from_candles(safe_symbol: str, candles_by_interval: dict[str, list[dict]]) -> dict:
+    """Build the shared MTF decision from already fetched candle snapshots."""
     intervals = [("15m", 0.20), ("1h", 0.30), ("4h", 0.30), ("1d", 0.20)]
 
     async def inspect(interval: str, weight: float):
-        result = analyze(await fetch_candles(safe_symbol, interval, 260))
+        result = await asyncio.to_thread(analyze, candles_by_interval[interval])
         return {
             "timeframe": interval,
             "weight": weight,
@@ -3771,6 +3777,25 @@ async def multi_timeframe_consensus(symbol: str):
         "verdict": verdict, "entry_permission": permission, "reason": reason,
         "timeframes": timeframes,
     }
+    return payload
+
+
+@app.get("/api/consensus/{symbol}")
+async def multi_timeframe_consensus(symbol: str):
+    """15m, 1h, 4h ve 1d analizlerini birleştirir; emir izni vermez."""
+    safe_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+    cached = CONSENSUS_CACHE.get(safe_symbol)
+    if cached and time.monotonic() - cached[0] < 45:
+        return {**cached[1], "cached": True}
+
+    candles_by_interval = {
+        interval: candles
+        for interval, candles in zip(
+            ("15m", "1h", "4h", "1d"),
+            await asyncio.gather(*(fetch_candles(safe_symbol, interval, 260) for interval in ("15m", "1h", "4h", "1d"))),
+        )
+    }
+    payload = await consensus_from_candles(safe_symbol, candles_by_interval)
     CONSENSUS_CACHE[safe_symbol] = (time.monotonic(), payload)
     return {**payload, "cached": False}
 
