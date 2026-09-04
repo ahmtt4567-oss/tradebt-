@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
 import { Activity, CircleDollarSign, Cloud, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
-import CoinAnalysisCenter from './CoinAnalysisCenter'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
 const ExecutionCenter = lazy(() => import('./ExecutionCenter'))
@@ -22,7 +21,7 @@ type Health = {status:string;version:string;mode:string;testnet:string;live_guar
 
 const format = (value:number) => value.toLocaleString('tr-TR',{maximumFractionDigits:value < 10 ? 5 : 2})
 
-function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval:string;onAnalysis:(analysis:Analysis|null)=>void}) {
+function TestnetMarketChart({symbol,interval,onAnalysis,showLevels=true,showEma=true}:{symbol:string;interval:string;onAnalysis:(analysis:Analysis|null)=>void;showLevels?:boolean;showEma?:boolean}) {
   const host = useRef<HTMLDivElement>(null)
   const [stream,setStream] = useState<'YÜKLENİYOR'|'CANLI'|'HATA'>('YÜKLENİYOR')
   const [updated,setUpdated] = useState('—')
@@ -47,17 +46,16 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
     const ema200 = chart.addSeries(LineSeries,{color:'#8063d9',lineWidth:2,priceLineVisible:false,lastValueVisible:false,title:'EMA200'})
 
     const applyAnalysis = (analysis:Analysis) => {
-      ema20.setData(analysis.series.ema20.map(point => ({time:point.time as never,value:point.value})))
-      ema50.setData(analysis.series.ema50.map(point => ({time:point.time as never,value:point.value})))
-      ema200.setData(analysis.series.ema200.map(point => ({time:point.time as never,value:point.value})))
+      ema20.setData(showEma ? analysis.series.ema20.map(point => ({time:point.time as never,value:point.value})) : [])
+      ema50.setData(showEma ? analysis.series.ema50.map(point => ({time:point.time as never,value:point.value})) : [])
+      ema200.setData(showEma ? analysis.series.ema200.map(point => ({time:point.time as never,value:point.value})) : [])
       priceLines.forEach(line => candles.removePriceLine(line))
       const line = (price:number,color:string,title:string,width:1|2|3=2,style=2) => candles.createPriceLine({price,color,lineWidth:width,lineStyle:style,axisLabelVisible:true,title})
-      priceLines = [
-        line(analysis.entry,'#078b4c',`${analysis.direction} GİRİŞ`,3,0),
-        line(analysis.stop_loss,'#ed4f42','STOP',3,0),
+      priceLines = showLevels ? [
+        line(analysis.entry,'#078b4c',`${analysis.direction} GİRİŞ`,3,0), line(analysis.stop_loss,'#ed4f42','STOP',3,0),
         line(analysis.tp1,'#28a657','TP1'),line(analysis.tp2,'#28a657','TP2'),line(analysis.tp3,'#28a657','TP3'),
         line(analysis.support,'#e96b5f','DESTEK',1,3),line(analysis.resistance,'#228d51','DİRENÇ',1,3),
-      ]
+      ] : []
       onAnalysis(analysis)
     }
 
@@ -90,7 +88,7 @@ function TestnetMarketChart({symbol,interval,onAnalysis}:{symbol:string;interval
     void load()
     const timer = window.setInterval(() => void load(),15000)
     return () => {active=false;window.clearInterval(timer);chart.remove();onAnalysis(null)}
-  },[symbol,interval,onAnalysis])
+  },[symbol,interval,onAnalysis,showLevels,showEma])
 
   return <div className="v26ChartShell">
     <div className="v26ChartStatus"><span className={stream === 'CANLI' ? 'live' : stream === 'HATA' ? 'error' : ''}><i/>{stream}</span><em>{error || `Binance Futures piyasa verisi · 15 sn yenileme · ${updated}`}</em></div>
@@ -158,7 +156,6 @@ export default function TestnetFirstApp() {
       <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Testnet merkezi hazırlanıyor…</div>}>
         <BinanceDemo active symbol={symbol} analysis={analysis} chart={<TestnetMarketChart symbol={symbol} interval={interval} onAnalysis={setAnalysis}/>}/>
       </Suspense>
-      <CoinAnalysisCenter interval={interval} onIntervalChange={setInterval} chart={(selectedSymbol,selectedInterval) => <TestnetMarketChart symbol={selectedSymbol} interval={selectedInterval} onAnalysis={() => undefined}/>}/>
     </>}
 
     {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><ExecutionCenter/></Suspense>}

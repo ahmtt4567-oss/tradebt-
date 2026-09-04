@@ -51,7 +51,7 @@ Vercel ön yüzde:
 
 | Değişken | Değer |
 |---|---|
-| `VITE_API_URL` | Örneğin `https://protrebot-api.onrender.com` |
+| `VITE_API_URL` | Örneğin `https://tradebt15.onrender.com` |
 | `VITE_WEB_ACCESS_REQUIRED` | `true` |
 
 ## Program içinden bağlantı sırası

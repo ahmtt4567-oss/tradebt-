@@ -3553,6 +3553,17 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
         try:
             async with semaphore:
                 result = analyze(await fetch_candles(market["symbol"], interval, 500))
+            direction = result["direction"]
+            aligned = (
+                result["ema"]["ema20"] > result["ema"]["ema50"] > result["ema"]["ema200"]
+                if direction == "LONG" else
+                result["ema"]["ema20"] < result["ema"]["ema50"] < result["ema"]["ema200"]
+                if direction == "SHORT" else False
+            )
+            rsi_fit = 1.0 if (direction == "LONG" and 50 <= result["rsi"] <= 70) or (direction == "SHORT" and 30 <= result["rsi"] <= 50) else .45
+            smart_score = round(min(100.0, max(0.0, result["confidence"] * .40 + (20 if aligned else 8) + rsi_fit * 15 + min(15, result["volume_ratio"] * 8) + min(10, result["risk_reward"] / 3 * 10))), 1)
+            risk_pct = abs(result["entry"] - result["stop_loss"]) / result["entry"] * 100
+            potential_tp3_pct = abs(result["tp3"] - result["entry"]) / result["entry"] * 100
             return {
                 **market, "rsi": round(float(result["rsi"]), 2),
                 "ema20": result["ema"]["ema20"], "ema50": result["ema"]["ema50"],
@@ -3562,6 +3573,8 @@ async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1,
                 "tp1": result["tp1"], "tp2": result["tp2"], "tp3": result["tp3"],
                 "support": result["support"], "resistance": result["resistance"],
                 "volume_ratio": round(float(result["volume_ratio"]), 2),
+                "risk_reward": result["risk_reward"], "smart_score": smart_score,
+                "risk_pct": round(risk_pct, 2), "potential_tp3_pct": round(potential_tp3_pct, 2),
             }
         except Exception:
             return None

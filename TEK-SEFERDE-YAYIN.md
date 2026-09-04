@@ -12,7 +12,7 @@
 ## Render
 
 1. GitHub push sonrasında dağıtım başlamazsa **Manual Deploy > Deploy latest commit** seçin.
-2. `https://protrebot-api.onrender.com/api/health` adresinde şunları görün:
+2. `https://tradebt15.onrender.com/api/health` adresinde şunları görün:
    - `version: 27.0.0`
    - `mode: TESTNET_FIRST_CLOUD_DURABLE`
    - `cloud_evidence: KALICI`
