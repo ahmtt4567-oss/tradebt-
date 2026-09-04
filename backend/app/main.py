@@ -75,9 +75,10 @@ RISK_PER_TRADE = 0.01
 SHORT_MTF_ALIGNMENT_MAX = 80.0
 LIVE_CHANNEL_ENABLED = env_flag("PROTREBOT_LIVE_CHANNEL_ENABLED", default=True)
 EXECUTION_MODE = "TESTNET_FIRST"
-ALLOWED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
-INTERVAL_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
+ALLOWED_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "4h", "1d"}
+INTERVAL_SECONDS = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400}
 SCAN_CACHE: dict[tuple[int, str], tuple[float, list]] = {}
+ANALYSIS_UNIVERSE_CACHE: dict[str, tuple[float, list[dict]]] = {}
 CONSENSUS_CACHE: dict[str, tuple[float, dict]] = {}
 GUARD_CACHE: dict[str, tuple[float, dict]] = {}
 LAB_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
@@ -800,7 +801,7 @@ async def web_access_check():
 
 
 @app.get("/api/markets")
-async def markets(limit: int = Query(12, ge=1, le=50)):
+async def markets(limit: int = Query(12, ge=1, le=200)):
     try:
         response = await app.state.http.get(f"{FUTURES_MARKET_DATA_API}/fapi/v1/ticker/24hr")
         response.raise_for_status()
@@ -3534,6 +3535,42 @@ async def smart_scan(limit: int = Query(18, ge=6, le=30), interval: str = "15m")
     results = results[:limit]
     SCAN_CACHE[key] = (time.monotonic(), results)
     return {"cached": False, "results": results}
+
+
+@app.get("/api/analysis-universe")
+async def analysis_universe(interval: str = "15m", limit: int = Query(120, ge=1, le=200)):
+    """Return cached, read-only technical snapshots for eligible USDT pairs."""
+    if interval not in ALLOWED_INTERVALS:
+        raise HTTPException(400, "Desteklenmeyen zaman dilimi")
+    cached = ANALYSIS_UNIVERSE_CACHE.get(interval)
+    if cached and time.monotonic() - cached[0] < 60:
+        return {"cached": True, "interval": interval, "results": cached[1][:limit]}
+
+    market_list = await markets(limit=limit)
+    semaphore = asyncio.Semaphore(8)
+
+    async def inspect(market: dict) -> dict | None:
+        try:
+            async with semaphore:
+                result = analyze(await fetch_candles(market["symbol"], interval, 500))
+            return {
+                **market, "rsi": round(float(result["rsi"]), 2),
+                "ema20": result["ema"]["ema20"], "ema50": result["ema"]["ema50"],
+                "ema200": result["ema"]["ema200"], "trend": result["trend"],
+                "direction": result["direction"], "confidence": result["confidence"],
+                "entry": result["entry"], "stop_loss": result["stop_loss"],
+                "tp1": result["tp1"], "tp2": result["tp2"], "tp3": result["tp3"],
+                "support": result["support"], "resistance": result["resistance"],
+                "volume_ratio": round(float(result["volume_ratio"]), 2),
+            }
+        except Exception:
+            return None
+
+    inspected = await asyncio.gather(*(inspect(market) for market in market_list))
+    results = [item for item in inspected if item is not None]
+    results.sort(key=lambda item: item["volume"], reverse=True)
+    ANALYSIS_UNIVERSE_CACHE[interval] = (time.monotonic(), results)
+    return {"cached": False, "interval": interval, "results": results[:limit]}
 
 
 @app.get("/api/consensus/{symbol}")

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, type IPriceLine } from 'lightweight-charts'
 import { Activity, CircleDollarSign, Cloud, KeyRound, LockKeyhole, RadioTower, RefreshCw, ShieldCheck, TestTube2 } from 'lucide-react'
 import { API_BASE } from './api'
+import CoinAnalysisCenter from './CoinAnalysisCenter'
 
 const BinanceDemo = lazy(() => import('./BinanceDemo'))
 const ExecutionCenter = lazy(() => import('./ExecutionCenter'))
@@ -157,6 +158,7 @@ export default function TestnetFirstApp() {
       <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Testnet merkezi hazırlanıyor…</div>}>
         <BinanceDemo active symbol={symbol} analysis={analysis} chart={<TestnetMarketChart symbol={symbol} interval={interval} onAnalysis={setAnalysis}/>}/>
       </Suspense>
+      <CoinAnalysisCenter interval={interval} onIntervalChange={setInterval} chart={(selectedSymbol,selectedInterval) => <TestnetMarketChart symbol={selectedSymbol} interval={selectedInterval} onAnalysis={() => undefined}/>}/>
     </>}
 
     {view === 'live' && <Suspense fallback={<div className="v26Loading"><RefreshCw className="spin"/>Canlı güvenlik merkezi hazırlanıyor…</div>}><ExecutionCenter/></Suspense>}
